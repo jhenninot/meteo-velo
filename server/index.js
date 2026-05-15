@@ -147,11 +147,21 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
 
         const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
         
-        let prompt = `Tu es un algorithme de filtrage intransigeant pour un cycliste gravel. Voici la météo agrégée (Matin / Après-midi) pour ${city} : ${JSON.stringify(structuredWeather)}`;
+        let prompt = `Tu es un algorithme de filtrage intransigeant pour un cycliste gravel ou route. Voici la météo agrégée (Matin / Après-midi) pour ${city} : ${JSON.stringify(structuredWeather)}`;
 
         if (customInstructions && customInstructions.trim() !== "") {
             prompt += `\nRÈGLES ÉLIMINATOIRES :\n"""${customInstructions}"""\nTu DOIS mettre "favorable": false si une règle est enfreinte.`;
         }
+
+        prompt += `
+            RÈGLES D'ANALYSE PRÉCISES :
+            - PRÉCIPITATIONS : Si le cumul (precip) est de 0mm, ne parle pas de "pluie continue" ou de "déluge", même si la probabilité est haute. Parle plutôt de "ciel menaçant" ou "risque de bruine".
+            - SEUIL DE TOLÉRANCE : Considère que moins de 0.5mm sur une demi-journée est négligeable pour un cycliste équipé.
+            - VENT : Sois intransigeant sur les rafales (gust) par rapport aux consignes de l'utilisateur.
+            - TON : Reste factuel et encourageant si les conditions sont à la limite.
+            
+            Pour CHAQUE JOUR, détermine si le matin et l'après-midi sont favorables (true ou false) en respectant STRICTEMENT les consignes utilisateur.
+            `;
 
         prompt += `\nRéponds EXCLUSIVEMENT en JSON : [{"date":"...", "matin":{"favorable":true/false, "conseil":"..."}, "apres_midi":{...}}]`;
 
