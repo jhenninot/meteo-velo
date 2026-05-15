@@ -25,7 +25,7 @@ watch(query, async (newQuery) => {
     return
   }
   try {
-    const response = await axios.get(`http://localhost:3001/api/search?q=${newQuery}`)
+    const response = await axios.get(`http://192.168.0.41:3001/api/search?q=${newQuery}`)
     suggestions.value = response.data || []
   } catch (e) {
     suggestions.value = []
