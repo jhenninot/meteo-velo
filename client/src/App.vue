@@ -124,7 +124,7 @@ const fetchForecast = async () => {
 <template>
   <div class="app-container">
     <header>
-      <h1><span class="mdi mdi-bicycle"></span> Vélo Météo IA</h1>
+      <h1>Vélo Météo IA</h1>
     </header>
 
     <main>
@@ -233,6 +233,13 @@ const fetchForecast = async () => {
 </style>
 
 <style scoped>
+
+.app-logo {
+  height: 40px; /* Ajuste la hauteur selon tes préférences */
+  width: auto;
+  object-fit: contain;
+  vertical-align: middle;
+}
 .app-container {
   max-width: 800px;
   margin: 0 auto;
