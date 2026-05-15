@@ -111,9 +111,10 @@ const fetchForecast = async () => {
             </button>
           </div>
 
-          <ul v-if="suggestions.length > 0" class="suggestions-list">
-            <li v-for="s in suggestions" :key="s.id" @click="selectCity(s)">
-              {{ s.name }} ({{ s.region }})
+          <ul v-if="suggestions && suggestions.length > 0" class="suggestions-list">
+            <li v-for="s in suggestions" :key="s.id || s.name" @click="selectCity(s)">
+              {{ s.name || s.label || 'Ville inconnue' }} 
+              <span v-if="s.region">({{ s.region }})</span>
             </li>
           </ul>
         </div>
