@@ -1,22 +1,18 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
 import axios from 'axios'
-// Ajout de l'icône Navigation pour la direction du vent
-import { Bike, CloudRain, Wind, Thermometer, Search, Settings, Navigation } from 'lucide-vue-next'
+import { Bike, CloudRain, Wind, Thermometer, Search, Settings, Navigation, CheckCircle, XCircle, Sunrise, Sun } from 'lucide-vue-next'
 
 const query = ref('')
 const suggestions = ref([])
-const forecast = ref(null)
+const forecast = ref(null) // Recevra directement le tableau fusionné
 const loading = ref(false)
 const selectedLocation = ref('') 
-
 const customPrompt = ref('')
 
 onMounted(() => {
   const savedPrompt = localStorage.getItem('veloUserPrompt')
-  if (savedPrompt) {
-    customPrompt.value = savedPrompt
-  }
+  if (savedPrompt) customPrompt.value = savedPrompt
 })
 
 watch(customPrompt, (newVal) => {
@@ -32,7 +28,6 @@ watch(query, async (newQuery) => {
     const response = await axios.get(`http://localhost:3001/api/search?q=${newQuery}`)
     suggestions.value = response.data || []
   } catch (e) {
-    console.error("Erreur recherche", e)
     suggestions.value = []
   }
 })
@@ -75,10 +70,7 @@ const formatDay = (dateString) => {
     <main>
       <div class="preferences-box">
         <label><Settings :size="16" /> Consignes pour l'IA (mémorisées)</label>
-        <textarea 
-          v-model="customPrompt" 
-          placeholder="Ex: Je déteste la pluie. Je veux rouler au moins 2h l'après-midi. Je suis débutant..."
-        ></textarea>
+        <textarea v-model="customPrompt" placeholder="Ex: Je déteste la pluie. Je veux rouler au moins 2h l'après-midi..."></textarea>
       </div>
 
       <div class="search-box">
@@ -96,39 +88,45 @@ const formatDay = (dateString) => {
       <div v-if="loading" class="loader">Analyse de la météo par Gemini...</div>
 
       <div v-if="forecast" class="results">
-        <div v-for="(advice, index) in forecast.aiAdvice" :key="index" class="card">
-          <h3>{{ formatDay(advice.date) }}</h3>
+        <div v-for="(day, index) in forecast" :key="index" class="card">
+          <h3 class="day-title">{{ formatDay(day.date) }}</h3>
           
-          <div class="weather-brief">
-            <span class="weather-item">
-              <Thermometer :size="28" color="#e74c3c"/> 
-              <strong>{{ forecast.weather.temperature_2m_max[index] }}°C</strong>
-            </span>
-            <span class="weather-item">
-              <CloudRain :size="28" color="#3498db"/> 
-              <strong>{{ forecast.weather.precipitation_probability_max[index] }}%</strong>
-            </span>
-            <span class="weather-item">
-              <Wind :size="28" color="#7f8c8d"/> 
-              <strong>{{ forecast.weather.wind_speed_10m_max[index] }} km/h</strong>
-              
-              <Navigation 
-                v-if="forecast.weather.wind_direction_10m_dominant && forecast.weather.wind_direction_10m_dominant[index]"
-                :size="20" 
-                color="#7f8c8d"
-                :style="{ transform: `rotate(${forecast.weather.wind_direction_10m_dominant[index]}deg)` }"
-                class="wind-direction"
-              />
-
-              <span class="gusts" v-if="forecast.weather.wind_gusts_10m_max && forecast.weather.wind_gusts_10m_max[index]">
-                (Rafales : {{ forecast.weather.wind_gusts_10m_max[index] }} km/h)
+          <div class="half-day">
+            <h4 class="half-day-title">
+              <span class="period"><Sunrise :size="20"/> Matin (8h - 12h)</span>
+              <CheckCircle v-if="day.matin.favorable" color="#2ecc71" :size="24" />
+              <XCircle v-else color="#e74c3c" :size="24" />
+            </h4>
+            <div class="weather-brief">
+              <span class="weather-item"><Thermometer :size="24" color="#e74c3c"/> <strong>{{ day.matin.temp }}°C</strong></span>
+              <span class="weather-item"><CloudRain :size="24" color="#3498db"/> <strong>{{ day.matin.rain }}%</strong></span>
+              <span class="weather-item">
+                <Wind :size="24" color="#7f8c8d"/> <strong>{{ day.matin.wind }} km/h</strong>
+                <Navigation :size="18" color="#7f8c8d" :style="{ transform: `rotate(${day.matin.dir}deg)` }" class="wind-direction"/>
+                <span class="gusts">(Rafales : {{ day.matin.gust }})</span>
               </span>
-            </span>
+            </div>
+            <p class="ai-advice"><strong>IA :</strong> {{ day.matin.conseil }}</p>
           </div>
 
-          <p class="ai-advice">
-            <strong>Conseil IA :</strong> {{ advice.conseil }}
-          </p>
+          <div class="half-day">
+            <h4 class="half-day-title">
+              <span class="period"><Sun :size="20"/> Après-midi (13h - 18h)</span>
+              <CheckCircle v-if="day.apres_midi.favorable" color="#2ecc71" :size="24" />
+              <XCircle v-else color="#e74c3c" :size="24" />
+            </h4>
+            <div class="weather-brief">
+              <span class="weather-item"><Thermometer :size="24" color="#e74c3c"/> <strong>{{ day.apres_midi.temp }}°C</strong></span>
+              <span class="weather-item"><CloudRain :size="24" color="#3498db"/> <strong>{{ day.apres_midi.rain }}%</strong></span>
+              <span class="weather-item">
+                <Wind :size="24" color="#7f8c8d"/> <strong>{{ day.apres_midi.wind }} km/h</strong>
+                <Navigation :size="18" color="#7f8c8d" :style="{ transform: `rotate(${day.apres_midi.dir}deg)` }" class="wind-direction"/>
+                <span class="gusts">(Rafales : {{ day.apres_midi.gust }})</span>
+              </span>
+            </div>
+            <p class="ai-advice"><strong>IA :</strong> {{ day.apres_midi.conseil }}</p>
+          </div>
+
         </div>
       </div>
     </main>
@@ -143,7 +141,7 @@ h1 { display: flex; align-items: center; justify-content: center; gap: 10px; col
 
 .preferences-box { margin-bottom: 15px; }
 .preferences-box label { display: flex; align-items: center; gap: 8px; font-size: 0.9em; color: #555; margin-bottom: 8px; font-weight: 600; }
-.preferences-box textarea { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-family: inherit; font-size: 14px; resize: vertical; min-height: 65px; outline: none; transition: border-color 0.2s; background-color: #fafafa; }
+.preferences-box textarea { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-family: inherit; font-size: 14px; resize: vertical; min-height: 65px; outline: none; background-color: #fafafa; }
 .preferences-box textarea:focus { border-color: #42b983; background-color: #fff; }
 
 .search-box { position: relative; margin-bottom: 20px; }
@@ -153,14 +151,20 @@ input { border: none; outline: none; width: 100%; margin-left: 10px; font-size: 
 .suggestions li { padding: 12px; cursor: pointer; }
 .suggestions li:hover { background: #f0f0f0; }
 
-.card { background: #f9f9f9; border-left: 5px solid #42b983; padding: 15px; margin-bottom: 15px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-.weather-brief { display: flex; flex-wrap: wrap; gap: 20px; margin: 15px 0; color: #333; font-size: 1.1em; }
-.weather-item { display: flex; align-items: center; gap: 8px; }
+.card { background: #fff; padding: 0; margin-bottom: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border: 1px solid #eee; overflow: hidden; }
+.day-title { background: #42b983; color: white; margin: 0; padding: 12px 20px; font-size: 1.2rem; text-align: center; }
 
-/* Nouveau style pour l'icône de direction */
-.wind-direction { margin-left: 2px; margin-right: 2px; }
+.half-day { padding: 15px 20px; border-bottom: 1px solid #f0f0f0; }
+.half-day:last-child { border-bottom: none; }
 
-.gusts { font-size: 0.85em; color: #e67e22; font-weight: normal; margin-left: 4px; }
-.ai-advice { font-style: italic; color: #2c3e50; border-top: 1px solid #eee; padding-top: 10px; }
+.half-day-title { display: flex; align-items: center; justify-content: space-between; margin: 0 0 10px 0; color: #2c3e50; }
+.period { display: flex; align-items: center; gap: 8px; font-size: 1.1rem; }
+
+.weather-brief { display: flex; flex-wrap: wrap; gap: 15px; margin: 10px 0; color: #444; font-size: 1.05em; }
+.weather-item { display: flex; align-items: center; gap: 6px; }
+.wind-direction { margin: 0 2px; }
+.gusts { font-size: 0.85em; color: #e67e22; margin-left: 2px; }
+
+.ai-advice { font-style: italic; color: #555; background: #f9f9f9; padding: 10px; border-radius: 6px; margin: 10px 0 0 0; font-size: 0.95rem; }
 .loader { text-align: center; color: #42b983; font-weight: bold; margin: 20px 0; }
 </style>
