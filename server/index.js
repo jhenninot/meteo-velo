@@ -16,7 +16,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const JWT_SECRET = process.env.JWT_SECRET || 'ta_cle_secrete_hyper_longue';
 
 // --- 1. CONNEXION MONGODB ---
-mongoose.connect(process.env.MONGO_URL || 'mongodb://192.168.0.41:27017/meteo_velo')
+mongoose.connect(process.env.MONGO_URL || 'mongodb://mongodb:27017/meteo_velo')
   .then(() => console.log("Connecté à MongoDB"))
   .catch(err => console.error("Erreur MongoDB:", err));
 
