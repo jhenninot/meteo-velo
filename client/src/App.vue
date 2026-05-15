@@ -40,7 +40,7 @@ const selectCity = async (city) => {
   
   try {
     const [lon, lat] = city.geometry.coordinates
-    const response = await axios.post('http://localhost:3001/api/forecast', {
+    const response = await axios.post('http://192.168.0.41:3001/api/forecast', {
       lat, lon, 
       city: city.properties.name,
       customInstructions: customPrompt.value
