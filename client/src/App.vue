@@ -561,7 +561,10 @@ html:not(.meteo-theme-dark) body {
 
 <style scoped>
 /* STRUCTURE GENERALE */
-.app-container { max-width: 800px; margin: 0 auto; padding: 20px; font-family: 'Segoe UI', sans-serif; color: #333; }
+.app-container { max-width: 1200px; margin: 0 auto; padding: 20px; font-family: 'Segoe UI', sans-serif; color: #333; }
+@media (max-width: 600px) {
+  .app-container { padding: 4px; }
+}
 header { display: flex; flex-direction: column; align-items: stretch; gap: 12px; margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 15px; }
 header h1 { margin: 0; display: flex; align-items: center; gap: 15px; font-size: 1.5rem; align-self: flex-start; }
 .app-logo { height: 40px; width: auto; vertical-align: middle; }
@@ -592,7 +595,17 @@ input, textarea, select { width: 100%; padding: 10px; border: 1px solid #ddd; bo
 textarea { height: 80px; }
 
 /* MÉTÉO GRID */
-.forecast-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+.forecast-grid { display: grid; gap: 15px; grid-template-columns: 1fr; }
+@media (max-width: 600px) {
+  .forecast-grid { gap: 10px; }
+  .day-card { padding: 8px; border-radius: 8px; }
+}
+@media (min-width: 768px) {
+  .forecast-grid { grid-template-columns: repeat(2, 1fr); gap: 20px; }
+}
+@media (min-width: 1024px) {
+  .forecast-grid { grid-template-columns: repeat(3, 1fr); }
+}
 .day-card { background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 15px; border: 1px solid #eee; }
 .day-card h3 { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 8px; margin-top: 0; }
 .day-split { display: flex; flex-direction: column; gap: 10px; }
