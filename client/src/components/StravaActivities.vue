@@ -66,7 +66,33 @@ const timeframeLabel = computed(() => {
 })
 
 // ---- Filtre par type (multi-sélection) ----
-const activeTypeFilters = ref([]) // Tableau vide = Tous les types affichés
+const activeTypeFilters = ref([])
+let isInitialized = false
+
+// Watch filters deeply and save to BDD
+watch(activeTypeFilters, async (newVal) => {
+  if (!isInitialized) return
+  try {
+    await axios.post(`${props.apiBaseUrl}/api/user/preferences`, {
+      stravaFilters: newVal
+    })
+  } catch (e) {
+    console.error('Error saving strava filters to DB', e)
+  }
+}, { deep: true })
+
+const fetchSavedFilters = async () => {
+  try {
+    const { data } = await axios.get(`${props.apiBaseUrl}/api/user/preferences`)
+    if (data && Array.isArray(data.stravaFilters)) {
+      activeTypeFilters.value = data.stravaFilters
+    }
+  } catch (e) {
+    console.error('Error loading strava filters from BDD', e)
+  } finally {
+    isInitialized = true
+  }
+}
 
 // Types effectivement présents dans les activités chargées
 const availableTypes = computed(() => {
@@ -464,7 +490,10 @@ onMounted(async () => {
   }
 
   await fetchStatus()
-  if (stravaStatus.value.connected) await fetchActivities()
+  if (stravaStatus.value.connected) {
+    await fetchSavedFilters()
+    await fetchActivities()
+  }
 })
 
 onUnmounted(() => {
@@ -589,7 +618,7 @@ onUnmounted(() => {
             :class="{ active: activeTypeFilters.length === 0 }"
             @click="toggleTypeFilter('all')"
           >
-            <span class="mdi mdi-bike"></span> Tous
+            <span class="mdi mdi-run-fast"></span> Tous
             <span class="type-count">({{ activities.length }})</span>
           </button>
           <button
@@ -626,9 +655,9 @@ onUnmounted(() => {
       <!-- Stats mensuelles -->
       <div v-if="!loading && activities.length" class="monthly-stats">
         <div class="stat-tile">
-          <span class="mdi mdi-bike stat-icon"></span>
+          <span class="mdi mdi-run-fast stat-icon"></span>
           <div class="stat-val">{{ monthlyStats.count }}</div>
-          <div class="stat-label">Sorties</div>
+          <div class="stat-label">Activités</div>
         </div>
         <div class="stat-tile">
           <span class="mdi mdi-map-marker-distance stat-icon"></span>
@@ -643,7 +672,7 @@ onUnmounted(() => {
         <div class="stat-tile">
           <span class="mdi mdi-clock-outline stat-icon"></span>
           <div class="stat-val">{{ monthlyStats.totalTime }}</div>
-          <div class="stat-label">Temps de selle</div>
+          <div class="stat-label">Durée totale</div>
         </div>
       </div>
 
