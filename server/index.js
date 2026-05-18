@@ -29,7 +29,8 @@ const userSchema = new mongoose.Schema({
     city: String,
     lat: Number,
     lon: Number,
-    consignes: String
+    consignes: String,
+    theme: { type: String, enum: ['light', 'dark'], default: 'light' }
   }
 });
 const User = mongoose.model('User', userSchema);
@@ -90,8 +91,31 @@ app.get('/api/search', verifyToken, async (req, res) => {
     }
 });
 
+const CRITERE_KEYS = ['temperature', 'pluie', 'precipitations', 'vent', 'rafales'];
+
+function normalizeCriteres(aiSlice, globalFavorable) {
+    const raw = aiSlice?.criteres || {};
+    const out = {};
+    for (const k of CRITERE_KEYS) {
+        let v = raw[k];
+        if (v !== 'favorable' && v !== 'defavorable') {
+            v = globalFavorable === true ? 'favorable' : 'neutre';
+        }
+        out[k] = v;
+    }
+    return out;
+}
+
+function enrichPeriod(aggregated, aiSlice) {
+    const merged = { ...aggregated, ...aiSlice };
+    const fav = merged.favorable === true;
+    merged.criteres = normalizeCriteres(aiSlice, fav);
+    return merged;
+}
+
 app.post('/api/forecast', verifyToken, async (req, res) => {
-    const { lat, lon, city, customInstructions } = req.body;
+    const { lat, lon, city, consignes, customInstructions } = req.body;
+    const userRules = (consignes ?? customInstructions ?? '').trim();
     try {
         const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m&timezone=auto`;
         const weatherRes = await axios.get(weatherUrl);
@@ -149,8 +173,8 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
         
         let prompt = `Tu es un algorithme de filtrage intransigeant pour un cycliste gravel ou route. Voici la météo agrégée (Matin / Après-midi) pour ${city} : ${JSON.stringify(structuredWeather)}`;
 
-        if (customInstructions && customInstructions.trim() !== "") {
-            prompt += `\nRÈGLES ÉLIMINATOIRES :\n"""${customInstructions}"""\nTu DOIS mettre "favorable": false si une règle est enfreinte.`;
+        if (userRules !== "") {
+            prompt += `\nRÈGLES ÉLIMINATOIRES :\n"""${userRules}"""\nTu DOIS mettre "favorable": false si une règle est enfreinte.`;
         }
 
         prompt += `
@@ -160,10 +184,18 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
             - VENT : Sois intransigeant sur les rafales (gust) par rapport aux consignes de l'utilisateur.
             - TON : Reste factuel et encourageant si les conditions sont à la limite.
             
-            Pour CHAQUE JOUR, détermine si le matin et l'après-midi sont favorables (true ou false) en respectant STRICTEMENT les consignes utilisateur.
+            Pour CHAQUE JOUR et CHAQUE demi-journée (matin / apres_midi), détermine "favorable" true ou false en respectant STRICTEMENT les consignes.
+            Tu DOIS aussi remplir "criteres" (voir ci-dessous) : pour chaque critère, indique "favorable" si ce facteur ne milite pas contre la sortie vélo, "defavorable" s'il contribue au refus ou au verdict défavorable.
+            Correspondance avec les chiffres fournis : temperature = temp (°C max), pluie = rain (% max), precipitations = precip (mm cumul), vent = wind (km/h max), rafales = gust (km/h max).
+            Si la demi-journée est favorable, tous les critères doivent être "favorable" sauf si un critère reste objectivement limite (dans ce cas mets "favorable": false et le ou les critères concernés en "defavorable").
+            Si la demi-journée est défavorable, au moins un critère doit être "defavorable" (tous ceux qui expliquent le verdict).
             `;
 
-        prompt += `\nRéponds EXCLUSIVEMENT en JSON : [{"date":"...", "matin":{"favorable":true/false, "conseil":"..."}, "apres_midi":{...}}]`;
+        prompt += `
+Réponds EXCLUSIVEMENT par un tableau JSON (sans markdown), un objet par jour, dans l'ordre des dates. Structure exacte pour chaque jour :
+{"date":"YYYY-MM-DD","matin":{"favorable":true,"conseil":"...","criteres":{"temperature":"favorable","pluie":"favorable","precipitations":"favorable","vent":"favorable","rafales":"favorable"}},"apres_midi":{"favorable":true,"conseil":"...","criteres":{"temperature":"favorable","pluie":"favorable","precipitations":"favorable","vent":"favorable","rafales":"favorable"}}}
+Les valeurs dans criteres sont uniquement les chaînes "favorable" ou "defavorable" (pas d'autres valeurs).
+`;
 
         const result = await model.generateContent(prompt);
         const responseText = result.response.text();
@@ -176,8 +208,8 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
             const ai = aiData.find(a => a.date === day.date) || { matin: {}, apres_midi: {} };
             return {
                 date: day.date,
-                matin: { ...day.matin, ...ai.matin },
-                apres_midi: { ...day.apres_midi, ...ai.apres_midi }
+                matin: enrichPeriod(day.matin, ai.matin || {}),
+                apres_midi: enrichPeriod(day.apres_midi, ai.apres_midi || {})
             };
         });
 
@@ -204,10 +236,25 @@ app.post('/api/admin/create-user', verifyToken, async (req, res) => {
     }
 });
 
-// Route Utilisateur : Sauvegarder préférences
+// Préférences utilisateur (lecture)
+app.get('/api/user/preferences', verifyToken, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id).select('preferences');
+        if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
+        res.json(user.preferences || {});
+    } catch (err) {
+        res.status(500).json({ error: "Erreur lors de la lecture des préférences" });
+    }
+});
+
+// Route Utilisateur : Sauvegarder préférences (fusion avec l'existant)
 app.post('/api/user/preferences', verifyToken, async (req, res) => {
     try {
-        await User.findByIdAndUpdate(req.user.id, { preferences: req.body });
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
+        const prev = user.preferences?.toObject?.() ?? user.preferences ?? {};
+        user.preferences = { ...prev, ...req.body };
+        await user.save();
         res.json({ message: "Préférences sauvegardées" });
     } catch (err) {
         res.status(500).json({ error: "Erreur lors de la sauvegarde" });

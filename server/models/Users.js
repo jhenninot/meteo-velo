@@ -8,7 +8,8 @@ const userSchema = new mongoose.Schema({
     city: String,
     lat: Number,
     lon: Number,
-    consignes: String
+    consignes: String,
+    theme: { type: String, enum: ['light', 'dark'], default: 'light' }
   }
 });
 
