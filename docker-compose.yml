@@ -4,25 +4,35 @@ services:
       context: ./client
       dockerfile: Dockerfile
       args:
-        # On passe la variable de Dockge au Dockerfile
         VITE_API_BASE_URL: ${VITE_API_BASE_URL}
     ports:
-      - "8085:80"
+      - 8085:80
     restart: always
-
   backend:
     build:
       context: ./server
       dockerfile: Dockerfile
     ports:
-      - "3001:3001"
+      - 3001:3001
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - PORT=3001
-      - MONGO_URL=${MONGO_URL}
       - JWT_SECRET=${JWT_SECRET}
+      - MONGO_URL=mongodb://mongodb:27017/meteo_velo
+      - PORT=3001
       - STRAVA_CLIENT_ID=${STRAVA_CLIENT_ID}
       - STRAVA_CLIENT_SECRET=${STRAVA_CLIENT_SECRET}
       - STRAVA_CALLBACK_URL=${STRAVA_CALLBACK_URL}
       - FRONTEND_URL=${FRONTEND_URL}
     restart: always
+    depends_on:
+      - mongodb
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - 27017:27017 # Permet à ton PC (VS Code) de se connecter au serveur
+    volumes:
+      - mongo_data:/data/db
+    restart: always
+volumes:
+  mongo_data: null
