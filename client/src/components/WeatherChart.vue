@@ -62,9 +62,10 @@ const createWindArrow = (dir, color) => {
 }
 
 const chartData = computed(() => {
-  const labels = props.hourlyData.map(d => [`${d.hour}h`, `${d.rain}%`])
+  const labels = props.hourlyData.map(d => [`${d.hour}h`, `${d.precip}mm`, `${d.rain}%`])
   const precip = props.hourlyData.map(d => d.precip)
   const wind = props.hourlyData.map(d => d.wind)
+  const temp = props.hourlyData.map(d => d.temp)
   
   const isDark = props.theme === 'dark'
   const arrowColor = isDark ? '#e8eaed' : '#555'
@@ -73,6 +74,20 @@ const chartData = computed(() => {
   return {
     labels,
     datasets: [
+      {
+        type: 'line',
+        label: 'Température',
+        data: temp,
+        borderColor: '#e53935',
+        backgroundColor: 'rgba(229, 57, 53, 0.15)',
+        yAxisID: 'y2',
+        tension: 0.4,
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: '#e53935',
+        fill: false,
+        order: 0
+      },
       {
         type: 'line',
         label: 'Vent',
@@ -119,11 +134,11 @@ const chartOptions = computed(() => {
         callbacks: {
           label: function(context) {
             let label = context.dataset.label || '';
-            if (label) {
-              label += ': ';
-            }
+            if (label) label += ': ';
             if (context.parsed.y !== null) {
-              label += context.parsed.y + (context.datasetIndex === 0 ? ' km/h' : ' mm');
+              if (context.dataset.yAxisID === 'y2') label += context.parsed.y + '°C';
+              else if (context.dataset.yAxisID === 'y1') label += context.parsed.y + ' km/h';
+              else label += context.parsed.y + ' mm';
             }
             return label;
           },
@@ -153,17 +168,11 @@ const chartOptions = computed(() => {
       },
       y: {
         type: 'linear',
-        display: true,
+        display: false,
         position: 'left',
-        title: {
-          display: true,
-          text: 'Pluie (mm)',
-          color: textColor
-        },
         min: 0,
         suggestedMax: Math.max(1, ...props.hourlyData.map(d => d.precip)) * 1.2,
-        ticks: { color: textColor },
-        grid: { color: gridColor }
+        grid: { display: false }
       },
       y1: {
         type: 'linear',
@@ -177,6 +186,18 @@ const chartOptions = computed(() => {
         min: 0,
         suggestedMax: Math.max(15, ...props.hourlyData.map(d => d.wind)) * 1.2,
         ticks: { color: textColor },
+        grid: { drawOnChartArea: false },
+      },
+      y2: {
+        type: 'linear',
+        display: true,
+        position: 'left',
+        title: {
+          display: true,
+          text: 'Temp (°C)',
+          color: '#e53935'
+        },
+        ticks: { color: '#e53935' },
         grid: { drawOnChartArea: false },
       }
     }
