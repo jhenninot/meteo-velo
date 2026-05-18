@@ -120,16 +120,25 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
         const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m&timezone=auto`;
         const weatherRes = await axios.get(weatherUrl);
         const hourly = weatherRes.data.hourly;
+        // utc_offset_seconds est fourni par Open-Meteo avec timezone=auto
+        const utcOffsetSeconds = weatherRes.data.utc_offset_seconds ?? 0;
 
-        const now = new Date();
+        // Heure locale actuelle à la destination (en minutes UTC depuis epoch)
+        const nowUtcMs = Date.now();
+        // On fabrique un timestamp local fictif pour comparer avec les strings ISO sans TZ
+        const nowLocalMs = nowUtcMs + utcOffsetSeconds * 1000;
+        const nowLocalStr = new Date(nowLocalMs).toISOString().slice(0, 16); // "YYYY-MM-DDTHH:mm"
+
         const daysMap = {};
         hourly.time.forEach((t, i) => {
-            const dateObj = new Date(t);
-            // Ignorer les heures passées
-            if (dateObj < now) return;
+            // Open-Meteo retourne les temps en heure locale de la destination
+            // sans suffixe de fuseau (ex: "2026-05-18T14:00").
+            // On compare directement les strings pour éviter toute reinterprétation UTC.
+            if (t < nowLocalStr) return;
 
             const date = t.split('T')[0];
-            const hour = dateObj.getHours();
+            // Extraction de l'heure directement depuis la chaîne (pas via new Date)
+            const hour = parseInt(t.split('T')[1].split(':')[0], 10);
 
             if (!daysMap[date]) {
                 daysMap[date] = { 
@@ -185,7 +194,7 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
         const structuredWeather = Object.values(daysMap)
             .map(d => ({ date: d.date, matin: aggregate(d.matin), apres_midi: aggregate(d.apres_midi) }))
             .filter(d => d.matin !== null || d.apres_midi !== null)
-            .slice(0, 5);
+            .slice(0, 7);
 
         const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
         
