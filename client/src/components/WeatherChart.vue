@@ -7,6 +7,8 @@ import {
   PointElement,
   LineElement,
   BarElement,
+  LineController,
+  BarController,
   Title,
   Tooltip,
   Legend
@@ -19,6 +21,8 @@ ChartJS.register(
   PointElement,
   LineElement,
   BarElement,
+  LineController,
+  BarController,
   Title,
   Tooltip,
   Legend
@@ -188,6 +192,7 @@ const chartOptions = computed(() => {
 
 <style scoped>
 .weather-chart-container {
+  position: relative;
   height: 250px;
   width: calc(100% + 3.75rem - 12px);
   margin-top: 15px;
