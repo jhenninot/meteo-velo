@@ -139,7 +139,19 @@ function decodePolyline(encoded) {
 // ---- Formatters ----
 const formatDistance = (m) => m ? (m / 1000).toFixed(1) + ' km' : '—'
 const formatElevation = (m) => m ? Math.round(m) + ' m' : '—'
-const formatSpeed = (ms) => ms ? (ms * 3.6).toFixed(1) + ' km/h' : '—'
+const formatSpeed = (ms, type) => {
+  if (!ms) return '—'
+  const isPace = ['Run', 'Walk', 'Hike'].includes(type)
+  if (isPace) {
+    const secPerKm = 1000 / ms
+    if (secPerKm > 3600) return '—'
+    const mins = Math.floor(secPerKm / 60)
+    const secs = Math.floor(secPerKm % 60)
+    return `${mins}:${secs.toString().padStart(2, '0')} /km`
+  } else {
+    return (ms * 3.6).toFixed(1) + ' km/h'
+  }
+}
 const formatDuration = (s) => {
   if (!s) return '—'
   const h = Math.floor(s / 3600)
@@ -268,12 +280,34 @@ const initMap = (activityId, encodedPolyline) => {
 
   const map = L.map(containerId, { zoomControl: true, scrollWheelZoom: false })
   const isDark = props.theme === 'dark'
-  L.tileLayer(
+
+  const standardLayer = L.tileLayer(
     isDark
       ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
       : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     { attribution: isDark ? '© OpenStreetMap © CARTO' : '© OpenStreetMap contributors', maxZoom: 19 }
-  ).addTo(map)
+  )
+
+  const topoLayer = L.tileLayer(
+    'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    { attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)', maxZoom: 17 }
+  )
+
+  const satelliteLayer = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { attribution: 'Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community', maxZoom: 19 }
+  )
+
+  // Default to standard layer
+  standardLayer.addTo(map)
+
+  // Add premium layers control
+  const baseLayers = {
+    "Standard": standardLayer,
+    "Topographique (Dénivelés)": topoLayer,
+    "Satellite": satelliteLayer
+  }
+  L.control.layers(baseLayers, null, { position: 'bottomleft' }).addTo(map)
 
   const points = decodePolyline(encodedPolyline)
   if (points.length) {
@@ -357,12 +391,34 @@ const openFullscreenMap = async (activity) => {
 
   fullscreenMapInstance = L.map(containerId, { zoomControl: true, scrollWheelZoom: true })
   const isDark = props.theme === 'dark'
-  L.tileLayer(
+
+  const standardLayer = L.tileLayer(
     isDark
       ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
       : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     { attribution: isDark ? '© OpenStreetMap © CARTO' : '© OpenStreetMap contributors', maxZoom: 19 }
-  ).addTo(fullscreenMapInstance)
+  )
+
+  const topoLayer = L.tileLayer(
+    'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    { attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)', maxZoom: 17 }
+  )
+
+  const satelliteLayer = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { attribution: 'Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community', maxZoom: 19 }
+  )
+
+  // Default to standard layer
+  standardLayer.addTo(fullscreenMapInstance)
+
+  // Add premium layers control
+  const baseLayers = {
+    "Standard": standardLayer,
+    "Topographique (Dénivelés)": topoLayer,
+    "Satellite": satelliteLayer
+  }
+  L.control.layers(baseLayers, null, { position: 'bottomleft' }).addTo(fullscreenMapInstance)
 
   const points = decodePolyline(activity.map?.summary_polyline)
   if (points.length) {
@@ -617,7 +673,7 @@ onUnmounted(() => {
             <div class="activity-metrics">
               <span class="metric"><span class="mdi mdi-map-marker-distance"></span>{{ formatDistance(activity.distance) }}</span>
               <span class="metric"><span class="mdi mdi-summit"></span>{{ formatElevation(activity.total_elevation_gain) }}</span>
-              <span class="metric"><span class="mdi mdi-speedometer"></span>{{ formatSpeed(activity.average_speed) }}</span>
+              <span class="metric"><span class="mdi mdi-speedometer"></span>{{ formatSpeed(activity.average_speed, activity.type) }}</span>
               <span class="metric"><span class="mdi mdi-timer-outline"></span>{{ formatDuration(activity.moving_time) }}</span>
             </div>
             <span class="activity-expand-icon mdi" :class="expandedId === activity.id ? 'mdi-chevron-up' : 'mdi-chevron-down'"></span>
@@ -630,8 +686,11 @@ onUnmounted(() => {
             </div>
             <div v-else class="map-container-relative">
               <div :id="`strava-map-${activity.id}`" class="activity-map"></div>
-              <!-- Action Overlay: Plein écran & Exporter GPX -->
+              <!-- Action Overlay: Voir sur Strava & Plein écran & Exporter GPX -->
               <div class="map-actions-overlay">
+                <a :href="`https://www.strava.com/activities/${activity.id}`" target="_blank" class="btn-map-action btn-strava-link" title="Voir l'activité sur Strava (nouvel onglet)">
+                  <span class="mdi mdi-open-in-new"></span> Voir sur Strava
+                </a>
                 <button class="btn-map-action" @click.stop="openFullscreenMap(activity)" title="Ouvrir la carte en plein écran">
                   <span class="mdi mdi-fullscreen"></span> Plein écran
                 </button>
@@ -659,6 +718,9 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="fullscreen-actions">
+          <a :href="`https://www.strava.com/activities/${fullscreenActivity.id}`" target="_blank" class="btn-fullscreen-action btn-strava-link-full" title="Voir l'activité sur Strava (nouvel onglet)">
+            <span class="mdi mdi-open-in-new"></span> Voir sur Strava
+          </a>
           <button class="btn-fullscreen-action" @click="exportToGPX(fullscreenActivity)">
             <span class="mdi mdi-download"></span> Exporter GPX
           </button>
@@ -962,11 +1024,18 @@ onUnmounted(() => {
   font-size: 0.8rem;
   font-weight: 700;
   color: #374151;
+  text-decoration: none;
   cursor: pointer;
   box-shadow: 0 2px 6px rgba(0,0,0,0.15);
   transition: all 0.15s;
 }
 .btn-map-action:hover {
+  background: #FC4C02;
+  color: #fff;
+  border-color: #FC4C02;
+}
+
+.btn-strava-link:hover {
   background: #FC4C02;
   color: #fff;
   border-color: #FC4C02;
@@ -1046,11 +1115,31 @@ onUnmounted(() => {
   padding: 8px 16px;
   font-size: 0.85rem;
   font-weight: 700;
+  text-decoration: none;
   cursor: pointer;
   transition: background 0.15s;
 }
 .btn-fullscreen-action:hover {
   background: #e03e00;
+}
+.btn-strava-link-full {
+  background: #fff;
+  color: #FC4C02;
+  border: 1.5px solid rgba(252, 76, 2, 0.4);
+}
+.btn-strava-link-full:hover {
+  background: #FC4C02;
+  color: #fff;
+}
+
+:global(.theme-dark) .btn-strava-link-full {
+  background: #252a32;
+  color: #FC4C02;
+  border-color: rgba(252, 76, 2, 0.5);
+}
+:global(.theme-dark) .btn-strava-link-full:hover {
+  background: #FC4C02;
+  color: #fff;
 }
 .btn-fullscreen-close {
   display: inline-flex;
