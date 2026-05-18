@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import axios from 'axios'
 import { jwtDecode } from 'jwt-decode'
 import WeatherChart from './components/WeatherChart.vue'
@@ -38,10 +38,30 @@ const togglePeriod = (dayIndex, period) => {
 }
 
 const storedTheme = localStorage.getItem('user_theme')
-const theme = ref(storedTheme === 'dark' ? 'dark' : 'light')
+const theme = ref(storedTheme === 'dark' || storedTheme === 'light' || storedTheme === 'auto' ? storedTheme : 'auto')
 
-watch(theme, (t) => {
-  document.documentElement.classList.toggle('meteo-theme-dark', t === 'dark')
+const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)')
+const isSystemDark = ref(systemPrefersDark.matches)
+if (typeof systemPrefersDark.addEventListener === 'function') {
+  systemPrefersDark.addEventListener('change', (e) => {
+    isSystemDark.value = e.matches
+  })
+}
+
+const isDark = computed(() => {
+  return theme.value === 'dark' || (theme.value === 'auto' && isSystemDark.value)
+})
+
+const resolvedTheme = computed(() => isDark.value ? 'dark' : 'light')
+
+const themeIcon = computed(() => {
+  if (theme.value === 'light') return 'mdi-white-balance-sunny'
+  if (theme.value === 'dark') return 'mdi-weather-night'
+  return 'mdi-brightness-auto'
+})
+
+watch(isDark, (val) => {
+  document.documentElement.classList.toggle('meteo-theme-dark', val)
 }, { immediate: true })
 
 // --- CONFIGURATION ---
@@ -85,7 +105,7 @@ const handleLogin = async () => {
       consignes.value = preferences.consignes || ''
       lat.value = preferences.lat || null
       lon.value = preferences.lon || null
-      theme.value = preferences.theme === 'dark' ? 'dark' : 'light'
+      theme.value = preferences.theme === 'dark' || preferences.theme === 'light' || preferences.theme === 'auto' ? preferences.theme : 'auto'
 
       // On met aussi à jour le localStorage pour que initializeApp() soit cohérent
       localStorage.setItem('selected_city', city.value)
@@ -102,7 +122,7 @@ const handleLogin = async () => {
       localStorage.removeItem('user_consignes')
       localStorage.removeItem('user_theme')
       city.value = ''; consignes.value = ''; lat.value = null; lon.value = null;
-      theme.value = 'light'
+      theme.value = 'auto'
     }
 
     initializeApp()
@@ -121,7 +141,7 @@ const handleLogout = () => {
   forecastData.value = null
   showAdminPanel.value = false
   showStravaPage.value = false
-  theme.value = 'light'
+  theme.value = 'auto'
 }
 
 const createUser = async () => {
@@ -192,7 +212,7 @@ const syncPreferences = async () => {
 const loadUserPreferences = async () => {
   try {
     const { data } = await axios.get(`${API_BASE_URL}/api/user/preferences`)
-    if (data.theme === 'dark' || data.theme === 'light') {
+    if (data.theme === 'dark' || data.theme === 'light' || data.theme === 'auto') {
       theme.value = data.theme
       localStorage.setItem('user_theme', theme.value)
     }
@@ -202,9 +222,11 @@ const loadUserPreferences = async () => {
 }
 
 const setTheme = (mode) => {
-  theme.value = mode === 'dark' ? 'dark' : 'light'
-  localStorage.setItem('user_theme', theme.value)
-  syncPreferences()
+  if (mode === 'dark' || mode === 'light' || mode === 'auto') {
+    theme.value = mode
+    localStorage.setItem('user_theme', theme.value)
+    syncPreferences()
+  }
 }
 
 onMounted(async () => {
@@ -346,18 +368,18 @@ const fetchForecast = async () => {
 </script>
 
 <template>
-  <div class="app-container" :class="{ 'theme-dark': theme === 'dark' }">
+  <div class="app-container" :class="{ 'theme-dark': isDark }">
     <header>
       <h1><img src="/logo_velo.png" alt="Logo" class="app-logo" /> Vélo Météo IA</h1>
       
       <div v-if="isLoggedIn" class="header-controls">
-        <div class="theme-switch" role="group" aria-label="Affichage jour ou nuit">
-          <button type="button" class="theme-btn" :class="{ active: theme === 'light' }" title="Mode jour" @click="setTheme('light')">
-            <span class="mdi mdi-white-balance-sunny"></span> Jour
-          </button>
-          <button type="button" class="theme-btn" :class="{ active: theme === 'dark' }" title="Mode nuit" @click="setTheme('dark')">
-            <span class="mdi mdi-weather-night"></span> Nuit
-          </button>
+        <div class="theme-select-wrapper">
+          <span class="mdi" :class="themeIcon"></span>
+          <select :value="theme" @change="setTheme($event.target.value)" class="theme-select" aria-label="Sélectionner le thème">
+            <option value="light">Jour</option>
+            <option value="auto">Auto</option>
+            <option value="dark">Nuit</option>
+          </select>
         </div>
         <nav class="main-nav">
           <button @click="showAdminPanel = false; showStravaPage = false" :class="{ active: !showAdminPanel && !showStravaPage }">
@@ -459,7 +481,7 @@ const fetchForecast = async () => {
       </div>
     </main>
     <main v-else-if="showStravaPage">
-      <StravaActivities :theme="theme" :api-base-url="API_BASE_URL" />
+      <StravaActivities :theme="resolvedTheme" :api-base-url="API_BASE_URL" />
     </main>
     <main v-else>
       <section class="config-section">
@@ -519,7 +541,7 @@ const fetchForecast = async () => {
                 <div class="ia-advice">{{ day.matin.conseil }}</div>
                 
                 <div v-if="expandedPeriods[`${index}-matin`] && day.matin.hourly">
-                  <WeatherChart :hourlyData="day.matin.hourly" :theme="theme" />
+                  <WeatherChart :hourlyData="day.matin.hourly" :theme="resolvedTheme" />
                 </div>
               </div>
               <div v-if="day.apres_midi" class="half-day" :class="[day.apres_midi.favorable ? 'favorable' : 'defavorable', { 'is-expanded': expandedPeriods[`${index}-apres_midi`] }]" @click="togglePeriod(index, 'apres_midi')">
@@ -548,7 +570,7 @@ const fetchForecast = async () => {
                 <div class="ia-advice">{{ day.apres_midi.conseil }}</div>
                 
                 <div v-if="expandedPeriods[`${index}-apres_midi`] && day.apres_midi.hourly">
-                  <WeatherChart :hourlyData="day.apres_midi.hourly" :theme="theme" />
+                  <WeatherChart :hourlyData="day.apres_midi.hourly" :theme="resolvedTheme" />
                 </div>
               </div>
             </div>
@@ -591,19 +613,49 @@ header h1 { margin: 0; display: flex; align-items: center; gap: 15px; font-size:
 .main-nav { display: flex; background: #eee; padding: 4px; border-radius: 8px; gap: 2px; }
 .main-nav button { border: none; padding: 6px 12px; cursor: pointer; border-radius: 6px; background: transparent; font-weight: bold; color: #666; display: flex; align-items: center; gap: 5px; font-size: 0.88rem; }
 .main-nav button.active { background: white; color: #4caf50; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-.theme-switch { display: flex; background: #eee; padding: 3px; border-radius: 8px; gap: 2px; }
-.theme-btn { display: flex; align-items: center; gap: 4px; border: none; padding: 6px 10px; cursor: pointer; border-radius: 6px; background: transparent; font-weight: 600; font-size: 0.85rem; color: #666; white-space: nowrap; }
-.theme-btn.active { background: white; color: #4caf50; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.theme-select-wrapper { display: inline-flex; align-items: center; gap: 6px; background: #eee; padding: 5px 10px; border-radius: 8px; color: #666; font-weight: 600; font-size: 0.88rem; box-sizing: border-box; }
+.theme-select-wrapper .mdi { font-size: 1.1rem; color: #666; display: flex; align-items: center; }
+.theme-select { border: none !important; background: transparent !important; box-shadow: none !important; padding: 0 !important; font-weight: 600; color: #666 !important; cursor: pointer; outline: none !important; font-family: inherit; font-size: 0.88rem; width: auto; }
 .logout-btn { background: #f44336; color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; }
 
 /* ECRANS LOGIN & ADMIN */
-.login-screen, .admin-screen { display: flex; justify-content: center; margin-top: 40px; }
-.login-box, .admin-box { background: #f9f9f9; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+.login-screen, .admin-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; margin-top: 40px; gap: 20px; }
+.login-box, .admin-box { background: #f9f9f9; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; box-sizing: border-box; }
+.admin-box.list-box { max-width: 400px; margin-top: 0px; }
 .login-error { background: #ffebee; color: #d32f2f; padding: 10px; border-radius: 6px; margin-bottom: 15px; text-align: center; }
 .msg-banner { padding: 10px; border-radius: 6px; margin-bottom: 15px; text-align: center; }
 .msg-banner.success { background: #e8f5e9; color: #2e7d32; }
 .msg-banner.error { background: #ffebee; color: #c62828; }
 .login-btn { width: 100%; background: #4caf50; color: white; border: none; padding: 12px; border-radius: 8px; font-size: 1.1rem; cursor: pointer; margin-top: 10px; }
+
+/* Table d'administration */
+.user-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+.user-table th, .user-table td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; font-size: 0.95rem; }
+.user-table th { font-weight: bold; color: #666; }
+
+/* Badges rôles */
+.badge { padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; }
+.badge.admin { background: #e8f5e9; color: #2e7d32; }
+.badge.user { background: #e3f2fd; color: #1565c0; }
+
+/* Boutons d'action */
+.actions { display: flex; gap: 8px; justify-content: flex-start; }
+.actions button {
+  border: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: #f0f0f0;
+  color: #333;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+.actions button:hover { background: #e0e0e0; color: #4caf50; }
+.actions button.del-btn { background: #ffebee; color: #c62828; }
+.actions button.del-btn:hover { background: #ffcdd2; color: #b71c1c; }
 
 /* FORMULAIRES */
 .input-group { margin-bottom: 15px; }
@@ -717,9 +769,10 @@ textarea { height: 80px; }
 /* Mode nuit */
 .app-container.theme-dark { color: #e8eaed; }
 .app-container.theme-dark header { border-bottom-color: #3d4450; }
-.app-container.theme-dark .theme-switch { background: #2d333c; }
-.app-container.theme-dark .theme-btn { color: #b0b8c4; }
-.app-container.theme-dark .theme-btn.active { background: #3d4450; color: #81c784; box-shadow: none; }
+.app-container.theme-dark .theme-select-wrapper { background: #2d333c; color: #e8eaed; }
+.app-container.theme-dark .theme-select-wrapper .mdi { color: #e8eaed; }
+.app-container.theme-dark .theme-select { color: #e8eaed !important; }
+.app-container.theme-dark .theme-select option { background: #252a32; color: #e8eaed; }
 .app-container.theme-dark .main-nav { background: #2d333c; }
 .app-container.theme-dark .main-nav button { color: #b0b8c4; }
 .app-container.theme-dark .main-nav button.active { background: #3d4450; color: #81c784; box-shadow: none; }
@@ -759,4 +812,15 @@ textarea { height: 80px; }
 .app-container.theme-dark .error-msg { background: #4a2328; color: #ffcdd2; }
 .app-container.theme-dark .refresh-btn { background: #3d4450; color: #e8eaed; border: none; border-radius: 8px; padding: 10px 14px; cursor: pointer; }
 .app-container.theme-dark .refresh-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Dark mode pour la table d'administration et les boutons */
+.app-container.theme-dark .user-table th { color: #b0b8c4; }
+.app-container.theme-dark .user-table th, 
+.app-container.theme-dark .user-table td { border-bottom-color: #3d4450; }
+.app-container.theme-dark .badge.admin { background: rgba(46, 125, 50, 0.2); color: #a5d6a7; }
+.app-container.theme-dark .badge.user { background: rgba(21, 101, 192, 0.2); color: #90caf9; }
+.app-container.theme-dark .actions button { background: #2d333c; color: #e5e7eb; }
+.app-container.theme-dark .actions button:hover { background: #3d4450; color: #81c784; }
+.app-container.theme-dark .actions button.del-btn { background: rgba(198, 40, 40, 0.2); color: #ef9a9a; }
+.app-container.theme-dark .actions button.del-btn:hover { background: rgba(198, 40, 40, 0.35); color: #ff8a80; }
 </style>

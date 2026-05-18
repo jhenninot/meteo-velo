@@ -272,6 +272,8 @@ watch(timeframe, () => {
   }
 })
 
+
+
 const connectStrava = async () => {
   loadingConnect.value = true
   try {
@@ -305,13 +307,10 @@ const initMap = (activityId, encodedPolyline) => {
   }
 
   const map = L.map(containerId, { zoomControl: true, scrollWheelZoom: false })
-  const isDark = props.theme === 'dark'
 
   const standardLayer = L.tileLayer(
-    isDark
-      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    { attribution: isDark ? '© OpenStreetMap © CARTO' : '© OpenStreetMap contributors', maxZoom: 19 }
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    { attribution: '© OpenStreetMap contributors', maxZoom: 19 }
   )
 
   const topoLayer = L.tileLayer(
@@ -416,13 +415,10 @@ const openFullscreenMap = async (activity) => {
   if (!container) return
 
   fullscreenMapInstance = L.map(containerId, { zoomControl: true, scrollWheelZoom: true })
-  const isDark = props.theme === 'dark'
 
   const standardLayer = L.tileLayer(
-    isDark
-      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    { attribution: isDark ? '© OpenStreetMap © CARTO' : '© OpenStreetMap contributors', maxZoom: 19 }
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    { attribution: '© OpenStreetMap contributors', maxZoom: 19 }
   )
 
   const topoLayer = L.tileLayer(
@@ -505,7 +501,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="strava-page">
+  <div class="strava-page" :class="{ 'theme-dark': theme === 'dark' }">
 
     <!-- Notification retour OAuth -->
     <div v-if="stravaNotif === 'success'" class="strava-notif success">
@@ -890,30 +886,31 @@ onUnmounted(() => {
 }
 
 /* ========== DARK MODE ========== */
-:global(.theme-dark) .connect-card { background: #252a32; color: #e8eaed; }
-:global(.theme-dark) .connect-card h2 { color: #e8eaed; }
-:global(.theme-dark) .connect-card p { color: #9aa0a6; }
-:global(.theme-dark) .connect-note { color: #6b7280; }
-:global(.theme-dark) .athlete-header { background: #252a32; }
-:global(.theme-dark) .athlete-name { color: #e8eaed; }
-:global(.theme-dark) .btn-disconnect { background: #2d1f1a; }
-:global(.theme-dark) .btn-disconnect:hover { background: #3d2a20; }
-:global(.theme-dark) .stat-tile { background: #252a32; }
-:global(.theme-dark) .stat-val { color: #e8eaed; }
-:global(.theme-dark) .stat-val small { color: #9aa0a6; }
-:global(.theme-dark) .activity-card { background: #252a32; border-left-color: #FC4C02; }
-:global(.theme-dark) .activity-card.is-expanded { box-shadow: 0 6px 24px rgba(252,76,2,0.2); }
-:global(.theme-dark) .activity-header:hover { background: #2d2420; }
-:global(.theme-dark) .activity-name { color: #e8eaed; }
-:global(.theme-dark) .activity-date { color: #6b7280; }
-:global(.theme-dark) .activity-metrics { color: #c5cad3; }
-:global(.theme-dark) .activity-type-badge { background: #3d2a20; }
-:global(.theme-dark) .activity-map-wrap { border-top-color: #3d4450; }
-:global(.theme-dark) .strava-notif.success { background: #1e3a24; color: #86efac; }
-:global(.theme-dark) .strava-notif.strava-error { background: #4a2328; color: #fca5a5; }
-:global(.theme-dark) .strava-error-msg { background: #4a2328; color: #fca5a5; }
-:global(.theme-dark) .strava-loading { color: #6b7280; }
-:global(.theme-dark) .strava-empty { color: #6b7280; }
+.theme-dark .connect-card { background: #252a32; color: #e8eaed; }
+.theme-dark .connect-card h2 { color: #e8eaed; }
+.theme-dark .connect-card p { color: #9aa0a6; }
+.theme-dark .connect-note { color: #6b7280; }
+.theme-dark .athlete-header { background: #252a32; }
+.theme-dark .athlete-name { color: #e8eaed; }
+.theme-dark .btn-disconnect { background: #2d333c; border-color: #4a515c; color: #FC4C02; }
+.theme-dark .btn-disconnect:hover { background: #3d4450; }
+.theme-dark .stat-tile { background: #252a32; }
+.theme-dark .stat-val { color: #e8eaed; }
+.theme-dark .stat-val small { color: #9aa0a6; }
+.theme-dark .activity-card { background: #252a32; border-left-color: #FC4C02; }
+.theme-dark .activity-card.is-expanded { background: #252a32; box-shadow: 0 6px 24px rgba(252,76,2,0.2); }
+.theme-dark .activity-header:hover { background: rgba(255, 255, 255, 0.03); }
+.theme-dark .activity-name { color: #e8eaed; }
+.theme-dark .activity-date { color: #6b7280; }
+.theme-dark .activity-metrics { color: #c5cad3; }
+.theme-dark .activity-type-badge { background: #2d333c; border: 1px solid #3d4450; }
+.theme-dark .activity-map-wrap { border-top-color: #3d4450; }
+.theme-dark .activity-map { background: #1a1d23; }
+.theme-dark .strava-notif.success { background: #1e3a24; color: #86efac; }
+.theme-dark .strava-notif.strava-error { background: #4a2328; color: #fca5a5; }
+.theme-dark .strava-error-msg { background: #4a2328; color: #fca5a5; }
+.theme-dark .strava-loading { color: #6b7280; }
+.theme-dark .strava-empty { color: #6b7280; }
 
 /* ---- Filter controls ---- */
 .filter-controls {
@@ -946,10 +943,10 @@ onUnmounted(() => {
 .sort-btn.active { background: #FC4C02; color: #fff; border-color: #FC4C02; }
 .sort-btn .mdi { font-size: 0.9rem; }
 
-:global(.theme-dark) .sort-label { color: #6b7280; }
-:global(.theme-dark) .sort-btn { background: #2d333c; border-color: #3d4450; color: #9aa0a6; }
-:global(.theme-dark) .sort-btn:hover { border-color: #FC4C02; color: #FC4C02; background: #2d1f1a; }
-:global(.theme-dark) .sort-btn.active { background: #FC4C02; color: #fff; border-color: #FC4C02; }
+.theme-dark .sort-label { color: #6b7280; }
+.theme-dark .sort-btn { background: #2d333c; border-color: #3d4450; color: #9aa0a6; }
+.theme-dark .sort-btn:hover { border-color: #FC4C02; color: #FC4C02; background: #3d4450; }
+.theme-dark .sort-btn.active { background: #FC4C02; color: #fff; border-color: #FC4C02; }
 
 /* ---- Custom date pickers ---- */
 .custom-date-pickers {
@@ -991,19 +988,19 @@ onUnmounted(() => {
   box-shadow: 0 0 0 3px rgba(252, 76, 2, 0.15);
 }
 
-:global(.theme-dark) .custom-date-pickers {
+.theme-dark .custom-date-pickers {
   background: #1e232b;
   border-color: #2d333c;
 }
-:global(.theme-dark) .date-picker-group label {
+.theme-dark .date-picker-group label {
   color: #9aa0a6;
 }
-:global(.theme-dark) .date-input {
+.theme-dark .date-input {
   background: #252a32;
   border-color: #3d4450;
   color: #e8eaed;
 }
-:global(.theme-dark) .date-input:focus {
+.theme-dark .date-input:focus {
   border-color: #FC4C02;
 }
 
@@ -1070,12 +1067,12 @@ onUnmounted(() => {
   border-color: #FC4C02;
 }
 
-:global(.theme-dark) .btn-map-action {
+.theme-dark .btn-map-action {
   background: rgba(37, 42, 50, 0.95);
   border-color: #4b5563;
   color: #e5e7eb;
 }
-:global(.theme-dark) .btn-map-action:hover {
+.theme-dark .btn-map-action:hover {
   background: #FC4C02;
   color: #fff;
   border-color: #FC4C02;
@@ -1161,12 +1158,12 @@ onUnmounted(() => {
   color: #fff;
 }
 
-:global(.theme-dark) .btn-strava-link-full {
+.theme-dark .btn-strava-link-full {
   background: #252a32;
   color: #FC4C02;
   border-color: rgba(252, 76, 2, 0.5);
 }
-:global(.theme-dark) .btn-strava-link-full:hover {
+.theme-dark .btn-strava-link-full:hover {
   background: #FC4C02;
   color: #fff;
 }
@@ -1194,29 +1191,29 @@ onUnmounted(() => {
   height: 100%;
 }
 
-:global(.theme-dark) .map-fullscreen-modal {
+.theme-dark .map-fullscreen-modal {
   background: #1a1e24;
 }
-:global(.theme-dark) .fullscreen-header {
+.theme-dark .fullscreen-header {
   background: #252a32;
   border-bottom-color: #3d4450;
 }
-:global(.theme-dark) .fullscreen-type-badge {
-  background: #3d2a20;
-  border-color: rgba(252, 76, 2, 0.4);
+.theme-dark .fullscreen-type-badge {
+  background: #2d333c;
+  border-color: #3d4450;
 }
-:global(.theme-dark) .fullscreen-title-main h2 {
+.theme-dark .fullscreen-title-main h2 {
   color: #e8eaed;
 }
-:global(.theme-dark) .fullscreen-date {
+.theme-dark .fullscreen-date {
   color: #9aa0a6;
 }
-:global(.theme-dark) .btn-fullscreen-close {
+.theme-dark .btn-fullscreen-close {
   background: #2d333c;
   color: #e5e7eb;
   border-color: #3d4450;
 }
-:global(.theme-dark) .btn-fullscreen-close:hover {
+.theme-dark .btn-fullscreen-close:hover {
   background: #3d4450;
   border-color: #4b5563;
 }

@@ -30,7 +30,7 @@ const userSchema = new mongoose.Schema({
     lat: Number,
     lon: Number,
     consignes: String,
-    theme: { type: String, enum: ['light', 'dark'], default: 'light' },
+    theme: { type: String, enum: ['light', 'dark', 'auto'], default: 'auto' },
     stravaFilters: { type: [String], default: [] }
   },
   strava: {
