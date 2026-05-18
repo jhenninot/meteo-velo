@@ -410,20 +410,35 @@ app.get('/api/strava/activities', verifyToken, async (req, res) => {
     if (!user?.strava?.accessToken) return res.status(404).json({ error: 'Compte Strava non lié' });
 
     const accessToken = await ensureStravaToken(user);
-    const after = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
+    
+    // Support dynamic timeframe / custom calendar range
+    let after, before;
+    if (req.query.startDate) {
+      after = Math.floor(new Date(req.query.startDate).getTime() / 1000);
+      if (req.query.endDate) {
+        before = Math.floor(new Date(req.query.endDate).getTime() / 1000) + 86400;
+      }
+    } else {
+      const days = parseInt(req.query.days) || 30;
+      after = Math.floor(Date.now() / 1000) - days * 24 * 3600;
+    }
+
+    const stravaParams = { per_page: 200 };
+    if (after) stravaParams.after = after;
+    if (before) stravaParams.before = before;
 
     const response = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
       headers: { Authorization: `Bearer ${accessToken}` },
-      params: { after, per_page: 100 }
+      params: stravaParams
     });
 
+
     const activities = response.data
-      .filter(a => BIKE_TYPES.includes(a.type))
       .map(a => ({
         id: a.id,
         name: a.name,
-        type: a.type,
-        sport_type: a.sport_type,
+        type: a.sport_type || a.type,
+        sport_type: a.sport_type || a.type,
         start_date: a.start_date,
         distance: a.distance,
         moving_time: a.moving_time,
