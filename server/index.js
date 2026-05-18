@@ -31,9 +31,35 @@ const userSchema = new mongoose.Schema({
     lon: Number,
     consignes: String,
     theme: { type: String, enum: ['light', 'dark'], default: 'light' }
+  },
+  strava: {
+    athleteId: Number,
+    accessToken: String,
+    refreshToken: String,
+    expiresAt: Number, // Unix timestamp seconds
+    athleteName: String,
+    athleteProfile: String
   }
 });
 const User = mongoose.model('User', userSchema);
+
+// --- HELPER STRAVA : Rafraîchit le token si expiré ---
+const ensureStravaToken = async (user) => {
+  const now = Math.floor(Date.now() / 1000);
+  if (user.strava.expiresAt > now + 60) return user.strava.accessToken;
+
+  const res = await axios.post('https://www.strava.com/oauth/token', {
+    client_id: process.env.STRAVA_CLIENT_ID,
+    client_secret: process.env.STRAVA_CLIENT_SECRET,
+    grant_type: 'refresh_token',
+    refresh_token: user.strava.refreshToken
+  });
+  user.strava.accessToken = res.data.access_token;
+  user.strava.refreshToken = res.data.refresh_token;
+  user.strava.expiresAt = res.data.expires_at;
+  await user.save();
+  return user.strava.accessToken;
+};
 
 // --- 3. MIDDLEWARE DE SÉCURITÉ (verifyToken) ---
 const verifyToken = (req, res, next) => {
@@ -311,6 +337,119 @@ app.delete('/api/admin/users/:id', verifyToken, async (req, res) => {
     if (req.params.id === req.user.id) return res.status(400).json({ error: "Impossible de supprimer votre propre compte" });
     await User.findByIdAndDelete(req.params.id);
     res.json({ message: "Utilisateur supprimé" });
+});
+
+// --- ROUTES STRAVA ---
+
+// 1. Générer l'URL d'autorisation Strava
+app.get('/api/strava/authorize', verifyToken, (req, res) => {
+  const state = Buffer.from(req.user.id).toString('base64url');
+  const params = new URLSearchParams({
+    client_id: process.env.STRAVA_CLIENT_ID,
+    response_type: 'code',
+    redirect_uri: process.env.STRAVA_CALLBACK_URL,
+    approval_prompt: 'auto',
+    scope: 'activity:read_all',
+    state
+  });
+  res.json({ url: `https://www.strava.com/oauth/authorize?${params}` });
+});
+
+// 2. Callback OAuth de Strava
+app.get('/api/strava/callback', async (req, res) => {
+  const { code, state, error } = req.query;
+  const frontend = process.env.FRONTEND_URL || 'http://localhost:5173';
+  if (error || !code) return res.redirect(`${frontend}/?strava=error`);
+
+  try {
+    const userId = Buffer.from(state, 'base64url').toString('utf-8');
+    const tokenRes = await axios.post('https://www.strava.com/oauth/token', {
+      client_id: process.env.STRAVA_CLIENT_ID,
+      client_secret: process.env.STRAVA_CLIENT_SECRET,
+      code,
+      grant_type: 'authorization_code'
+    });
+    const { access_token, refresh_token, expires_at, athlete } = tokenRes.data;
+    await User.findByIdAndUpdate(userId, {
+      strava: {
+        athleteId: athlete.id,
+        accessToken: access_token,
+        refreshToken: refresh_token,
+        expiresAt: expires_at,
+        athleteName: `${athlete.firstname} ${athlete.lastname}`,
+        athleteProfile: athlete.profile_medium
+      }
+    });
+    res.redirect(`${frontend}/?strava=success`);
+  } catch (err) {
+    console.error('Strava callback error:', err.message);
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/?strava=error`);
+  }
+});
+
+// 3. Statut de connexion Strava
+app.get('/api/strava/status', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('strava');
+    res.json({
+      connected: !!(user?.strava?.accessToken),
+      athleteName: user?.strava?.athleteName || null,
+      athleteProfile: user?.strava?.athleteProfile || null
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur statut Strava' });
+  }
+});
+
+// 4. Récupérer les activités vélo des 30 derniers jours
+const BIKE_TYPES = ['Ride', 'VirtualRide', 'GravelRide', 'EBikeRide', 'MountainBikeRide'];
+
+app.get('/api/strava/activities', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user?.strava?.accessToken) return res.status(404).json({ error: 'Compte Strava non lié' });
+
+    const accessToken = await ensureStravaToken(user);
+    const after = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
+
+    const response = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      params: { after, per_page: 100 }
+    });
+
+    const activities = response.data
+      .filter(a => BIKE_TYPES.includes(a.type))
+      .map(a => ({
+        id: a.id,
+        name: a.name,
+        type: a.type,
+        sport_type: a.sport_type,
+        start_date: a.start_date,
+        distance: a.distance,
+        moving_time: a.moving_time,
+        elapsed_time: a.elapsed_time,
+        total_elevation_gain: a.total_elevation_gain,
+        average_speed: a.average_speed,
+        max_speed: a.max_speed,
+        average_watts: a.average_watts,
+        map: { summary_polyline: a.map?.summary_polyline }
+      }));
+
+    res.json(activities);
+  } catch (err) {
+    console.error('Strava activities error:', err.message);
+    res.status(500).json({ error: 'Erreur récupération activités Strava' });
+  }
+});
+
+// 5. Délier le compte Strava
+app.delete('/api/strava/disconnect', verifyToken, async (req, res) => {
+  try {
+    await User.findByIdAndUpdate(req.user.id, { $unset: { strava: '' } });
+    res.json({ message: 'Compte Strava délié' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur lors de la déconnexion Strava' });
+  }
 });
 
 app.listen(PORT, () => console.log(`Serveur prêt sur http://localhost:${PORT}`));

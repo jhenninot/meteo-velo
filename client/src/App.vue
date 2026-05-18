@@ -3,6 +3,7 @@ import { ref, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { jwtDecode } from 'jwt-decode'
 import WeatherChart from './components/WeatherChart.vue'
+import StravaActivities from './components/StravaActivities.vue'
 
 // --- ÉTATS D'AUTHENTIFICATION ---
 const isLoggedIn = ref(false)
@@ -14,6 +15,7 @@ const loginError = ref('')
 
 // --- ÉTATS ADMIN ---
 const showAdminPanel = ref(false)
+const showStravaPage = ref(false)
 const newUser = ref({ username: '', password: '', role: 'user' })
 const adminMsg = ref({ text: '', type: '' })
 const usersList = ref([])
@@ -118,6 +120,7 @@ const handleLogout = () => {
   currentUser.value = ''
   forecastData.value = null
   showAdminPanel.value = false
+  showStravaPage.value = false
   theme.value = 'light'
 }
 
@@ -210,17 +213,21 @@ onMounted(async () => {
     try {
       setupAxiosToken(token)
       const decoded = jwtDecode(token)
-      isLoggedIn.value = true 
+      isLoggedIn.value = true
       currentUser.value = decoded.username
       userRole.value = decoded.role
-      
-      // AJOUT : Si l'utilisateur est admin, on précharge la liste
-      if (decoded.role === 'admin') {
-        fetchUsers()
-      }
+
+      if (decoded.role === 'admin') fetchUsers()
 
       await loadUserPreferences()
       initializeApp()
+
+      // Retour callback Strava → ouvrir la page Activités
+      const urlParams = new URLSearchParams(window.location.search)
+      if (urlParams.has('strava')) {
+        showStravaPage.value = true
+        showAdminPanel.value = false
+      }
     } catch (err) {
       handleLogout()
     }
@@ -352,9 +359,16 @@ const fetchForecast = async () => {
             <span class="mdi mdi-weather-night"></span> Nuit
           </button>
         </div>
-        <nav v-if="userRole === 'admin'" class="admin-nav">
-          <button @click="showAdminPanel = false" :class="{ active: !showAdminPanel }">Météo</button>
-          <button @click="showAdminPanel = true" :class="{ active: showAdminPanel }">Admin</button>
+        <nav class="main-nav">
+          <button @click="showAdminPanel = false; showStravaPage = false" :class="{ active: !showAdminPanel && !showStravaPage }">
+            <span class="mdi mdi-weather-sunny"></span> Météo
+          </button>
+          <button @click="showAdminPanel = false; showStravaPage = true" :class="{ active: showStravaPage }">
+            <span class="mdi mdi-bike"></span> Activités
+          </button>
+          <button v-if="userRole === 'admin'" @click="showAdminPanel = true; showStravaPage = false" :class="{ active: showAdminPanel }">
+            <span class="mdi mdi-shield-account"></span> Admin
+          </button>
         </nav>
         
         <button @click="handleLogout" class="logout-btn" title="Déconnexion">
@@ -443,6 +457,9 @@ const fetchForecast = async () => {
         </div>
 
       </div>
+    </main>
+    <main v-else-if="showStravaPage">
+      <StravaActivities :theme="theme" :api-base-url="API_BASE_URL" />
     </main>
     <main v-else>
       <section class="config-section">
@@ -571,9 +588,9 @@ header h1 { margin: 0; display: flex; align-items: center; gap: 15px; font-size:
 
 /* NAVIGATION & BOUTONS */
 .header-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 15px; }
-.admin-nav { display: flex; background: #eee; padding: 4px; border-radius: 8px; }
-.admin-nav button { border: none; padding: 6px 12px; cursor: pointer; border-radius: 6px; background: transparent; font-weight: bold; color: #666; }
-.admin-nav button.active { background: white; color: #4caf50; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.main-nav { display: flex; background: #eee; padding: 4px; border-radius: 8px; gap: 2px; }
+.main-nav button { border: none; padding: 6px 12px; cursor: pointer; border-radius: 6px; background: transparent; font-weight: bold; color: #666; display: flex; align-items: center; gap: 5px; font-size: 0.88rem; }
+.main-nav button.active { background: white; color: #4caf50; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 .theme-switch { display: flex; background: #eee; padding: 3px; border-radius: 8px; gap: 2px; }
 .theme-btn { display: flex; align-items: center; gap: 4px; border: none; padding: 6px 10px; cursor: pointer; border-radius: 6px; background: transparent; font-weight: 600; font-size: 0.85rem; color: #666; white-space: nowrap; }
 .theme-btn.active { background: white; color: #4caf50; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -703,9 +720,9 @@ textarea { height: 80px; }
 .app-container.theme-dark .theme-switch { background: #2d333c; }
 .app-container.theme-dark .theme-btn { color: #b0b8c4; }
 .app-container.theme-dark .theme-btn.active { background: #3d4450; color: #81c784; box-shadow: none; }
-.app-container.theme-dark .admin-nav { background: #2d333c; }
-.app-container.theme-dark .admin-nav button { color: #b0b8c4; }
-.app-container.theme-dark .admin-nav button.active { background: #3d4450; color: #81c784; box-shadow: none; }
+.app-container.theme-dark .main-nav { background: #2d333c; }
+.app-container.theme-dark .main-nav button { color: #b0b8c4; }
+.app-container.theme-dark .main-nav button.active { background: #3d4450; color: #81c784; box-shadow: none; }
 .app-container.theme-dark .login-box,
 .app-container.theme-dark .admin-box { background: #252a32; border: 1px solid #3d4450; box-shadow: 0 4px 20px rgba(0,0,0,0.35); color: #e8eaed; }
 .app-container.theme-dark .login-error { background: #4a2328; color: #ffcdd2; }
