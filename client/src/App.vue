@@ -27,6 +27,12 @@ const consignes = ref(localStorage.getItem('user_consignes') || '')
 const forecastData = ref(null)
 const loading = ref(false)
 const error = ref(null)
+const expandedPeriods = ref({})
+
+const togglePeriod = (dayIndex, period) => {
+  const key = `${dayIndex}-${period}`
+  expandedPeriods.value[key] = !expandedPeriods.value[key]
+}
 
 const storedTheme = localStorage.getItem('user_theme')
 const theme = ref(storedTheme === 'dark' ? 'dark' : 'light')
@@ -469,7 +475,7 @@ const fetchForecast = async () => {
           <div v-for="(day, index) in forecastData" :key="index" class="day-card">
             <h3><span class="mdi mdi-calendar"></span> {{ formatDate(day.date) }}</h3>
             <div class="day-split">
-              <div class="half-day" :class="day.matin.favorable ? 'favorable' : 'defavorable'">
+              <div class="half-day" :class="[day.matin.favorable ? 'favorable' : 'defavorable', { 'is-expanded': expandedPeriods[`${index}-matin`] }]" @click="togglePeriod(index, 'matin')">
                 <span
                   class="bike-day-indicator"
                   :class="day.matin.favorable ? 'bike-day-favorable' : 'bike-day-defavorable'"
@@ -493,8 +499,28 @@ const fetchForecast = async () => {
                   Facteurs défavorables : {{ defavorableCritereLabels(day.matin).join(' · ') }}
                 </div>
                 <div class="ia-advice">{{ day.matin.conseil }}</div>
+                
+                <div v-if="expandedPeriods[`${index}-matin`] && day.matin.hourly" class="hourly-details">
+                  <div class="hourly-row hourly-header">
+                    <span>Heure</span><span>Temp.</span><span>Proba.</span><span>Pluie</span><span>Vent</span>
+                  </div>
+                  <div v-for="(h, i) in day.matin.hourly" :key="i" class="hourly-row">
+                    <span class="hour-label">{{ h.hour }}h</span>
+                    <span class="hour-temp">{{ h.temp }}°C</span>
+                    <span class="hour-rain-prob"><span class="mdi mdi-water-percent"></span> {{ h.rain }}%</span>
+                    <span class="hour-rain-qty">
+                      <span class="rain-bar-container" :title="`${h.precip} mm`">
+                        <span class="rain-bar" :style="{ width: Math.min(100, h.precip * 20) + '%' }"></span>
+                      </span>
+                      <span class="rain-val">{{ h.precip }}mm</span>
+                    </span>
+                    <span class="hour-wind">
+                      <span class="mdi mdi-navigation wind-icon" :style="getWindStyle(h.dir)"></span> {{ h.wind }}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div class="half-day" :class="day.apres_midi.favorable ? 'favorable' : 'defavorable'">
+              <div class="half-day" :class="[day.apres_midi.favorable ? 'favorable' : 'defavorable', { 'is-expanded': expandedPeriods[`${index}-apres_midi`] }]" @click="togglePeriod(index, 'apres_midi')">
                 <span
                   class="bike-day-indicator"
                   :class="day.apres_midi.favorable ? 'bike-day-favorable' : 'bike-day-defavorable'"
@@ -518,6 +544,26 @@ const fetchForecast = async () => {
                   Facteurs défavorables : {{ defavorableCritereLabels(day.apres_midi).join(' · ') }}
                 </div>
                 <div class="ia-advice">{{ day.apres_midi.conseil }}</div>
+                
+                <div v-if="expandedPeriods[`${index}-apres_midi`] && day.apres_midi.hourly" class="hourly-details">
+                  <div class="hourly-row hourly-header">
+                    <span>Heure</span><span>Temp.</span><span>Proba.</span><span>Pluie</span><span>Vent</span>
+                  </div>
+                  <div v-for="(h, i) in day.apres_midi.hourly" :key="i" class="hourly-row">
+                    <span class="hour-label">{{ h.hour }}h</span>
+                    <span class="hour-temp">{{ h.temp }}°C</span>
+                    <span class="hour-rain-prob"><span class="mdi mdi-water-percent"></span> {{ h.rain }}%</span>
+                    <span class="hour-rain-qty">
+                      <span class="rain-bar-container" :title="`${h.precip} mm`">
+                        <span class="rain-bar" :style="{ width: Math.min(100, h.precip * 20) + '%' }"></span>
+                      </span>
+                      <span class="rain-val">{{ h.precip }}mm</span>
+                    </span>
+                    <span class="hour-wind">
+                      <span class="mdi mdi-navigation wind-icon" :style="getWindStyle(h.dir)"></span> {{ h.wind }}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -581,18 +627,30 @@ textarea { height: 80px; }
 .day-card { background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 15px; border: 1px solid #eee; }
 .day-card h3 { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 8px; margin-top: 0; }
 .day-split { display: flex; flex-direction: column; gap: 10px; }
-.half-day { position: relative; padding: 12px 3.75rem 12px 12px; border-radius: 8px; border-left: 6px solid #ddd; background: #f9f9f9; }
+.half-day { position: relative; padding: 12px 3.75rem 12px 12px; border-radius: 8px; border-left: 6px solid #ddd; background: #f9f9f9; cursor: pointer; transition: filter 0.2s; }
+.half-day:hover { filter: brightness(0.96); }
 .half-day.favorable { border-left-color: #4caf50; background: #f1f8e9; }
 .half-day.defavorable { border-left-color: #f44336; background: #ffebee; }
 .half-day h4 { margin: 0 0 10px; font-size: 1rem; }
 .half-day-heading { display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; }
 .half-day-heading-label { font-weight: 600; }
 
+.hourly-details { margin-top: 15px; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 10px; font-size: 0.85rem; }
+.hourly-row { display: grid; grid-template-columns: 1fr 1fr 1.2fr 1.2fr 1.5fr; padding: 4px 0; border-bottom: 1px solid rgba(0,0,0,0.05); align-items: center; }
+.hourly-row:last-child { border-bottom: none; }
+.hourly-header { font-weight: bold; color: #666; border-bottom: 1px solid rgba(0,0,0,0.15); margin-bottom: 4px; }
+.hour-label { font-weight: 600; }
+
+.hour-rain-qty { display: flex; align-items: center; gap: 8px; }
+.rain-bar-container { flex: 1; height: 6px; background: rgba(0,0,0,0.05); border-radius: 4px; overflow: hidden; display: flex; }
+.rain-bar { height: 100%; background: #2196f3; border-radius: 4px; transition: width 0.3s; }
+.rain-val { width: 35px; text-align: right; font-size: 0.8rem; color: #555; }
+
 .bike-day-indicator {
-  --bike-d: 3.15rem;
+  --bike-d: 2rem;
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 15px;
+  right: 15px;
   z-index: 1;
   width: var(--bike-d);
   height: var(--bike-d);
@@ -606,17 +664,16 @@ textarea { height: 80px; }
   background: rgba(255, 255, 255, 0.55);
 }
 .bike-day-indicator__icon {
-  font-size: 1.65rem;
+  font-size: 1rem;
   line-height: 1;
   position: relative;
   z-index: 0;
 }
-.bike-day-favorable { color: #4caf50; }
-.bike-day-favorable .bike-day-indicator__icon { color: inherit; }
+.bike-day-favorable { color: #4caf50; background: transparent; border-color: transparent; }
+.bike-day-favorable .bike-day-indicator__icon { color: inherit; font-size: 1.5rem; }
 .bike-day-defavorable { color: #f44336; }
 .bike-day-defavorable .bike-day-indicator__icon { color: inherit; }
-.bike-day-defavorable::before,
-.bike-day-defavorable::after {
+.bike-day-defavorable::before {
   content: '';
   position: absolute;
   left: 50%;
@@ -634,9 +691,6 @@ textarea { height: 80px; }
 }
 .bike-day-defavorable::before {
   transform: rotate(45deg);
-}
-.bike-day-defavorable::after {
-  transform: rotate(-45deg);
 }
 
 /* METRICS & ICONS */
@@ -681,9 +735,16 @@ textarea { height: 80px; }
 .app-container.theme-dark .day-card { background: #252a32; border-color: #3d4450; box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
 .app-container.theme-dark .day-card h3 { border-bottom-color: #3d4450; }
 .app-container.theme-dark .half-day { background: #2d333c; border-left-color: #4a515c; }
+.app-container.theme-dark .half-day:hover { filter: brightness(1.15); }
 .app-container.theme-dark .half-day.favorable { border-left-color: #66bb6a; background: #1e2e22; }
 .app-container.theme-dark .half-day.defavorable { border-left-color: #e57373; background: #3a2628; }
+.app-container.theme-dark .hourly-details { border-top-color: rgba(255,255,255,0.1); }
+.app-container.theme-dark .hourly-row { border-bottom-color: rgba(255,255,255,0.05); }
+.app-container.theme-dark .hourly-header { color: #aaa; border-bottom-color: rgba(255,255,255,0.15); }
+.app-container.theme-dark .rain-bar-container { background: rgba(255,255,255,0.1); }
+.app-container.theme-dark .rain-val { color: #bbb; }
 .app-container.theme-dark .bike-day-indicator { background: rgba(0, 0, 0, 0.35); }
+.app-container.theme-dark .bike-day-indicator.bike-day-favorable { background: transparent; border-color: transparent; }
 .app-container.theme-dark .bike-day-favorable { color: #81c784; }
 .app-container.theme-dark .bike-day-defavorable { color: #ef9a9a; }
 .app-container.theme-dark .half-day.favorable h4 .weather-main-icon { color: #81c784; }

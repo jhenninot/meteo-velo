@@ -130,8 +130,8 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
             if (!daysMap[date]) {
                 daysMap[date] = { 
                     date, 
-                    matin: { temps:[], rains:[], precips:[], winds:[], gusts:[], dirs:[] }, 
-                    apres_midi: { temps:[], rains:[], precips:[], winds:[], gusts:[], dirs:[] } 
+                    matin: { temps:[], rains:[], precips:[], winds:[], gusts:[], dirs:[], hours:[] }, 
+                    apres_midi: { temps:[], rains:[], precips:[], winds:[], gusts:[], dirs:[], hours:[] } 
                 };
             }
 
@@ -142,6 +142,7 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
                 daysMap[date].matin.winds.push(hourly.wind_speed_10m[i]);
                 daysMap[date].matin.gusts.push(hourly.wind_gusts_10m[i]);
                 daysMap[date].matin.dirs.push(hourly.wind_direction_10m[i]);
+                daysMap[date].matin.hours.push(hour);
             } else if (hour >= 13 && hour <= 18) {
                 daysMap[date].apres_midi.temps.push(hourly.temperature_2m[i]);
                 daysMap[date].apres_midi.rains.push(hourly.precipitation_probability[i]);
@@ -149,18 +150,31 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
                 daysMap[date].apres_midi.winds.push(hourly.wind_speed_10m[i]);
                 daysMap[date].apres_midi.gusts.push(hourly.wind_gusts_10m[i]);
                 daysMap[date].apres_midi.dirs.push(hourly.wind_direction_10m[i]);
+                daysMap[date].apres_midi.hours.push(hour);
             }
         });
 
         const aggregate = (period) => {
             if (!period || period.temps.length === 0) return null;
+            
+            const hourlyData = period.hours.map((h, i) => ({
+                hour: h,
+                temp: Math.round(period.temps[i]),
+                rain: period.rains[i],
+                precip: Number(period.precips[i].toFixed(1)),
+                wind: Math.round(period.winds[i]),
+                gust: Math.round(period.gusts[i]),
+                dir: period.dirs[i]
+            }));
+
             return {
                 temp: Math.round(Math.max(...period.temps)),
                 rain: Math.max(...period.rains),
                 precip: Number(period.precips.reduce((sum, current) => sum + current, 0).toFixed(1)),
                 wind: Math.round(Math.max(...period.winds)),
                 gust: Math.round(Math.max(...period.gusts)),
-                dir: period.dirs[Math.floor(period.dirs.length / 2)] 
+                dir: period.dirs[Math.floor(period.dirs.length / 2)],
+                hourly: hourlyData
             };
         };
 
