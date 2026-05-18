@@ -194,7 +194,7 @@ const chartOptions = computed(() => {
 .weather-chart-container {
   position: relative;
   height: 250px;
-  width: calc(100% + 3.75rem - 12px);
+  width: 100%;
   margin-top: 15px;
   padding-top: 10px;
   border-top: 1px solid rgba(0,0,0,0.1);

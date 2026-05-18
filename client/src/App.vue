@@ -609,12 +609,12 @@ textarea { height: 80px; }
 .day-card { background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 15px; border: 1px solid #eee; }
 .day-card h3 { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 8px; margin-top: 0; }
 .day-split { display: flex; flex-direction: column; gap: 10px; }
-.half-day { position: relative; padding: 12px 3.75rem 12px 12px; border-radius: 8px; border-left: 6px solid #ddd; background: transparent; cursor: pointer; transition: filter 0.2s, box-shadow 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.half-day { position: relative; padding: 12px; border-radius: 8px; border-left: 6px solid #ddd; background: transparent; cursor: pointer; transition: filter 0.2s, box-shadow 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
 .half-day:hover { filter: brightness(0.96); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
 .half-day.favorable { border-left-color: #4caf50; background: transparent; }
 .half-day.defavorable { border-left-color: #f44336; background: transparent; }
 .half-day h4 { margin: 0 0 10px; font-size: 1rem; }
-.half-day-heading { display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; }
+.half-day-heading { display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; margin-right: 3.5rem; }
 .half-day-heading-label { font-weight: 600; }
 
 .hourly-details { margin-top: 15px; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 10px; font-size: 0.85rem; }
@@ -676,7 +676,7 @@ textarea { height: 80px; }
 }
 
 /* METRICS & ICONS */
-.metrics { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; font-size: 0.85rem; font-weight: 600; }
+.metrics { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; font-size: 0.85rem; font-weight: 600; margin-right: 3.5rem; }
 .metrics span { display: flex; align-items: center; gap: 3px; }
 .weather-main-icon { font-size: 2.75rem; line-height: 1; flex-shrink: 0; }
 .half-day.favorable h4 .weather-main-icon { color: #4caf50; }
