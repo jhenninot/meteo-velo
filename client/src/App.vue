@@ -2,6 +2,7 @@
 import { ref, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { jwtDecode } from 'jwt-decode'
+import WeatherChart from './components/WeatherChart.vue'
 
 // --- ÉTATS D'AUTHENTIFICATION ---
 const isLoggedIn = ref(false)
@@ -475,7 +476,7 @@ const fetchForecast = async () => {
           <div v-for="(day, index) in forecastData" :key="index" class="day-card">
             <h3><span class="mdi mdi-calendar"></span> {{ formatDate(day.date) }}</h3>
             <div class="day-split">
-              <div class="half-day" :class="[day.matin.favorable ? 'favorable' : 'defavorable', { 'is-expanded': expandedPeriods[`${index}-matin`] }]" @click="togglePeriod(index, 'matin')">
+              <div v-if="day.matin" class="half-day" :class="[day.matin.favorable ? 'favorable' : 'defavorable', { 'is-expanded': expandedPeriods[`${index}-matin`] }]" @click="togglePeriod(index, 'matin')">
                 <span
                   class="bike-day-indicator"
                   :class="day.matin.favorable ? 'bike-day-favorable' : 'bike-day-defavorable'"
@@ -500,27 +501,11 @@ const fetchForecast = async () => {
                 </div>
                 <div class="ia-advice">{{ day.matin.conseil }}</div>
                 
-                <div v-if="expandedPeriods[`${index}-matin`] && day.matin.hourly" class="hourly-details">
-                  <div class="hourly-row hourly-header">
-                    <span>Heure</span><span>Temp.</span><span>Proba.</span><span>Pluie</span><span>Vent</span>
-                  </div>
-                  <div v-for="(h, i) in day.matin.hourly" :key="i" class="hourly-row">
-                    <span class="hour-label">{{ h.hour }}h</span>
-                    <span class="hour-temp">{{ h.temp }}°C</span>
-                    <span class="hour-rain-prob"><span class="mdi mdi-water-percent"></span> {{ h.rain }}%</span>
-                    <span class="hour-rain-qty">
-                      <span class="rain-bar-container" :title="`${h.precip} mm`">
-                        <span class="rain-bar" :style="{ width: Math.min(100, h.precip * 20) + '%' }"></span>
-                      </span>
-                      <span class="rain-val">{{ h.precip }}mm</span>
-                    </span>
-                    <span class="hour-wind">
-                      <span class="mdi mdi-navigation wind-icon" :style="getWindStyle(h.dir)"></span> {{ h.wind }}
-                    </span>
-                  </div>
+                <div v-if="expandedPeriods[`${index}-matin`] && day.matin.hourly">
+                  <WeatherChart :hourlyData="day.matin.hourly" :theme="theme" />
                 </div>
               </div>
-              <div class="half-day" :class="[day.apres_midi.favorable ? 'favorable' : 'defavorable', { 'is-expanded': expandedPeriods[`${index}-apres_midi`] }]" @click="togglePeriod(index, 'apres_midi')">
+              <div v-if="day.apres_midi" class="half-day" :class="[day.apres_midi.favorable ? 'favorable' : 'defavorable', { 'is-expanded': expandedPeriods[`${index}-apres_midi`] }]" @click="togglePeriod(index, 'apres_midi')">
                 <span
                   class="bike-day-indicator"
                   :class="day.apres_midi.favorable ? 'bike-day-favorable' : 'bike-day-defavorable'"
@@ -545,24 +530,8 @@ const fetchForecast = async () => {
                 </div>
                 <div class="ia-advice">{{ day.apres_midi.conseil }}</div>
                 
-                <div v-if="expandedPeriods[`${index}-apres_midi`] && day.apres_midi.hourly" class="hourly-details">
-                  <div class="hourly-row hourly-header">
-                    <span>Heure</span><span>Temp.</span><span>Proba.</span><span>Pluie</span><span>Vent</span>
-                  </div>
-                  <div v-for="(h, i) in day.apres_midi.hourly" :key="i" class="hourly-row">
-                    <span class="hour-label">{{ h.hour }}h</span>
-                    <span class="hour-temp">{{ h.temp }}°C</span>
-                    <span class="hour-rain-prob"><span class="mdi mdi-water-percent"></span> {{ h.rain }}%</span>
-                    <span class="hour-rain-qty">
-                      <span class="rain-bar-container" :title="`${h.precip} mm`">
-                        <span class="rain-bar" :style="{ width: Math.min(100, h.precip * 20) + '%' }"></span>
-                      </span>
-                      <span class="rain-val">{{ h.precip }}mm</span>
-                    </span>
-                    <span class="hour-wind">
-                      <span class="mdi mdi-navigation wind-icon" :style="getWindStyle(h.dir)"></span> {{ h.wind }}
-                    </span>
-                  </div>
+                <div v-if="expandedPeriods[`${index}-apres_midi`] && day.apres_midi.hourly">
+                  <WeatherChart :hourlyData="day.apres_midi.hourly" :theme="theme" />
                 </div>
               </div>
             </div>
@@ -627,10 +596,10 @@ textarea { height: 80px; }
 .day-card { background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 15px; border: 1px solid #eee; }
 .day-card h3 { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 8px; margin-top: 0; }
 .day-split { display: flex; flex-direction: column; gap: 10px; }
-.half-day { position: relative; padding: 12px 3.75rem 12px 12px; border-radius: 8px; border-left: 6px solid #ddd; background: #f9f9f9; cursor: pointer; transition: filter 0.2s; }
-.half-day:hover { filter: brightness(0.96); }
-.half-day.favorable { border-left-color: #4caf50; background: #f1f8e9; }
-.half-day.defavorable { border-left-color: #f44336; background: #ffebee; }
+.half-day { position: relative; padding: 12px 3.75rem 12px 12px; border-radius: 8px; border-left: 6px solid #ddd; background: transparent; cursor: pointer; transition: filter 0.2s, box-shadow 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.half-day:hover { filter: brightness(0.96); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+.half-day.favorable { border-left-color: #4caf50; background: transparent; }
+.half-day.defavorable { border-left-color: #f44336; background: transparent; }
 .half-day h4 { margin: 0 0 10px; font-size: 1rem; }
 .half-day-heading { display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; }
 .half-day-heading-label { font-weight: 600; }
@@ -734,10 +703,10 @@ textarea { height: 80px; }
 .app-container.theme-dark select { background: #1e222a; border-color: #4a515c; color: #e8eaed; }
 .app-container.theme-dark .day-card { background: #252a32; border-color: #3d4450; box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
 .app-container.theme-dark .day-card h3 { border-bottom-color: #3d4450; }
-.app-container.theme-dark .half-day { background: #2d333c; border-left-color: #4a515c; }
-.app-container.theme-dark .half-day:hover { filter: brightness(1.15); }
-.app-container.theme-dark .half-day.favorable { border-left-color: #66bb6a; background: #1e2e22; }
-.app-container.theme-dark .half-day.defavorable { border-left-color: #e57373; background: #3a2628; }
+.app-container.theme-dark .half-day { background: transparent; border-left-color: #4a515c; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+.app-container.theme-dark .half-day:hover { filter: brightness(1.15); box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+.app-container.theme-dark .half-day.favorable { border-left-color: #66bb6a; background: transparent; }
+.app-container.theme-dark .half-day.defavorable { border-left-color: #e57373; background: transparent; }
 .app-container.theme-dark .hourly-details { border-top-color: rgba(255,255,255,0.1); }
 .app-container.theme-dark .hourly-row { border-bottom-color: rgba(255,255,255,0.05); }
 .app-container.theme-dark .hourly-header { color: #aaa; border-bottom-color: rgba(255,255,255,0.15); }

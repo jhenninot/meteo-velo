@@ -121,9 +121,13 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
         const weatherRes = await axios.get(weatherUrl);
         const hourly = weatherRes.data.hourly;
 
+        const now = new Date();
         const daysMap = {};
         hourly.time.forEach((t, i) => {
             const dateObj = new Date(t);
+            // Ignorer les heures passées
+            if (dateObj < now) return;
+
             const date = t.split('T')[0];
             const hour = dateObj.getHours();
 
@@ -180,7 +184,7 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
 
         const structuredWeather = Object.values(daysMap)
             .map(d => ({ date: d.date, matin: aggregate(d.matin), apres_midi: aggregate(d.apres_midi) }))
-            .filter(d => d.matin !== null && d.apres_midi !== null)
+            .filter(d => d.matin !== null || d.apres_midi !== null)
             .slice(0, 5);
 
         const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
@@ -222,8 +226,8 @@ Les valeurs dans criteres sont uniquement les chaînes "favorable" ou "defavorab
             const ai = aiData.find(a => a.date === day.date) || { matin: {}, apres_midi: {} };
             return {
                 date: day.date,
-                matin: enrichPeriod(day.matin, ai.matin || {}),
-                apres_midi: enrichPeriod(day.apres_midi, ai.apres_midi || {})
+                matin: day.matin ? enrichPeriod(day.matin, ai.matin || {}) : null,
+                apres_midi: day.apres_midi ? enrichPeriod(day.apres_midi, ai.apres_midi || {}) : null
             };
         });
 
