@@ -15,6 +15,12 @@ const PORT = process.env.PORT || 3001;
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const JWT_SECRET = process.env.JWT_SECRET || 'ta_cle_secrete_hyper_longue';
 const PASSWORD_RULES_MESSAGE = "Le mot de passe doit contenir au moins 10 caractères, une majuscule, une minuscule, un chiffre et un caractère spécial.";
+const DEFAULT_ACTIVITY_ICON = 'mdi-bike';
+
+const normalizeMdiIcon = (icon) => {
+  const normalized = typeof icon === 'string' ? icon.trim() : '';
+  return /^mdi-[a-z0-9-]{1,56}$/.test(normalized) ? normalized : DEFAULT_ACTIVITY_ICON;
+};
 
 const validatePasswordStrength = (password) => {
   return typeof password === 'string'
@@ -43,6 +49,11 @@ const userSchema = new mongoose.Schema({
     theme: { type: String, enum: ['light', 'dark', 'auto'], default: 'auto' },
     stravaFilters: { type: [String], default: [] }
   },
+  activities: [{
+    label: { type: String, required: true, trim: true, maxlength: 80 },
+    icon: { type: String, default: 'mdi-bike', trim: true, maxlength: 60 },
+    constraints: { type: String, default: '', trim: true, maxlength: 4000 }
+  }],
   strava: {
     athleteId: Number,
     accessToken: String,
@@ -151,9 +162,18 @@ function enrichPeriod(aggregated, aiSlice) {
 }
 
 app.post('/api/forecast', verifyToken, async (req, res) => {
-  const { lat, lon, city, consignes, customInstructions } = req.body;
-  const userRules = (consignes ?? customInstructions ?? '').trim();
+  const { lat, lon, city, activityId } = req.body;
+  let activityLabel = '';
+  let userRules = '';
+
   try {
+    if (!activityId) return res.status(400).json({ error: "L'activité est obligatoire" });
+    const user = await User.findById(req.user.id).select('activities');
+    if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
+    const activity = user.activities.id(activityId);
+    if (!activity) return res.status(404).json({ error: "Activité introuvable" });
+    activityLabel = activity.label;
+    userRules = (activity.constraints || '').trim();
     const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m&timezone=auto`;
     const weatherRes = await axios.get(weatherUrl);
     const hourly = weatherRes.data.hourly;
@@ -235,10 +255,13 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
 
     const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
 
-    let prompt = `Tu es un algorithme de filtrage intransigeant pour un cycliste gravel ou route. Voici la météo agrégée (Matin / Après-midi) pour ${city} : ${JSON.stringify(structuredWeather)}`;
+    let prompt = `Tu es un algorithme de filtrage intransigeant pour l'activité suivante : ${activityLabel}. Voici la météo agrégée (Matin / Après-midi) pour ${city} : ${JSON.stringify(structuredWeather)}`;
 
     if (userRules !== "") {
-      prompt += `\nRÈGLES ÉLIMINATOIRES :\n"""${userRules}"""\nTu DOIS mettre "favorable": false si une règle est enfreinte.`;
+      prompt += `
+CONTRAINTES DE L'ACTIVITé :
+"""${userRules}"""
+Tu DOIS mettre "favorable": false si une contrainte est enfreinte.`;
     }
 
     prompt += `
@@ -342,6 +365,74 @@ app.patch('/api/user/password', verifyToken, async (req, res) => {
     res.json({ message: "Mot de passe mis à jour" });
   } catch (err) {
     res.status(500).json({ error: "Erreur lors de la mise à jour du mot de passe" });
+  }
+});
+
+app.get('/api/user/activities', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('activities');
+    if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
+    res.json(user.activities || []);
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors de la lecture des activités" });
+  }
+});
+
+app.post('/api/user/activities', verifyToken, async (req, res) => {
+  const label = typeof req.body.label === 'string' ? req.body.label.trim() : '';
+  const icon = normalizeMdiIcon(req.body.icon);
+  const constraints = typeof req.body.constraints === 'string' ? req.body.constraints.trim() : '';
+
+  if (!label) return res.status(400).json({ error: "Le libellé est obligatoire" });
+  if (label.length > 80) return res.status(400).json({ error: "Le libellé doit contenir 80 caractères maximum" });
+  if (constraints.length > 4000) return res.status(400).json({ error: "Les contraintes doivent contenir 4000 caractères maximum" });
+
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
+    user.activities.push({ label, icon, constraints });
+    await user.save();
+    res.status(201).json(user.activities[user.activities.length - 1]);
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors de la création de l'activité" });
+  }
+});
+
+app.put('/api/user/activities/:activityId', verifyToken, async (req, res) => {
+  const label = typeof req.body.label === 'string' ? req.body.label.trim() : '';
+  const icon = normalizeMdiIcon(req.body.icon);
+  const constraints = typeof req.body.constraints === 'string' ? req.body.constraints.trim() : '';
+
+  if (!label) return res.status(400).json({ error: "Le libellé est obligatoire" });
+  if (label.length > 80) return res.status(400).json({ error: "Le libellé doit contenir 80 caractères maximum" });
+  if (constraints.length > 4000) return res.status(400).json({ error: "Les contraintes doivent contenir 4000 caractères maximum" });
+
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
+    const activity = user.activities.id(req.params.activityId);
+    if (!activity) return res.status(404).json({ error: "Activité introuvable" });
+    activity.label = label;
+    activity.icon = icon;
+    activity.constraints = constraints;
+    await user.save();
+    res.json(activity);
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors de la modification de l'activité" });
+  }
+});
+
+app.delete('/api/user/activities/:activityId', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
+    const activity = user.activities.id(req.params.activityId);
+    if (!activity) return res.status(404).json({ error: "Activité introuvable" });
+    activity.deleteOne();
+    await user.save();
+    res.json({ message: "Activité supprimée" });
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors de la suppression de l'activité" });
   }
 });
 

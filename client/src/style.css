@@ -125,9 +125,27 @@ header h1 { margin: 0; display: flex; align-items: center; gap: 15px; font-size:
 .login-btn { width: 100%; background: var(--color-primary); color: white; border: none; padding: 12px; border-radius: var(--radius-md); font-size: 1.1rem; cursor: pointer; margin-top: 10px; }
 .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .account-screen { display: flex; justify-content: center; margin-top: 40px; }
-.account-box { background: var(--bg-surface-2); padding: 30px; border-radius: var(--radius-lg); box-shadow: var(--shadow-md); width: 100%; max-width: 460px; box-sizing: border-box; color: var(--text-primary); }
+.account-box { background: var(--bg-surface-2); padding: 30px; border-radius: var(--radius-lg); box-shadow: var(--shadow-md); width: 100%; max-width: 760px; box-sizing: border-box; color: var(--text-primary); }
 .account-user { color: var(--text-secondary); margin: 0 0 20px; }
 .password-rules { color: var(--text-muted); font-size: 0.85rem; margin: 4px 0 10px; }
+.account-section { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border-color); }
+.account-section h3 { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+.activity-form-actions { display: flex; align-items: center; gap: 10px; }
+.activity-form-actions .login-btn { flex: 1; }
+.secondary-btn { background: var(--nav-bg); color: var(--text-secondary); border: none; padding: 12px; border-radius: var(--radius-md); font-weight: 700; }
+.activity-icon-input { display: flex; align-items: center; gap: 10px; }
+.activity-icon-preview { width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-input); border-radius: var(--radius-md); background: var(--bg-surface); font-size: 1.5rem; color: var(--color-primary); flex: 0 0 42px; }
+.activity-list { display: grid; gap: 12px; margin-top: 20px; }
+.empty-activities { color: var(--text-muted); text-align: center; margin: 0; }
+.activity-card { display: flex; justify-content: space-between; gap: 14px; padding: 14px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-surface); }
+.activity-card-content h4 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; }
+.activity-card-content h4 .mdi { color: var(--color-primary); font-size: 1.25rem; }
+.activity-card p { margin: 0; color: var(--text-secondary); white-space: pre-wrap; }
+.selected-activity-constraints { display: flex; align-items: flex-start; gap: 8px; color: var(--text-secondary); margin: 8px 0 0; }
+.selected-activity-constraints .mdi { color: var(--color-primary); font-size: 1.2rem; }
+.activity-actions { display: flex; align-items: flex-start; gap: 6px; }
+.activity-actions button { border: none; background: var(--nav-bg); color: var(--text-secondary); width: 34px; height: 34px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; justify-content: center; }
+.activity-actions button:hover { color: var(--text-primary); background: var(--nav-active-bg); }
 
 .forecast-grid { display: grid; gap: 15px; grid-template-columns: 1fr; }
 @media (max-width: 600px) {

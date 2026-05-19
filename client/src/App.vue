@@ -19,6 +19,11 @@ const passwordMsg = ref({ text: '', type: '' })
 const passwordLoading = ref(false)
 const showLoginPassword = ref(false)
 const visiblePasswordFields = ref({})
+const userActivities = ref([])
+const activityForm = ref({ id: null, label: '', icon: 'mdi-bike', constraints: '' })
+const activityMsg = ref({ text: '', type: '' })
+const activityLoading = ref(false)
+const selectedActivityId = ref(localStorage.getItem('selected_activity_id') || '')
 
 // --- ÉTATS NAVIGATION ---
 const showAdminPanel = ref(false)
@@ -57,6 +62,12 @@ const isDark = computed(() => {
 })
 
 const resolvedTheme = computed(() => isDark.value ? 'dark' : 'light')
+
+const selectedActivity = computed(() => {
+  return userActivities.value.find(activity => activity._id === selectedActivityId.value) || null
+})
+
+const selectedActivityIcon = computed(() => selectedActivity.value?.icon || 'mdi-bike')
 
 const themeIcon = computed(() => {
   if (theme.value === 'light') return 'mdi-white-balance-sunny'
@@ -129,6 +140,7 @@ const handleLogin = async () => {
       theme.value = 'auto'
     }
 
+    await loadUserActivities()
     initializeApp()
   } catch (err) {
     loginError.value = "Identifiant ou mot de passe incorrect."
@@ -143,6 +155,8 @@ const handleLogout = () => {
   userRole.value = ''
   currentUser.value = ''
   forecastData.value = null
+  userActivities.value = []
+  selectedActivityId.value = ''
   showAdminPanel.value = false
   showStravaPage.value = false
   showAccountPanel.value = false
@@ -171,6 +185,7 @@ const openAccount = () => {
   showAdminPanel.value = false
   showStravaPage.value = false
   showAccountPanel.value = true
+  loadUserActivities()
 }
 
 const handlePasswordChange = async () => {
@@ -197,6 +212,92 @@ const handlePasswordChange = async () => {
 
 const togglePasswordVisibility = (field) => {
   visiblePasswordFields.value[field] = !visiblePasswordFields.value[field]
+}
+
+const resetActivityForm = () => {
+  activityForm.value = { id: null, label: '', icon: 'mdi-bike', constraints: '' }
+}
+
+const loadUserActivities = async () => {
+  activityMsg.value = { text: '', type: '' }
+  activityLoading.value = true
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}/api/user/activities`)
+    userActivities.value = data
+    if (!userActivities.value.some(activity => activity._id === selectedActivityId.value)) {
+      selectedActivityId.value = userActivities.value[0]?._id || ''
+    }
+    if (selectedActivityId.value) {
+      localStorage.setItem('selected_activity_id', selectedActivityId.value)
+    } else {
+      localStorage.removeItem('selected_activity_id')
+    }
+  } catch (err) {
+    activityMsg.value = { text: err.response?.data?.error || "Impossible de charger les activités.", type: 'error' }
+  } finally {
+    activityLoading.value = false
+  }
+}
+
+const saveActivity = async () => {
+  activityMsg.value = { text: '', type: '' }
+  activityLoading.value = true
+  try {
+    const payload = {
+      label: activityForm.value.label,
+      icon: activityForm.value.icon,
+      constraints: activityForm.value.constraints
+    }
+
+    if (activityForm.value.id) {
+      await axios.put(`${API_BASE_URL}/api/user/activities/${activityForm.value.id}`, payload)
+      activityMsg.value = { text: "Activité modifiée.", type: 'success' }
+    } else {
+      await axios.post(`${API_BASE_URL}/api/user/activities`, payload)
+      activityMsg.value = { text: "Activité ajoutée.", type: 'success' }
+    }
+
+    resetActivityForm()
+    await loadUserActivities()
+  } catch (err) {
+    activityMsg.value = { text: err.response?.data?.error || "Impossible d'enregistrer l'activité.", type: 'error' }
+  } finally {
+    activityLoading.value = false
+  }
+}
+
+const editActivity = (activity) => {
+  activityForm.value = {
+    id: activity._id,
+    label: activity.label || '',
+    icon: activity.icon || 'mdi-bike',
+    constraints: activity.constraints || ''
+  }
+}
+
+const deleteActivity = async (activityId) => {
+  if (!confirm("Supprimer cette activité ?")) return
+  activityMsg.value = { text: '', type: '' }
+  activityLoading.value = true
+  try {
+    await axios.delete(`${API_BASE_URL}/api/user/activities/${activityId}`)
+    if (activityForm.value.id === activityId) resetActivityForm()
+    activityMsg.value = { text: "Activité supprimée.", type: 'success' }
+    await loadUserActivities()
+  } catch (err) {
+    activityMsg.value = { text: err.response?.data?.error || "Impossible de supprimer l'activité.", type: 'error' }
+  } finally {
+    activityLoading.value = false
+  }
+}
+
+const handleActivitySelection = () => {
+  if (selectedActivityId.value) {
+    localStorage.setItem('selected_activity_id', selectedActivityId.value)
+  } else {
+    localStorage.removeItem('selected_activity_id')
+  }
+  forecastData.value = null
 }
 
 const syncPreferences = async () => {
@@ -245,6 +346,7 @@ onMounted(async () => {
       userRole.value = decoded.role
 
       await loadUserPreferences()
+      await loadUserActivities()
       initializeApp()
 
       // Retour callback Strava → ouvrir la page Activités
@@ -345,6 +447,10 @@ const selectCity = (selectedFeature) => {
 
 const fetchForecast = async () => {
   if (!city.value || !lat.value || !lon.value) return;
+  if (!selectedActivityId.value) {
+    error.value = "Veuillez sélectionner une activité avant de lancer l'analyse."
+    return
+  }
   loading.value = true
   error.value = null
   suggestions.value = [] 
@@ -352,11 +458,14 @@ const fetchForecast = async () => {
   localStorage.setItem('selected_city', city.value)
   localStorage.setItem('selected_lat', lat.value)
   localStorage.setItem('selected_lon', lon.value)
-  localStorage.setItem('user_consignes', consignes.value)
+  localStorage.setItem('selected_activity_id', selectedActivityId.value)
 
   try {
     const response = await axios.post(`${API_BASE_URL}/api/forecast`, {
-      city: city.value, lat: lat.value, lon: lon.value, consignes: consignes.value
+      city: city.value,
+      lat: lat.value,
+      lon: lon.value,
+      activityId: selectedActivityId.value
     })
     forecastData.value = response.data
   } catch (err) {
@@ -474,6 +583,55 @@ const fetchForecast = async () => {
             {{ passwordLoading ? 'Modification...' : 'Modifier mon mot de passe' }}
           </button>
         </form>
+
+        <section class="account-section">
+          <h3><span class="mdi mdi-format-list-checks"></span> Mes activités</h3>
+          <div v-if="activityMsg.text" :class="['msg-banner', activityMsg.type]">{{ activityMsg.text }}</div>
+          <form @submit.prevent="saveActivity">
+            <div class="input-group">
+              <label>Libellé :</label>
+              <input v-model="activityForm.label" type="text" maxlength="80" placeholder="Ex: Vélo route, Gravel, Course à pied..." required />
+            </div>
+            <div class="input-group">
+              <label>Icône MDI :</label>
+              <div class="activity-icon-input">
+                <span class="mdi activity-icon-preview" :class="activityForm.icon || 'mdi-bike'"></span>
+                <input v-model="activityForm.icon" type="text" maxlength="60" placeholder="Ex: mdi-bike, mdi-run, mdi-hiking..." />
+              </div>
+            </div>
+            <div class="input-group">
+              <label>Contraintes :</label>
+              <textarea v-model="activityForm.constraints" maxlength="4000" placeholder="Ex: Pas de vent supérieur à 20 km/h, pas de pluie, température minimale..."></textarea>
+            </div>
+            <div class="activity-form-actions">
+              <button type="submit" class="login-btn" :disabled="activityLoading">
+                {{ activityLoading ? 'Enregistrement...' : (activityForm.id ? 'Modifier l’activité' : 'Ajouter l’activité') }}
+              </button>
+              <button v-if="activityForm.id" type="button" class="secondary-btn" @click="resetActivityForm" :disabled="activityLoading">
+                Annuler
+              </button>
+            </div>
+          </form>
+
+          <div class="activity-list">
+            <p v-if="activityLoading && userActivities.length === 0" class="empty-activities">Chargement des activités...</p>
+            <p v-else-if="userActivities.length === 0" class="empty-activities">Aucune activité enregistrée.</p>
+            <article v-for="activity in userActivities" :key="activity._id" class="activity-card">
+              <div class="activity-card-content">
+                <h4><span class="mdi" :class="activity.icon || 'mdi-bike'"></span> {{ activity.label }}</h4>
+                <p>{{ activity.constraints || 'Aucune contrainte renseignée.' }}</p>
+              </div>
+              <div class="activity-actions">
+                <button type="button" @click="editActivity(activity)" title="Modifier">
+                  <span class="mdi mdi-pencil"></span>
+                </button>
+                <button type="button" @click="deleteActivity(activity._id)" title="Supprimer">
+                  <span class="mdi mdi-delete"></span>
+                </button>
+              </div>
+            </article>
+          </div>
+        </section>
       </div>
     </main>
     <main v-else-if="showStravaPage">
@@ -482,8 +640,13 @@ const fetchForecast = async () => {
     <main v-else>
       <section class="config-section">
         <div class="input-group">
-          <label><span class="mdi mdi-robot"></span> Mes consignes (IA) :</label>
-          <textarea v-model="consignes" placeholder="Ex: Pas de vent > 20km/h..." @blur="saveConsignes"></textarea>
+          <label><span class="mdi mdi-format-list-checks"></span> Activité à analyser :</label>
+          <select v-model="selectedActivityId" @change="handleActivitySelection" :disabled="activityLoading || userActivities.length === 0">
+            <option value="" disabled>{{ activityLoading ? 'Chargement des activités...' : 'Sélectionnez une activité' }}</option>
+            <option v-for="activity in userActivities" :key="activity._id" :value="activity._id">{{ activity.label }}</option>
+          </select>
+          <p v-if="selectedActivity" class="selected-activity-constraints"><span class="mdi" :class="selectedActivity.icon || 'mdi-bike'"></span> {{ selectedActivity.constraints || 'Aucune contrainte renseignée pour cette activité.' }}</p>
+          <p v-else class="selected-activity-constraints">Ajoutez vos activités depuis la page Mon compte.</p>
         </div>
 
         <div class="search-container">
@@ -515,11 +678,11 @@ const fetchForecast = async () => {
                 <span
                   class="bike-day-indicator"
                   :class="day.matin.favorable ? 'bike-day-favorable' : 'bike-day-defavorable'"
-                  :title="day.matin.favorable ? 'Conditions favorables au vélo' : 'Conditions défavorables au vélo'"
+                  :title="day.matin.favorable ? 'Conditions favorables pour l?activit?' : 'Conditions d?favorables pour l?activit?'"
                   role="img"
-                  :aria-label="day.matin.favorable ? 'Vélo : conditions favorables' : 'Vélo : conditions défavorables'"
+                  :aria-label="day.matin.favorable ? 'Activit? : conditions favorables' : 'Activit? : conditions d?favorables'"
                 >
-                  <span class="mdi mdi-bike bike-day-indicator__icon" aria-hidden="true"></span>
+                  <span class="mdi bike-day-indicator__icon" :class="selectedActivityIcon" aria-hidden="true"></span>
                 </span>
                 <h4 class="half-day-heading">
                   <span class="mdi weather-main-icon" :class="getWeatherIcon(day.matin)"></span>
@@ -544,11 +707,11 @@ const fetchForecast = async () => {
                 <span
                   class="bike-day-indicator"
                   :class="day.apres_midi.favorable ? 'bike-day-favorable' : 'bike-day-defavorable'"
-                  :title="day.apres_midi.favorable ? 'Conditions favorables au vélo' : 'Conditions défavorables au vélo'"
+                  :title="day.apres_midi.favorable ? 'Conditions favorables pour l?activit?' : 'Conditions d?favorables pour l?activit?'"
                   role="img"
-                  :aria-label="day.apres_midi.favorable ? 'Vélo : conditions favorables' : 'Vélo : conditions défavorables'"
+                  :aria-label="day.apres_midi.favorable ? 'Activit? : conditions favorables' : 'Activit? : conditions d?favorables'"
                 >
-                  <span class="mdi mdi-bike bike-day-indicator__icon" aria-hidden="true"></span>
+                  <span class="mdi bike-day-indicator__icon" :class="selectedActivityIcon" aria-hidden="true"></span>
                 </span>
                 <h4 class="half-day-heading">
                   <span class="mdi weather-main-icon" :class="getWeatherIcon(day.apres_midi)"></span>
