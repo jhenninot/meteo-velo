@@ -13,6 +13,7 @@ const emit = defineEmits(['close'])
 const newUser = ref({ username: '', password: '', role: 'user' })
 const adminMsg = ref({ text: '', type: '' })
 const usersList = ref([])
+const showNewUserPassword = ref(false)
 
 // --- MÉTHODES ---
 const fetchUsers = async () => {
@@ -49,7 +50,7 @@ const changePassword = async (id) => {
   try {
     await axios.patch(`${props.apiBaseUrl}/api/admin/users/${id}/password`, { newPassword: newPass })
     alert("Mot de passe modifié !")
-  } catch (err) { console.error(err) }
+  } catch (err) { alert(err.response?.data?.error || "Erreur lors de la modification du mot de passe") }
 }
 
 // Charger la liste à la création du composant
@@ -74,7 +75,13 @@ fetchUsers()
 
         <div class="input-group">
           <label>Mot de passe :</label>
-          <input v-model="newUser.password" type="password" />
+          <div class="password-input-wrapper">
+            <input v-model="newUser.password" :type="showNewUserPassword ? 'text' : 'password'" />
+            <button type="button" class="password-toggle" @click="showNewUserPassword = !showNewUserPassword" :aria-label="showNewUserPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'">
+              <span class="mdi" :class="showNewUserPassword ? 'mdi-eye-off' : 'mdi-eye'"></span>
+            </button>
+          </div>
+          <p class="password-rules">Minimum 10 caractères, avec une majuscule, une minuscule, un chiffre et un caractère spécial.</p>
         </div>
 
         <div class="input-group">
@@ -118,40 +125,3 @@ fetchUsers()
     </div>
   </main>
 </template>
-
-<style scoped>
-/* ÉCRAN ADMIN */
-.admin-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; margin-top: 40px; gap: 20px; }
-.admin-container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; width: 100%; }
-.admin-box { background: var(--bg-surface-2); padding: 30px; border-radius: var(--radius-lg); box-shadow: var(--shadow-md); width: 100%; max-width: 400px; box-sizing: border-box; color: var(--text-primary); }
-.admin-box.list-box { max-width: 400px; margin-top: 0; }
-.login-btn { width: 100%; background: var(--color-primary); color: white; border: none; padding: 12px; border-radius: var(--radius-md); font-size: 1.1rem; cursor: pointer; margin-top: 10px; }
-
-/* TABLE */
-.user-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-.user-table th, .user-table td { padding: 10px; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 0.95rem; }
-.user-table th { font-weight: bold; color: var(--text-secondary); }
-
-/* BADGES */
-.badge { padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; }
-.badge.admin { background: #e8f5e9; color: #2e7d32; }
-.badge.user { background: #e3f2fd; color: #1565c0; }
-
-/* ACTIONS */
-.actions { display: flex; gap: 8px; justify-content: flex-start; }
-.actions button { border: none; padding: 6px 10px; border-radius: var(--radius-sm); cursor: pointer; background: #f0f0f0; color: #333; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s; font-size: 0.9rem; }
-.actions button:hover { background: #e0e0e0; color: var(--color-primary); }
-.actions button.del-btn { background: #ffebee; color: var(--color-danger-dark); }
-.actions button.del-btn:hover { background: #ffcdd2; color: #b71c1c; }
-
-/* MODE NUIT */
-.admin-screen.theme-dark .admin-box { background: var(--bg-surface); border: 1px solid var(--border-color); box-shadow: var(--shadow-md); }
-.admin-screen.theme-dark .user-table th,
-.admin-screen.theme-dark .user-table td { border-bottom-color: var(--border-color); }
-.admin-screen.theme-dark .badge.admin { background: rgba(46, 125, 50, 0.2); color: #a5d6a7; }
-.admin-screen.theme-dark .badge.user { background: rgba(21, 101, 192, 0.2); color: #90caf9; }
-.admin-screen.theme-dark .actions button { background: #2d333c; color: var(--text-primary); }
-.admin-screen.theme-dark .actions button:hover { background: var(--border-color); color: var(--color-primary-light); }
-.admin-screen.theme-dark .actions button.del-btn { background: rgba(198, 40, 40, 0.2); color: var(--color-danger-light); }
-.admin-screen.theme-dark .actions button.del-btn:hover { background: rgba(198, 40, 40, 0.35); color: #ff8a80; }
-</style>

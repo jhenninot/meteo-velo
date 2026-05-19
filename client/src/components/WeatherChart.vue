@@ -210,14 +210,3 @@ const chartOptions = computed(() => {
     <Bar :data="chartData" :options="chartOptions" />
   </div>
 </template>
-
-<style scoped>
-.weather-chart-container {
-  position: relative;
-  height: 250px;
-  width: 100%;
-  margin-top: 15px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-color);
-}
-</style>

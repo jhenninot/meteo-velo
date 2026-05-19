@@ -13,6 +13,12 @@ const currentUser = ref('')
 const loginUser = ref('')
 const loginPass = ref('')
 const loginError = ref('')
+const showAccountPanel = ref(false)
+const passwordForm = ref({ currentPassword: '', newPassword: '', confirmPassword: '' })
+const passwordMsg = ref({ text: '', type: '' })
+const passwordLoading = ref(false)
+const showLoginPassword = ref(false)
+const visiblePasswordFields = ref({})
 
 // --- ÉTATS NAVIGATION ---
 const showAdminPanel = ref(false)
@@ -139,11 +145,58 @@ const handleLogout = () => {
   forecastData.value = null
   showAdminPanel.value = false
   showStravaPage.value = false
+  showAccountPanel.value = false
   theme.value = 'auto'
 }
 
 const openAdmin = () => {
   showAdminPanel.value = true
+  showStravaPage.value = false
+  showAccountPanel.value = false
+}
+
+const openWeather = () => {
+  showAdminPanel.value = false
+  showStravaPage.value = false
+  showAccountPanel.value = false
+}
+
+const openStrava = () => {
+  showAdminPanel.value = false
+  showStravaPage.value = true
+  showAccountPanel.value = false
+}
+
+const openAccount = () => {
+  showAdminPanel.value = false
+  showStravaPage.value = false
+  showAccountPanel.value = true
+}
+
+const handlePasswordChange = async () => {
+  passwordMsg.value = { text: '', type: '' }
+  if (passwordForm.value.newPassword !== passwordForm.value.confirmPassword) {
+    passwordMsg.value = { text: "La confirmation ne correspond pas au nouveau mot de passe.", type: 'error' }
+    return
+  }
+
+  passwordLoading.value = true
+  try {
+    await axios.patch(`${API_BASE_URL}/api/user/password`, {
+      currentPassword: passwordForm.value.currentPassword,
+      newPassword: passwordForm.value.newPassword
+    })
+    passwordForm.value = { currentPassword: '', newPassword: '', confirmPassword: '' }
+    passwordMsg.value = { text: "Mot de passe mis à jour.", type: 'success' }
+  } catch (err) {
+    passwordMsg.value = { text: err.response?.data?.error || "Impossible de modifier le mot de passe.", type: 'error' }
+  } finally {
+    passwordLoading.value = false
+  }
+}
+
+const togglePasswordVisibility = (field) => {
+  visiblePasswordFields.value[field] = !visiblePasswordFields.value[field]
 }
 
 const syncPreferences = async () => {
@@ -320,32 +373,39 @@ const fetchForecast = async () => {
 <template>
   <div class="app-container" :class="{ 'theme-dark': isDark }">
     <header>
-      <h1><img src="/logo_velo.png" alt="Logo" class="app-logo" /> Vélo Météo IA</h1>
-      
-      <div v-if="isLoggedIn" class="header-controls">
-        <div class="theme-select-wrapper">
-          <span class="mdi" :class="themeIcon"></span>
-          <select :value="theme" @change="setTheme($event.target.value)" class="theme-select" aria-label="Sélectionner le thème">
-            <option value="light">Jour</option>
-            <option value="auto">Auto</option>
-            <option value="dark">Nuit</option>
-          </select>
+      <div class="header-top">
+        <h1><img src="/logo_velo.png" alt="Logo" class="app-logo" /> Vélo Météo IA</h1>
+        <div v-if="isLoggedIn" class="header-actions">
+          <div class="theme-select-wrapper">
+            <span class="mdi" :class="themeIcon"></span>
+            <select :value="theme" @change="setTheme($event.target.value)" class="theme-select" aria-label="Sélectionner le thème">
+              <option value="light">Jour</option>
+              <option value="auto">Auto</option>
+              <option value="dark">Nuit</option>
+            </select>
+          </div>
+          <button @click="openAccount" class="account-btn" :class="{ active: showAccountPanel }" title="Mon compte">
+            <span class="mdi mdi-account-cog"></span>
+            <span>Compte</span>
+          </button>
+          <button @click="handleLogout" class="logout-btn" title="Déconnexion">
+            <span class="mdi mdi-logout"></span>
+          </button>
         </div>
+      </div>
+
+      <div v-if="isLoggedIn" class="header-controls">
         <nav class="main-nav">
-          <button @click="showAdminPanel = false; showStravaPage = false" :class="{ active: !showAdminPanel && !showStravaPage }">
+          <button @click="openWeather" :class="{ active: !showAdminPanel && !showStravaPage && !showAccountPanel }">
             <span class="mdi mdi-weather-sunny"></span> Météo
           </button>
-          <button @click="showAdminPanel = false; showStravaPage = true" :class="{ active: showStravaPage }">
+          <button @click="openStrava" :class="{ active: showStravaPage }">
             <span class="mdi mdi-bike"></span> Activités
           </button>
-          <button v-if="userRole === 'admin'" @click="showAdminPanel = true; showStravaPage = false" :class="{ active: showAdminPanel }">
+          <button v-if="userRole === 'admin'" @click="openAdmin" :class="{ active: showAdminPanel }">
             <span class="mdi mdi-shield-account"></span> Admin
           </button>
         </nav>
-        
-        <button @click="handleLogout" class="logout-btn" title="Déconnexion">
-          <span class="mdi mdi-logout"></span>
-        </button>
       </div>
     </header>
 
@@ -362,7 +422,12 @@ const fetchForecast = async () => {
 
           <div class="input-group">
             <label>Mot de passe :</label>
-            <input v-model="loginPass" type="password" autocomplete="current-password" />
+            <div class="password-input-wrapper">
+              <input v-model="loginPass" :type="showLoginPassword ? 'text' : 'password'" autocomplete="current-password" />
+              <button type="button" class="password-toggle" @click="showLoginPassword = !showLoginPassword" :aria-label="showLoginPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'">
+                <span class="mdi" :class="showLoginPassword ? 'mdi-eye-off' : 'mdi-eye'"></span>
+              </button>
+            </div>
           </div>
 
           <button type="submit" class="login-btn">Se connecter</button>
@@ -371,6 +436,46 @@ const fetchForecast = async () => {
     </main>
 
     <AdminPanel v-else-if="showAdminPanel" :api-base-url="API_BASE_URL" :is-dark="isDark" />
+    <main v-else-if="showAccountPanel" class="account-screen">
+      <div class="account-box">
+        <h2><span class="mdi mdi-account-cog"></span> Mon compte</h2>
+        <p class="account-user">Connecté en tant que <strong>{{ currentUser }}</strong></p>
+        <div v-if="passwordMsg.text" :class="['msg-banner', passwordMsg.type]">{{ passwordMsg.text }}</div>
+        <form @submit.prevent="handlePasswordChange">
+          <div class="input-group">
+            <label>Mot de passe actuel :</label>
+            <div class="password-input-wrapper">
+              <input v-model="passwordForm.currentPassword" :type="visiblePasswordFields.currentPassword ? 'text' : 'password'" autocomplete="current-password" required />
+              <button type="button" class="password-toggle" @click="togglePasswordVisibility('currentPassword')" :aria-label="visiblePasswordFields.currentPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'">
+                <span class="mdi" :class="visiblePasswordFields.currentPassword ? 'mdi-eye-off' : 'mdi-eye'"></span>
+              </button>
+            </div>
+          </div>
+          <div class="input-group">
+            <label>Nouveau mot de passe :</label>
+            <div class="password-input-wrapper">
+              <input v-model="passwordForm.newPassword" :type="visiblePasswordFields.newPassword ? 'text' : 'password'" autocomplete="new-password" required />
+              <button type="button" class="password-toggle" @click="togglePasswordVisibility('newPassword')" :aria-label="visiblePasswordFields.newPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'">
+                <span class="mdi" :class="visiblePasswordFields.newPassword ? 'mdi-eye-off' : 'mdi-eye'"></span>
+              </button>
+            </div>
+          </div>
+          <div class="input-group">
+            <label>Confirmer le nouveau mot de passe :</label>
+            <div class="password-input-wrapper">
+              <input v-model="passwordForm.confirmPassword" :type="visiblePasswordFields.confirmPassword ? 'text' : 'password'" autocomplete="new-password" required />
+              <button type="button" class="password-toggle" @click="togglePasswordVisibility('confirmPassword')" :aria-label="visiblePasswordFields.confirmPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'">
+                <span class="mdi" :class="visiblePasswordFields.confirmPassword ? 'mdi-eye-off' : 'mdi-eye'"></span>
+              </button>
+            </div>
+          </div>
+          <p class="password-rules">Minimum 10 caractères, avec une majuscule, une minuscule, un chiffre et un caractère spécial.</p>
+          <button type="submit" class="login-btn" :disabled="passwordLoading">
+            {{ passwordLoading ? 'Modification...' : 'Modifier mon mot de passe' }}
+          </button>
+        </form>
+      </div>
+    </main>
     <main v-else-if="showStravaPage">
       <StravaActivities :theme="resolvedTheme" :api-base-url="API_BASE_URL" />
     </main>
@@ -471,156 +576,3 @@ const fetchForecast = async () => {
     </main>
   </div>
 </template>
-
-
-
-<style scoped>
-/* STRUCTURE GENERALE */
-.app-container { max-width: 1200px; margin: 0 auto; padding: 20px; color: var(--text-primary); }
-@media (max-width: 600px) {
-  .app-container { padding: 4px; }
-}
-header { display: flex; flex-direction: column; align-items: stretch; gap: 12px; margin-bottom: 30px; border-bottom: 2px solid var(--border-color); padding-bottom: 15px; }
-header h1 { margin: 0; display: flex; align-items: center; gap: 15px; font-size: 1.5rem; align-self: flex-start; }
-.app-logo { height: 40px; width: auto; vertical-align: middle; }
-
-/* NAVIGATION & BOUTONS */
-.header-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 15px; }
-.main-nav { display: flex; background: var(--nav-bg); padding: 4px; border-radius: var(--radius-md); gap: 2px; }
-.main-nav button { border: none; padding: 6px 12px; cursor: pointer; border-radius: var(--radius-sm); background: transparent; font-weight: bold; color: var(--text-secondary); display: flex; align-items: center; gap: 5px; font-size: 0.88rem; }
-.main-nav button.active { background: var(--nav-active-bg); color: var(--nav-active-color); box-shadow: var(--shadow-sm); }
-.theme-select-wrapper { display: inline-flex; align-items: center; gap: 6px; background: var(--nav-bg); padding: 5px 10px; border-radius: var(--radius-md); color: var(--text-secondary); font-weight: 600; font-size: 0.88rem; box-sizing: border-box; }
-.theme-select-wrapper .mdi { font-size: 1.1rem; color: var(--text-secondary); display: flex; align-items: center; }
-.theme-select { border: none !important; background: transparent !important; box-shadow: none !important; padding: 0 !important; font-weight: 600; color: var(--text-secondary) !important; cursor: pointer; outline: none !important; font-family: inherit; font-size: 0.88rem; width: auto; }
-.theme-select option { background: var(--bg-surface); color: var(--text-primary); }
-.logout-btn { background: var(--color-danger); color: white; border: none; padding: 8px; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; }
-
-/* ÉCRAN LOGIN */
-.login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; margin-top: 40px; gap: 20px; }
-.login-box { background: var(--bg-surface-2); padding: 30px; border-radius: var(--radius-lg); box-shadow: var(--shadow-md); width: 100%; max-width: 400px; box-sizing: border-box; }
-.login-error { background: #ffebee; color: #d32f2f; padding: 10px; border-radius: var(--radius-sm); margin-bottom: 15px; text-align: center; }
-.login-btn { width: 100%; background: var(--color-primary); color: white; border: none; padding: 12px; border-radius: var(--radius-md); font-size: 1.1rem; cursor: pointer; margin-top: 10px; }
-
-/* MÉTÉO GRID */
-.forecast-grid { display: grid; gap: 15px; grid-template-columns: 1fr; }
-@media (max-width: 600px) {
-  .forecast-grid { gap: 10px; }
-  .day-card { padding: 8px; border-radius: var(--radius-md); }
-}
-@media (min-width: 768px) {
-  .forecast-grid { grid-template-columns: repeat(2, 1fr); gap: 20px; }
-}
-@media (min-width: 1024px) {
-  .forecast-grid { grid-template-columns: repeat(3, 1fr); }
-}
-.day-card { background: var(--bg-surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 15px; border: 1px solid var(--border-color); }
-.day-card h3 { text-align: center; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-top: 0; color: var(--text-primary); }
-.day-split { display: flex; flex-direction: column; gap: 10px; }
-.half-day { position: relative; padding: 12px; border-radius: var(--radius-md); border-left: 6px solid var(--border-color); background: transparent; cursor: pointer; transition: filter 0.2s, box-shadow 0.2s; box-shadow: var(--shadow-sm); }
-.half-day:hover { filter: brightness(0.96); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-.half-day.favorable { border-left-color: var(--color-primary); background: transparent; }
-.half-day.defavorable { border-left-color: var(--color-danger); background: transparent; }
-.half-day h4 { margin: 0 0 10px; font-size: 1rem; }
-.half-day-heading { display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; margin-right: 3.5rem; }
-.half-day-heading-label { font-weight: 600; }
-
-.hourly-details { margin-top: 15px; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 10px; font-size: 0.85rem; }
-.hourly-row { display: grid; grid-template-columns: 1fr 1fr 1.2fr 1.2fr 1.5fr; padding: 4px 0; border-bottom: 1px solid rgba(0,0,0,0.05); align-items: center; }
-.hourly-row:last-child { border-bottom: none; }
-.hourly-header { font-weight: bold; color: #666; border-bottom: 1px solid rgba(0,0,0,0.15); margin-bottom: 4px; }
-.hour-label { font-weight: 600; }
-
-.hour-rain-qty { display: flex; align-items: center; gap: 8px; }
-.rain-bar-container { flex: 1; height: 6px; background: rgba(0,0,0,0.05); border-radius: 4px; overflow: hidden; display: flex; }
-.rain-bar { height: 100%; background: #2196f3; border-radius: 4px; transition: width 0.3s; }
-.rain-val { width: 35px; text-align: right; font-size: 0.8rem; color: #555; }
-
-.bike-day-indicator {
-  --bike-d: 2rem;
-  position: absolute;
-  top: 15px;
-  right: 15px;
-  z-index: 1;
-  width: var(--bike-d);
-  height: var(--bike-d);
-  box-sizing: border-box;
-  border-radius: 50%;
-  border: 2.5px solid currentColor;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  background: rgba(255, 255, 255, 0.55);
-}
-.bike-day-indicator__icon {
-  font-size: 1rem;
-  line-height: 1;
-  position: relative;
-  z-index: 0;
-}
-.bike-day-favorable { color: #4caf50; background: transparent; border-color: transparent; }
-.bike-day-favorable .bike-day-indicator__icon { color: inherit; font-size: 1.5rem; }
-.bike-day-defavorable { color: #f44336; }
-.bike-day-defavorable .bike-day-indicator__icon { color: inherit; }
-.bike-day-defavorable::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  z-index: 1;
-  /* Longueur = diamètre extérieur : les extrémités touchent le cercle du badge */
-  width: var(--bike-d, 3.15rem);
-  height: 0.16rem;
-  margin-left: calc(var(--bike-d, 3.15rem) / -2);
-  margin-top: -0.08rem;
-  background: currentColor;
-  border-radius: 0.08rem;
-  pointer-events: none;
-  transform-origin: center center;
-}
-.bike-day-defavorable::before {
-  transform: rotate(45deg);
-}
-
-/* METRICS & ICONS */
-.metrics { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; font-size: 0.85rem; font-weight: 600; margin-right: 3.5rem; }
-.metrics span { display: flex; align-items: center; gap: 3px; }
-.weather-main-icon { font-size: 2.75rem; line-height: 1; flex-shrink: 0; }
-.half-day.favorable h4 .weather-main-icon { color: var(--color-primary); }
-.half-day.defavorable h4 .weather-main-icon { color: var(--color-danger); }
-.metrics .metric-critere.critere-fav .mdi { color: var(--color-primary-dark); }
-.metrics .metric-critere.critere-def .mdi { color: var(--color-danger-dark); }
-.metrics .metric-critere.critere-neutre .mdi { color: #757575; }
-.facteurs-def { font-size: 0.8rem; font-weight: 600; color: #b71c1c; margin: 6px 0 4px; }
-.ia-advice { font-size: 0.9rem; font-style: italic; color: var(--text-secondary); background: rgba(255,255,255,0.5); padding: 6px; border-radius: 4px; }
-
-/* SUGGESTIONS & STATUS */
-.search-container { position: relative; margin-bottom: 3rem; }
-.search-input-wrapper { display: flex; gap: 8px; }
-.refresh-btn { flex-shrink: 0; background: var(--color-primary); color: white; border: none; border-radius: var(--radius-md); padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.suggestions-list { position: absolute; width: 100%; background: var(--bg-surface); border: 1px solid var(--border-input); z-index: 10; list-style: none; padding: 0; margin: 0; border-radius: var(--radius-md); }
-.suggestions-list li { padding: 10px; cursor: pointer; border-bottom: 1px solid var(--border-color); color: var(--text-primary); }
-.status-msg, .error-msg { text-align: center; margin-top: 20px; padding: 10px; border-radius: var(--radius-md); }
-.error-msg { background: #ffcdd2; color: #b71c1c; }
-
-/* Mode nuit — les variables CSS gèrent l'essentiel automatiquement
-   Seules les surcharges non couvertes par les variables restent ici */
-.app-container.theme-dark .half-day:hover { filter: brightness(1.15); }
-.app-container.theme-dark .half-day.favorable { border-left-color: #66bb6a; }
-.app-container.theme-dark .half-day.defavorable { border-left-color: #e57373; }
-.app-container.theme-dark .bike-day-indicator { background: rgba(0, 0, 0, 0.35); }
-.app-container.theme-dark .bike-day-indicator.bike-day-favorable { background: transparent; border-color: transparent; }
-.app-container.theme-dark .bike-day-favorable { color: var(--color-primary-light); }
-.app-container.theme-dark .bike-day-defavorable { color: var(--color-danger-light); }
-.app-container.theme-dark .half-day.favorable h4 .weather-main-icon { color: var(--color-primary-light); }
-.app-container.theme-dark .half-day.defavorable h4 .weather-main-icon { color: var(--color-danger-light); }
-.app-container.theme-dark .metrics .metric-critere.critere-fav .mdi { color: #a5d6a7; }
-.app-container.theme-dark .metrics .metric-critere.critere-def .mdi { color: var(--color-danger-light); }
-.app-container.theme-dark .metrics .metric-critere.critere-neutre .mdi { color: #9aa0a6; }
-.app-container.theme-dark .facteurs-def { color: #ffab91; }
-.app-container.theme-dark .ia-advice { color: #c5cad3; background: rgba(0,0,0,0.2); }
-.app-container.theme-dark .login-error { background: #4a2328; color: #ffcdd2; }
-.app-container.theme-dark .error-msg { background: #4a2328; color: #ffcdd2; }
-.app-container.theme-dark .status-msg { color: var(--text-secondary); }
-</style>

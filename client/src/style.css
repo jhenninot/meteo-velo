@@ -1,60 +1,34 @@
-/* ============================================================
-   METEO-VELO — Feuille de styles globale
-   Contient : variables de design, reset, typographie, dark mode
-   Les styles spécifiques à chaque composant restent en <style scoped>
-   ============================================================ */
-
-/* ---- Icônes Material Design (chargé une seule fois ici) ---- */
 @import url('https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css');
 
-/* ============================================================
-   VARIABLES DE DESIGN (tokens)
-   Utilisables partout avec var(--nom-variable)
-   ============================================================ */
 :root {
-  /* Couleurs principales */
-  --color-primary:        #4caf50;
-  --color-primary-dark:   #388e3c;
-  --color-primary-light:  #81c784;
-  --color-danger:         #f44336;
-  --color-danger-dark:    #c62828;
-  --color-danger-light:   #ef9a9a;
-  --color-strava:         #FC4C02;
-  --color-strava-dark:    #e03e00;
-
-  /* Fond & surfaces */
-  --bg-page:       #eceff1;
-  --bg-surface:    #ffffff;
-  --bg-surface-2:  #f9f9f9;
-  --bg-input:      #ffffff;
-
-  /* Texte */
-  --text-primary:   #333333;
+  --color-primary: #4caf50;
+  --color-primary-dark: #388e3c;
+  --color-primary-light: #81c784;
+  --color-danger: #f44336;
+  --color-danger-dark: #c62828;
+  --color-danger-light: #ef9a9a;
+  --color-strava: #fc4c02;
+  --color-strava-dark: #e03e00;
+  --bg-page: #eceff1;
+  --bg-surface: #ffffff;
+  --bg-surface-2: #f9f9f9;
+  --bg-input: #ffffff;
+  --text-primary: #333333;
   --text-secondary: #666666;
-  --text-muted:     #888888;
-  --text-link:      #4caf50;
-
-  /* Bordures & séparateurs */
-  --border-color:   #eeeeee;
-  --border-input:   #dddddd;
-
-  /* Ombres */
-  --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.07);
-  --shadow-md:  0 4px 15px rgba(0, 0, 0, 0.1);
-  --shadow-lg:  0 8px 40px rgba(0, 0, 0, 0.1);
-
-  /* Rayons */
-  --radius-sm:  6px;
-  --radius-md:  8px;
-  --radius-lg:  12px;
-  --radius-xl:  20px;
-
-  /* Navigation */
-  --nav-bg:       #eeeeee;
+  --text-muted: #888888;
+  --text-link: var(--color-primary);
+  --border-color: #eeeeee;
+  --border-input: #dddddd;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.07);
+  --shadow-md: 0 4px 15px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.1);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 20px;
+  --nav-bg: #eeeeee;
   --nav-active-bg: #ffffff;
-  --nav-active-color: #4caf50;
-
-  /* Typographie */
+  --nav-active-color: var(--color-primary);
   font-family: 'Segoe UI', system-ui, Avenir, Helvetica, Arial, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -62,79 +36,33 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ============================================================
-   DARK MODE — surcharge des variables uniquement
-   Déclenché par la classe .meteo-theme-dark sur <html>
-   ============================================================ */
 html.meteo-theme-dark {
   color-scheme: dark;
-
-  --bg-page:       #1a1d23;
-  --bg-surface:    #252a32;
-  --bg-surface-2:  #1e222a;
-  --bg-input:      #1e222a;
-
-  --text-primary:   #e8eaed;
+  --bg-page: #1a1d23;
+  --bg-surface: #252a32;
+  --bg-surface-2: #1e222a;
+  --bg-input: #1e222a;
+  --text-primary: #e8eaed;
   --text-secondary: #b0b8c4;
-  --text-muted:     #6b7280;
-
-  --border-color:   #3d4450;
-  --border-input:   #4a515c;
-
-  --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-md:  0 4px 20px rgba(0, 0, 0, 0.35);
-  --shadow-lg:  0 8px 40px rgba(0, 0, 0, 0.4);
-
-  --nav-bg:         #2d333c;
-  --nav-active-bg:  #3d4450;
-  --nav-active-color: #81c784;
+  --text-muted: #6b7280;
+  --border-color: #3d4450;
+  --border-input: #4a515c;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.4);
+  --nav-bg: #2d333c;
+  --nav-active-bg: #3d4450;
+  --nav-active-color: var(--color-primary-light);
 }
 
-html.meteo-theme-dark body {
-  background-color: var(--bg-page);
-  color: var(--text-primary);
-}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; min-height: 100vh; }
+body { background-color: var(--bg-page); color: var(--text-primary); line-height: 1.5; }
+#app { min-height: 100vh; }
+h1, h2, h3, h4 { margin-top: 0; color: var(--text-primary); }
+a { color: var(--text-link); text-decoration: inherit; }
+button { font-family: inherit; cursor: pointer; }
 
-/* ============================================================
-   RESET & BASE
-   ============================================================ */
-*, *::before, *::after {
-  box-sizing: border-box;
-}
-
-html, body {
-  margin: 0;
-  padding: 0;
-  min-height: 100vh;
-}
-
-body {
-  background-color: var(--bg-page);
-  color: var(--text-primary);
-  line-height: 1.5;
-}
-
-#app {
-  min-height: 100vh;
-}
-
-/* ============================================================
-   TYPOGRAPHIE DE BASE
-   ============================================================ */
-h1, h2, h3, h4 {
-  margin-top: 0;
-  color: var(--text-primary);
-}
-
-a {
-  color: var(--text-link);
-  text-decoration: inherit;
-}
-
-/* ============================================================
-   FORMULAIRES — styles de base partagés entre tous les composants
-   Les composants peuvent affiner avec leur <style scoped>
-   ============================================================ */
 input, textarea, select {
   width: 100%;
   padding: 10px;
@@ -144,7 +72,6 @@ input, textarea, select {
   font-family: inherit;
   background-color: var(--bg-input);
   color: var(--text-primary);
-  box-sizing: border-box;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
@@ -154,43 +81,642 @@ input:focus, textarea:focus, select:focus {
   box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.15);
 }
 
-textarea {
-  height: 80px;
-  resize: vertical;
-}
-
-button {
-  font-family: inherit;
-  cursor: pointer;
-}
-
-/* ============================================================
-   CLASSE UTILITAIRE — groupe de champ de formulaire
-   Partagée par App.vue, AdminPanel.vue
-   ============================================================ */
-.input-group {
-  margin-bottom: 15px;
-}
-
-.input-group label {
-  display: block;
-  margin-bottom: 5px;
-  font-weight: bold;
-  color: var(--text-primary);
-}
-
-/* ============================================================
-   MESSAGES DE STATUT PARTAGÉS
-   ============================================================ */
-.msg-banner {
-  padding: 10px;
-  border-radius: var(--radius-sm);
-  margin-bottom: 15px;
-  text-align: center;
-  font-weight: 600;
-}
+textarea { height: 80px; resize: vertical; }
+.password-input-wrapper { position: relative; display: flex; align-items: center; }
+.password-input-wrapper input { padding-right: 44px; }
+.password-toggle { position: absolute; right: 8px; width: 32px; height: 32px; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.password-toggle:hover { background: var(--nav-bg); color: var(--text-primary); }
+.input-group { margin-bottom: 15px; }
+.input-group label { display: block; margin-bottom: 5px; font-weight: bold; color: var(--text-primary); }
+.msg-banner { padding: 10px; border-radius: var(--radius-sm); margin-bottom: 15px; text-align: center; font-weight: 600; }
 .msg-banner.success { background: #e8f5e9; color: #2e7d32; }
-.msg-banner.error   { background: #ffebee; color: var(--color-danger-dark); }
-
+.msg-banner.error { background: #ffebee; color: var(--color-danger-dark); }
 html.meteo-theme-dark .msg-banner.success { background: #1e3a24; color: #a5d6a7; }
-html.meteo-theme-dark .msg-banner.error   { background: #4a2328; color: #ffcdd2; }
+html.meteo-theme-dark .msg-banner.error { background: #4a2328; color: #ffcdd2; }
+
+/* App.vue */
+.app-container { max-width: 1200px; margin: 0 auto; padding: 20px; color: var(--text-primary); }
+@media (max-width: 600px) {
+  .app-container { padding: 4px; }
+  .header-top { align-items: flex-start; flex-direction: column; }
+  .header-actions { width: 100%; justify-content: flex-end; }
+}
+header { position: sticky; top: 0; z-index: 100; display: flex; flex-direction: column; align-items: stretch; gap: 12px; margin-bottom: 30px; border-bottom: 2px solid var(--border-color); padding: 12px 0 15px; background: var(--bg-page); }
+.header-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+header h1 { margin: 0; display: flex; align-items: center; gap: 15px; font-size: 1.5rem; }
+.app-logo { height: 40px; width: auto; vertical-align: middle; }
+
+.header-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+.header-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 15px; }
+.main-nav { display: flex; background: var(--nav-bg); padding: 4px; border-radius: var(--radius-md); gap: 2px; }
+.main-nav button { border: none; padding: 6px 12px; cursor: pointer; border-radius: var(--radius-sm); background: transparent; font-weight: bold; color: var(--text-secondary); display: flex; align-items: center; gap: 5px; font-size: 0.88rem; }
+.main-nav button.active { background: var(--nav-active-bg); color: var(--nav-active-color); box-shadow: var(--shadow-sm); }
+.theme-select-wrapper { display: inline-flex; align-items: center; gap: 6px; background: var(--nav-bg); padding: 5px 10px; border-radius: var(--radius-md); color: var(--text-secondary); font-weight: 600; font-size: 0.88rem; box-sizing: border-box; }
+.theme-select-wrapper .mdi { font-size: 1.1rem; color: var(--text-secondary); display: flex; align-items: center; }
+.theme-select { border: none !important; background: transparent !important; box-shadow: none !important; padding: 0 !important; font-weight: 600; color: var(--text-secondary) !important; cursor: pointer; outline: none !important; font-family: inherit; font-size: 0.88rem; width: auto; }
+.theme-select option { background: var(--bg-surface); color: var(--text-primary); }
+.account-btn { display: inline-flex; align-items: center; gap: 6px; background: var(--nav-bg); color: var(--text-secondary); border: none; padding: 7px 10px; border-radius: var(--radius-md); font-weight: 700; font-size: 0.88rem; }
+.account-btn.active { background: var(--nav-active-bg); color: var(--nav-active-color); box-shadow: var(--shadow-sm); }
+.logout-btn { background: var(--color-danger); color: white; border: none; padding: 8px; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; }
+
+.login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; margin-top: 40px; gap: 20px; }
+.login-box { background: var(--bg-surface-2); padding: 30px; border-radius: var(--radius-lg); box-shadow: var(--shadow-md); width: 100%; max-width: 400px; box-sizing: border-box; }
+.login-error { background: #ffebee; color: #d32f2f; padding: 10px; border-radius: var(--radius-sm); margin-bottom: 15px; text-align: center; }
+.login-btn { width: 100%; background: var(--color-primary); color: white; border: none; padding: 12px; border-radius: var(--radius-md); font-size: 1.1rem; cursor: pointer; margin-top: 10px; }
+.login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.account-screen { display: flex; justify-content: center; margin-top: 40px; }
+.account-box { background: var(--bg-surface-2); padding: 30px; border-radius: var(--radius-lg); box-shadow: var(--shadow-md); width: 100%; max-width: 460px; box-sizing: border-box; color: var(--text-primary); }
+.account-user { color: var(--text-secondary); margin: 0 0 20px; }
+.password-rules { color: var(--text-muted); font-size: 0.85rem; margin: 4px 0 10px; }
+
+.forecast-grid { display: grid; gap: 15px; grid-template-columns: 1fr; }
+@media (max-width: 600px) {
+  .forecast-grid { gap: 10px; }
+  .day-card { padding: 8px; border-radius: var(--radius-md); }
+}
+@media (min-width: 768px) {
+  .forecast-grid { grid-template-columns: repeat(2, 1fr); gap: 20px; }
+}
+@media (min-width: 1024px) {
+  .forecast-grid { grid-template-columns: repeat(3, 1fr); }
+}
+.day-card { background: var(--bg-surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 15px; border: 1px solid var(--border-color); }
+.day-card h3 { text-align: center; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-top: 0; color: var(--text-primary); }
+.day-split { display: flex; flex-direction: column; gap: 10px; }
+.half-day { position: relative; padding: 12px; border-radius: var(--radius-md); border-left: 6px solid var(--border-color); background: transparent; cursor: pointer; transition: filter 0.2s, box-shadow 0.2s; box-shadow: var(--shadow-sm); }
+.half-day:hover { filter: brightness(0.96); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+.half-day.favorable { border-left-color: var(--color-primary); background: transparent; }
+.half-day.defavorable { border-left-color: var(--color-danger); background: transparent; }
+.half-day h4 { margin: 0 0 10px; font-size: 1rem; }
+.half-day-heading { display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; margin-right: 3.5rem; }
+.half-day-heading-label { font-weight: 600; }
+
+.hourly-details { margin-top: 15px; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 10px; font-size: 0.85rem; }
+.hourly-row { display: grid; grid-template-columns: 1fr 1fr 1.2fr 1.2fr 1.5fr; padding: 4px 0; border-bottom: 1px solid rgba(0,0,0,0.05); align-items: center; }
+.hourly-row:last-child { border-bottom: none; }
+.hourly-header { font-weight: bold; color: #666; border-bottom: 1px solid rgba(0,0,0,0.15); margin-bottom: 4px; }
+.hour-label { font-weight: 600; }
+
+.hour-rain-qty { display: flex; align-items: center; gap: 8px; }
+.rain-bar-container { flex: 1; height: 6px; background: rgba(0,0,0,0.05); border-radius: 4px; overflow: hidden; display: flex; }
+.rain-bar { height: 100%; background: #2196f3; border-radius: 4px; transition: width 0.3s; }
+.rain-val { width: 35px; text-align: right; font-size: 0.8rem; color: #555; }
+
+.bike-day-indicator {
+  --bike-d: 2rem;
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  z-index: 1;
+  width: var(--bike-d);
+  height: var(--bike-d);
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2.5px solid currentColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.55);
+}
+.bike-day-indicator__icon {
+  font-size: 1rem;
+  line-height: 1;
+  position: relative;
+  z-index: 0;
+}
+.bike-day-favorable { color: #4caf50; background: transparent; border-color: transparent; }
+.bike-day-favorable .bike-day-indicator__icon { color: inherit; font-size: 1.5rem; }
+.bike-day-defavorable { color: #f44336; }
+.bike-day-defavorable .bike-day-indicator__icon { color: inherit; }
+.bike-day-defavorable::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+
+  width: var(--bike-d, 3.15rem);
+  height: 0.16rem;
+  margin-left: calc(var(--bike-d, 3.15rem) / -2);
+  margin-top: -0.08rem;
+  background: currentColor;
+  border-radius: 0.08rem;
+  pointer-events: none;
+  transform-origin: center center;
+}
+.bike-day-defavorable::before {
+  transform: rotate(45deg);
+}
+
+.metrics { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; font-size: 0.85rem; font-weight: 600; margin-right: 3.5rem; }
+.metrics span { display: flex; align-items: center; gap: 3px; }
+.weather-main-icon { font-size: 2.75rem; line-height: 1; flex-shrink: 0; }
+.half-day.favorable h4 .weather-main-icon { color: var(--color-primary); }
+.half-day.defavorable h4 .weather-main-icon { color: var(--color-danger); }
+.metrics .metric-critere.critere-fav .mdi { color: var(--color-primary-dark); }
+.metrics .metric-critere.critere-def .mdi { color: var(--color-danger-dark); }
+.metrics .metric-critere.critere-neutre .mdi { color: #757575; }
+.facteurs-def { font-size: 0.8rem; font-weight: 600; color: #b71c1c; margin: 6px 0 4px; }
+.ia-advice { font-size: 0.9rem; font-style: italic; color: var(--text-secondary); background: rgba(255,255,255,0.5); padding: 6px; border-radius: 4px; }
+
+.search-container { position: relative; margin-bottom: 3rem; }
+.search-input-wrapper { display: flex; gap: 8px; }
+.refresh-btn { flex-shrink: 0; background: var(--color-primary); color: white; border: none; border-radius: var(--radius-md); padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.suggestions-list { position: absolute; width: 100%; background: var(--bg-surface); border: 1px solid var(--border-input); z-index: 10; list-style: none; padding: 0; margin: 0; border-radius: var(--radius-md); }
+.suggestions-list li { padding: 10px; cursor: pointer; border-bottom: 1px solid var(--border-color); color: var(--text-primary); }
+.status-msg, .error-msg { text-align: center; margin-top: 20px; padding: 10px; border-radius: var(--radius-md); }
+.error-msg { background: #ffcdd2; color: #b71c1c; }
+
+.app-container.theme-dark .half-day:hover { filter: brightness(1.15); }
+.app-container.theme-dark .half-day.favorable { border-left-color: #66bb6a; }
+.app-container.theme-dark .half-day.defavorable { border-left-color: #e57373; }
+.app-container.theme-dark .bike-day-indicator { background: rgba(0, 0, 0, 0.35); }
+.app-container.theme-dark .bike-day-indicator.bike-day-favorable { background: transparent; border-color: transparent; }
+.app-container.theme-dark .bike-day-favorable { color: var(--color-primary-light); }
+.app-container.theme-dark .bike-day-defavorable { color: var(--color-danger-light); }
+.app-container.theme-dark .half-day.favorable h4 .weather-main-icon { color: var(--color-primary-light); }
+.app-container.theme-dark .half-day.defavorable h4 .weather-main-icon { color: var(--color-danger-light); }
+.app-container.theme-dark .metrics .metric-critere.critere-fav .mdi { color: #a5d6a7; }
+.app-container.theme-dark .metrics .metric-critere.critere-def .mdi { color: var(--color-danger-light); }
+.app-container.theme-dark .metrics .metric-critere.critere-neutre .mdi { color: #9aa0a6; }
+.app-container.theme-dark .facteurs-def { color: #ffab91; }
+.app-container.theme-dark .ia-advice { color: #c5cad3; background: rgba(0,0,0,0.2); }
+.app-container.theme-dark .login-error { background: #4a2328; color: #ffcdd2; }
+.app-container.theme-dark .error-msg { background: #4a2328; color: #ffcdd2; }
+.app-container.theme-dark .status-msg { color: var(--text-secondary); }
+.app-container.theme-dark .account-box { background: var(--bg-surface); border: 1px solid var(--border-color); }
+
+/* components/AdminPanel.vue */
+.admin-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; margin-top: 40px; gap: 20px; }
+.admin-container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; width: 100%; }
+.admin-box { background: var(--bg-surface-2); padding: 30px; border-radius: var(--radius-lg); box-shadow: var(--shadow-md); width: 100%; max-width: 400px; box-sizing: border-box; color: var(--text-primary); }
+.admin-box.list-box { max-width: 400px; margin-top: 0; }
+.login-btn { width: 100%; background: var(--color-primary); color: white; border: none; padding: 12px; border-radius: var(--radius-md); font-size: 1.1rem; cursor: pointer; margin-top: 10px; }
+
+.user-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+.user-table th, .user-table td { padding: 10px; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 0.95rem; }
+.user-table th { font-weight: bold; color: var(--text-secondary); }
+
+.badge { padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; }
+.badge.admin { background: #e8f5e9; color: #2e7d32; }
+.badge.user { background: #e3f2fd; color: #1565c0; }
+
+.actions { display: flex; gap: 8px; justify-content: flex-start; }
+.actions button { border: none; padding: 6px 10px; border-radius: var(--radius-sm); cursor: pointer; background: #f0f0f0; color: #333; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s; font-size: 0.9rem; }
+.actions button:hover { background: #e0e0e0; color: var(--color-primary); }
+.actions button.del-btn { background: #ffebee; color: var(--color-danger-dark); }
+.actions button.del-btn:hover { background: #ffcdd2; color: #b71c1c; }
+
+.admin-screen.theme-dark .admin-box { background: var(--bg-surface); border: 1px solid var(--border-color); box-shadow: var(--shadow-md); }
+.admin-screen.theme-dark .user-table th,
+.admin-screen.theme-dark .user-table td { border-bottom-color: var(--border-color); }
+.admin-screen.theme-dark .badge.admin { background: rgba(46, 125, 50, 0.2); color: #a5d6a7; }
+.admin-screen.theme-dark .badge.user { background: rgba(21, 101, 192, 0.2); color: #90caf9; }
+.admin-screen.theme-dark .actions button { background: #2d333c; color: var(--text-primary); }
+.admin-screen.theme-dark .actions button:hover { background: var(--border-color); color: var(--color-primary-light); }
+.admin-screen.theme-dark .actions button.del-btn { background: rgba(198, 40, 40, 0.2); color: var(--color-danger-light); }
+.admin-screen.theme-dark .actions button.del-btn:hover { background: rgba(198, 40, 40, 0.35); color: #ff8a80; }
+
+/* components/StravaActivities.vue */
+.strava-page { padding: 8px 0 40px; }
+
+.strava-notif {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; border-radius: 10px; margin-bottom: 20px;
+  font-weight: 600; font-size: 0.95rem;
+}
+.strava-notif.success { background: #dcfce7; color: #166534; }
+.strava-notif.strava-error { background: #fee2e2; color: #991b1b; }
+.notif-close { margin-left: auto; background: none; border: none; font-size: 1.2rem; cursor: pointer; color: inherit; line-height: 1; }
+
+.connect-screen { display: flex; justify-content: center; padding: 40px 20px; }
+.connect-card {
+  background: var(--bg-surface); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg);
+  padding: 48px 40px; max-width: 440px; width: 100%; text-align: center;
+}
+.strava-logo-wrap { margin-bottom: 20px; }
+.strava-hero-icon { font-size: 4rem; color: var(--color-strava); }
+.connect-card h2 { margin: 0 0 12px; font-size: 1.5rem; color: var(--text-primary); }
+.connect-card p { color: var(--text-secondary); margin-bottom: 28px; line-height: 1.5; }
+.btn-strava-connect {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: var(--color-strava); color: #fff; border: none;
+  padding: 14px 28px; border-radius: 10px; font-size: 1.05rem;
+  font-weight: 700; cursor: pointer; width: 100%; justify-content: center;
+  transition: background 0.2s, transform 0.15s;
+}
+.btn-strava-connect:hover:not(:disabled) { background: var(--color-strava-dark); transform: translateY(-1px); }
+.btn-strava-connect:disabled { opacity: 0.6; cursor: not-allowed; }
+.connect-note { font-size: 0.78rem; color: var(--text-muted); margin-top: 14px; margin-bottom: 0; }
+
+.athlete-header {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--bg-surface); border-radius: 14px; padding: 16px 20px;
+  box-shadow: var(--shadow-sm); margin-bottom: 20px;
+}
+.athlete-avatar { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 3px solid var(--color-strava); }
+.athlete-avatar-fallback { font-size: 3rem; color: var(--color-strava); }
+.athlete-info { flex: 1; }
+.athlete-name { font-weight: 700; font-size: 1.1rem; color: var(--text-primary); }
+.athlete-sub { font-size: 0.82rem; color: var(--text-muted); margin-top: 2px; }
+.btn-disconnect {
+  display: flex; align-items: center; gap: 6px; background: #fff1ee;
+  color: var(--color-strava); border: 1.5px solid var(--color-strava); border-radius: var(--radius-md);
+  padding: 7px 14px; cursor: pointer; font-weight: 600; font-size: 0.85rem;
+  transition: background 0.2s;
+}
+.btn-disconnect:hover { background: #ffe3db; }
+
+.monthly-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px;
+}
+@media (max-width: 640px) { .monthly-stats { grid-template-columns: repeat(2, 1fr); } }
+.stat-tile {
+  background: var(--bg-surface); border-radius: 14px; padding: 20px 16px; text-align: center;
+  box-shadow: var(--shadow-sm); border-top: 3px solid var(--color-strava);
+}
+.stat-icon { font-size: 1.6rem; color: var(--color-strava); }
+.stat-val { font-size: 1.5rem; font-weight: 800; margin: 6px 0 2px; color: var(--text-primary); }
+.stat-val small { font-size: 0.9rem; font-weight: 600; color: var(--text-secondary); }
+.stat-label { font-size: 0.78rem; color: var(--text-muted); font-weight: 500; }
+
+.strava-loading, .strava-error-msg, .strava-empty {
+  text-align: center; padding: 30px; border-radius: 12px; margin-bottom: 16px;
+}
+.strava-loading { color: #888; font-size: 1rem; }
+.strava-error-msg { background: #fee2e2; color: #991b1b; font-weight: 600; }
+.strava-empty { color: #aaa; }
+.strava-empty-icon { font-size: 3rem; display: block; margin-bottom: 10px; }
+
+.activities-list { display: flex; flex-direction: column; gap: 12px; }
+.activity-card {
+  background: var(--bg-surface); border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden; transition: box-shadow 0.2s;
+  border-left: 4px solid var(--color-strava);
+}
+.activity-card.is-expanded { box-shadow: 0 6px 24px rgba(252,76,2,0.15); }
+
+.activity-header {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 18px; cursor: pointer;
+  transition: background 0.15s;
+}
+.activity-header:hover { background: #fff8f6; }
+
+.activity-type-badge {
+  flex-shrink: 0; width: 42px; height: 42px; border-radius: 50%;
+  background: #fff1ee; color: var(--color-strava);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem;
+}
+.activity-main { flex: 1; min-width: 0; }
+.activity-name { font-weight: 700; font-size: 0.97rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-primary); }
+.activity-date { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
+
+.activity-metrics {
+  display: flex; flex-wrap: wrap; gap: 8px 16px;
+  font-size: 0.82rem; font-weight: 600; color: var(--text-secondary);
+}
+.metric { display: flex; align-items: center; gap: 4px; }
+.metric .mdi { color: var(--color-strava); font-size: 1rem; }
+
+@media (max-width: 600px) {
+  .activity-header { flex-wrap: wrap; }
+  .activity-metrics { width: 100%; }
+}
+
+.activity-expand-icon { font-size: 1.3rem; color: #ccc; flex-shrink: 0; }
+
+.activity-map-wrap { border-top: 1px solid var(--border-color); }
+.activity-map { height: 320px; width: 100%; }
+.map-unavailable {
+  padding: 20px; text-align: center; color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+
+.theme-dark .connect-card { background: var(--bg-surface); }
+.theme-dark .connect-note { color: var(--text-muted); }
+.theme-dark .athlete-header { background: var(--bg-surface); }
+.theme-dark .btn-disconnect { background: #2d333c; border-color: var(--border-input); }
+.theme-dark .btn-disconnect:hover { background: var(--border-color); }
+.theme-dark .stat-tile { background: var(--bg-surface); }
+.theme-dark .activity-card { background: var(--bg-surface); }
+.theme-dark .activity-card.is-expanded { box-shadow: 0 6px 24px rgba(252,76,2,0.2); }
+.theme-dark .activity-header:hover { background: rgba(255, 255, 255, 0.03); }
+.theme-dark .activity-type-badge { background: #2d333c; border: 1px solid var(--border-color); }
+.theme-dark .activity-map-wrap { border-top-color: var(--border-color); }
+.theme-dark .activity-map { background: #1a1d23; }
+.theme-dark .strava-notif.success { background: #1e3a24; color: #86efac; }
+.theme-dark .strava-notif.strava-error { background: #4a2328; color: #fca5a5; }
+.theme-dark .strava-error-msg { background: #4a2328; color: #fca5a5; }
+
+.filter-controls {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  margin-bottom: 10px;
+}
+.type-count { font-size: 0.75rem; opacity: 0.75; margin-left: 2px; }
+
+.timeframe-controls {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  margin-bottom: 10px;
+}
+
+.sort-controls {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  margin-bottom: 16px;
+}
+.sort-label { font-size: 0.82rem; font-weight: 600; color: #888; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.sort-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.sort-btn {
+  display: flex; align-items: center; gap: 4px;
+  padding: 5px 12px; border-radius: 20px; border: 1.5px solid #e5e7eb;
+  background: #fff; color: #555; font-size: 0.82rem; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+}
+.sort-btn:hover { border-color: #FC4C02; color: #FC4C02; background: #fff8f6; }
+.sort-btn.active { background: #FC4C02; color: #fff; border-color: #FC4C02; }
+.sort-btn .mdi { font-size: 0.9rem; }
+
+.theme-dark .sort-label { color: var(--text-muted); }
+.theme-dark .sort-btn { background: #2d333c; border-color: var(--border-color); color: var(--text-secondary); }
+.theme-dark .sort-btn:hover { border-color: var(--color-strava); color: var(--color-strava); background: var(--border-color); }
+.theme-dark .sort-btn.active { background: var(--color-strava); color: #fff; border-color: var(--color-strava); }
+
+.custom-date-pickers {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  background: #f9fafb;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  border: 1px solid #f3f4f6;
+  max-width: fit-content;
+}
+.date-picker-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.date-picker-group label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #555;
+}
+.date-input {
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  color: #333;
+  outline: none;
+  font-family: inherit;
+  font-weight: 600;
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.date-input:focus {
+  border-color: #FC4C02;
+  box-shadow: 0 0 0 3px rgba(252, 76, 2, 0.15);
+}
+
+.theme-dark .custom-date-pickers {
+  background: #1e232b;
+  border-color: #2d333c;
+}
+.theme-dark .date-picker-group label {
+  color: #9aa0a6;
+}
+.theme-dark .date-input {
+  background: #252a32;
+  border-color: #3d4450;
+  color: #e8eaed;
+}
+.theme-dark .date-input:focus {
+  border-color: #FC4C02;
+}
+
+.btn-validate-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #FC4C02;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.btn-validate-date:hover {
+  background: #e03e00;
+}
+.btn-validate-date:active {
+  transform: scale(0.96);
+}
+
+.map-container-relative {
+  position: relative;
+  width: 100%;
+}
+.map-actions-overlay {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  display: flex;
+  gap: 8px;
+}
+.btn-map-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1.5px solid #d1d5db;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #374151;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  transition: all 0.15s;
+}
+.btn-map-action:hover {
+  background: #FC4C02;
+  color: #fff;
+  border-color: #FC4C02;
+}
+
+.btn-strava-link:hover {
+  background: #FC4C02;
+  color: #fff;
+  border-color: #FC4C02;
+}
+
+.theme-dark .btn-map-action {
+  background: rgba(37, 42, 50, 0.95);
+  border-color: #4b5563;
+  color: #e5e7eb;
+}
+.theme-dark .btn-map-action:hover {
+  background: #FC4C02;
+  color: #fff;
+  border-color: #FC4C02;
+}
+
+.map-fullscreen-modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 10000;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+.fullscreen-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  z-index: 10001;
+}
+.fullscreen-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.fullscreen-type-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  background: #fff8f6;
+  border-radius: 50%;
+  color: #FC4C02;
+  font-size: 1.2rem;
+  border: 1px solid rgba(252, 76, 2, 0.2);
+}
+.fullscreen-title-main h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+.fullscreen-date {
+  font-size: 0.78rem;
+  color: #6b7280;
+}
+.fullscreen-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.btn-fullscreen-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #FC4C02;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-fullscreen-action:hover {
+  background: #e03e00;
+}
+.btn-strava-link-full {
+  background: #fff;
+  color: #FC4C02;
+  border: 1.5px solid rgba(252, 76, 2, 0.4);
+}
+.btn-strava-link-full:hover {
+  background: #FC4C02;
+  color: #fff;
+}
+
+.theme-dark .btn-strava-link-full {
+  background: #252a32;
+  color: #FC4C02;
+  border-color: rgba(252, 76, 2, 0.5);
+}
+.theme-dark .btn-strava-link-full:hover {
+  background: #FC4C02;
+  color: #fff;
+}
+.btn-fullscreen-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fff;
+  color: #374151;
+  border: 1.5px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-fullscreen-close:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+.fullscreen-map-container {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+}
+
+.theme-dark .map-fullscreen-modal {
+  background: #1a1e24;
+}
+.theme-dark .fullscreen-header {
+  background: #252a32;
+  border-bottom-color: #3d4450;
+}
+.theme-dark .fullscreen-type-badge {
+  background: #2d333c;
+  border-color: #3d4450;
+}
+.theme-dark .fullscreen-title-main h2 {
+  color: #e8eaed;
+}
+.theme-dark .fullscreen-date {
+  color: #9aa0a6;
+}
+.theme-dark .btn-fullscreen-close {
+  background: #2d333c;
+  color: #e5e7eb;
+  border-color: #3d4450;
+}
+.theme-dark .btn-fullscreen-close:hover {
+  background: #3d4450;
+  border-color: #4b5563;
+}
+
+/* components/WeatherChart.vue */
+.weather-chart-container {
+  position: relative;
+  height: 250px;
+  width: 100%;
+  margin-top: 15px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}

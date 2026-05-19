@@ -14,6 +14,16 @@ app.use(express.json());
 const PORT = process.env.PORT || 3001;
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const JWT_SECRET = process.env.JWT_SECRET || 'ta_cle_secrete_hyper_longue';
+const PASSWORD_RULES_MESSAGE = "Le mot de passe doit contenir au moins 10 caractères, une majuscule, une minuscule, un chiffre et un caractère spécial.";
+
+const validatePasswordStrength = (password) => {
+  return typeof password === 'string'
+    && password.length >= 10
+    && /[A-Z]/.test(password)
+    && /[a-z]/.test(password)
+    && /\d/.test(password)
+    && /[^A-Za-z0-9]/.test(password);
+};
 
 // --- 1. CONNEXION MONGODB ---
 mongoose.connect(process.env.MONGO_URL || 'mongodb://mongodb:27017/meteo_velo')
@@ -280,6 +290,7 @@ app.post('/api/admin/create-user', verifyToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: "Accès refusé (Admin requis)" });
 
   const { username, password, role } = req.body;
+  if (!validatePasswordStrength(password)) return res.status(400).json({ error: PASSWORD_RULES_MESSAGE });
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = new User({ username, password: hashedPassword, role });
@@ -315,6 +326,25 @@ app.post('/api/user/preferences', verifyToken, async (req, res) => {
   }
 });
 
+app.patch('/api/user/password', verifyToken, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!validatePasswordStrength(newPassword)) return res.status(400).json({ error: PASSWORD_RULES_MESSAGE });
+
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
+
+    const validPassword = await bcrypt.compare(currentPassword, user.password);
+    if (!validPassword) return res.status(401).json({ error: "Mot de passe actuel incorrect" });
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+    res.json({ message: "Mot de passe mis à jour" });
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors de la mise à jour du mot de passe" });
+  }
+});
+
 // Lister tous les utilisateurs
 app.get('/api/admin/users', verifyToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: "Interdit" });
@@ -326,6 +356,7 @@ app.get('/api/admin/users', verifyToken, async (req, res) => {
 app.patch('/api/admin/users/:id/password', verifyToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: "Interdit" });
   const { newPassword } = req.body;
+  if (!validatePasswordStrength(newPassword)) return res.status(400).json({ error: PASSWORD_RULES_MESSAGE });
   const hashedPassword = await bcrypt.hash(newPassword, 10);
   await User.findByIdAndUpdate(req.params.id, { password: hashedPassword });
   res.json({ message: "Mot de passe mis à jour" });
