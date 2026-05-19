@@ -5,6 +5,7 @@ import { jwtDecode } from 'jwt-decode'
 import WeatherChart from './components/WeatherChart.vue'
 import StravaActivities from './components/StravaActivities.vue'
 import AdminPanel from './components/AdminPanel.vue'
+import { MDI_ICONS } from './utils/mdi-icons.js'
 
 // --- ÉTATS D'AUTHENTIFICATION ---
 const isLoggedIn = ref(false)
@@ -24,6 +25,7 @@ const activityForm = ref({ id: null, label: '', icon: 'mdi-bike', constraints: '
 const activityMsg = ref({ text: '', type: '' })
 const activityLoading = ref(false)
 const selectedActivityId = ref(localStorage.getItem('selected_activity_id') || '')
+const showIconSuggestions = ref(false)
 
 // --- ÉTATS NAVIGATION ---
 const showAdminPanel = ref(false)
@@ -73,6 +75,98 @@ const themeIcon = computed(() => {
   if (theme.value === 'light') return 'mdi-white-balance-sunny'
   if (theme.value === 'dark') return 'mdi-weather-night'
   return 'mdi-brightness-auto'
+})
+
+// --- LOGIQUE AUTOCOMPLÉTION ICÔNES MDI ---
+const focusedIconIndex = ref(0)
+
+const normalizedQuery = computed(() => {
+  return (activityForm.value.icon || '')
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+})
+
+const filteredIcons = computed(() => {
+  const q = normalizedQuery.value
+  if (!q) {
+    return MDI_ICONS
+  }
+  return MDI_ICONS.filter(icon => {
+    const nameMatch = icon.name.toLowerCase().includes(q)
+    const tagMatch = icon.tags.some(tag => 
+      tag.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q)
+    )
+    return nameMatch || tagMatch
+  })
+})
+
+const categorizedFilteredIcons = computed(() => {
+  const icons = filteredIcons.value
+  const groups = {}
+  icons.forEach(icon => {
+    const cat = icon.category || 'Autres'
+    if (!groups[cat]) {
+      groups[cat] = []
+    }
+    groups[cat].push(icon)
+  })
+  return groups
+})
+
+const focusedIcon = computed(() => {
+  const icons = filteredIcons.value
+  if (icons.length && focusedIconIndex.value >= 0 && focusedIconIndex.value < icons.length) {
+    return icons[focusedIconIndex.value]
+  }
+  return null
+})
+
+const navigateIcons = (direction) => {
+  const total = filteredIcons.value.length
+  if (!total) return
+  
+  const cols = 6
+  let current = focusedIconIndex.value
+  
+  if (direction === 'right') {
+    current = (current + 1) % total
+  } else if (direction === 'left') {
+    current = (current - 1 + total) % total
+  } else if (direction === 'down') {
+    current = current + cols
+    if (current >= total) {
+      current = current % cols
+      if (current >= total) current = 0
+    }
+  } else if (direction === 'up') {
+    current = current - cols
+    if (current < 0) {
+      const lastRowStart = Math.floor((total - 1) / cols) * cols
+      current = lastRowStart + (current + cols)
+      if (current >= total) {
+        current = total - 1
+      }
+    }
+  }
+  focusedIconIndex.value = current
+}
+
+const selectIcon = (iconName) => {
+  activityForm.value.icon = iconName
+  showIconSuggestions.value = false
+}
+
+const selectFocusedIcon = () => {
+  const icons = filteredIcons.value
+  if (icons.length && focusedIconIndex.value >= 0 && focusedIconIndex.value < icons.length) {
+    selectIcon(icons[focusedIconIndex.value].name)
+  }
+}
+
+watch(filteredIcons, () => {
+  focusedIconIndex.value = 0
 })
 
 watch(isDark, (val) => {
@@ -483,7 +577,13 @@ const fetchForecast = async () => {
   <div class="app-container" :class="{ 'theme-dark': isDark }">
     <header>
       <div class="header-top">
-        <h1><img src="/logo_velo.png" alt="Logo" class="app-logo" /> Vélo Météo IA</h1>
+        <div class="header-brand">
+          <img src="/actiweather-transparent.png" alt="Logo" class="app-logo" />
+          <div class="header-title-group">
+            <h1>ActiWeather</h1>
+            <p class="app-subtitle">Analyse météo intelligente</p>
+          </div>
+        </div>
         <div v-if="isLoggedIn" class="header-actions">
           <div class="theme-select-wrapper">
             <span class="mdi" :class="themeIcon"></span>
@@ -594,9 +694,57 @@ const fetchForecast = async () => {
             </div>
             <div class="input-group">
               <label>Icône MDI :</label>
-              <div class="activity-icon-input">
-                <span class="mdi activity-icon-preview" :class="activityForm.icon || 'mdi-bike'"></span>
-                <input v-model="activityForm.icon" type="text" maxlength="60" placeholder="Ex: mdi-bike, mdi-run, mdi-hiking..." />
+              <div class="activity-icon-input-container">
+                <div class="activity-icon-input">
+                  <span class="mdi activity-icon-preview" :class="activityForm.icon || 'mdi-bike'"></span>
+                  <input
+                    v-model="activityForm.icon"
+                    type="text"
+                    maxlength="60"
+                    placeholder="Ex: mdi-bike, mdi-run, mdi-hiking..."
+                    @focus="showIconSuggestions = true; focusedIconIndex = 0"
+                    @blur="showIconSuggestions = false"
+                    @keydown.down.prevent="navigateIcons('down')"
+                    @keydown.up.prevent="navigateIcons('up')"
+                    @keydown.right.prevent="navigateIcons('right')"
+                    @keydown.left.prevent="navigateIcons('left')"
+                    @keydown.enter.prevent="selectFocusedIcon"
+                    @keydown.esc="showIconSuggestions = false"
+                  />
+                </div>
+                <div v-if="showIconSuggestions" class="icon-picker-dropdown">
+                  <div class="icon-picker-body">
+                    <div
+                      v-for="(categoryIcons, categoryName) in categorizedFilteredIcons"
+                      :key="categoryName"
+                    >
+                      <div class="icon-picker-category-title">{{ categoryName }}</div>
+                      <div class="icon-picker-grid">
+                        <div
+                          v-for="icon in categoryIcons"
+                          :key="icon.name"
+                          :class="{ 'is-focused': filteredIcons.indexOf(icon) === focusedIconIndex }"
+                          @mouseenter="focusedIconIndex = filteredIcons.indexOf(icon)"
+                          @mousedown.prevent="selectIcon(icon.name)"
+                          class="icon-grid-item"
+                          :title="icon.name"
+                        >
+                          <span class="mdi" :class="icon.name"></span>
+                        </div>
+                      </div>
+                    </div>
+                    <div v-if="filteredIcons.length === 0" class="icon-picker-no-results">
+                      Aucun icône prédéfini trouvé
+                    </div>
+                  </div>
+                  <div v-if="focusedIcon" class="icon-picker-footer">
+                    <span class="mdi icon-picker-footer-preview" :class="focusedIcon.name"></span>
+                    <div class="icon-picker-footer-info">
+                      <span class="icon-picker-footer-name">{{ focusedIcon.name }}</span>
+                      <span class="icon-picker-footer-tags">{{ focusedIcon.tags.join(', ') }}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="input-group">
