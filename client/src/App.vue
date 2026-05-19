@@ -485,7 +485,8 @@ const critereLabels = {
   pluie: 'Probabilité de pluie',
   precipitations: 'Précipitations',
   vent: 'Vent',
-  rafales: 'Rafales'
+  rafales: 'Rafales',
+  uv: 'Indice UV'
 }
 
 const critereClass = (period, key) => {
@@ -841,6 +842,7 @@ const fetchForecast = async () => {
                   <span :class="critereClass(day.matin, 'pluie')"><span class="mdi mdi-water-percent"></span> {{ day.matin.rain }}%</span>
                   <span :class="critereClass(day.matin, 'precipitations')"><span class="mdi mdi-weather-pouring"></span> {{ day.matin.precip }}mm</span>
                   <span :class="critereWindClass(day.matin)"><span class="mdi mdi-navigation wind-icon" :style="getWindStyle(day.matin.dir)"></span> {{ day.matin.wind }}km/h ({{ day.matin.gust }})</span>
+                  <span :class="critereClass(day.matin, 'uv')"><span class="mdi mdi-sun-wireless"></span> UV {{ day.matin.uv }}</span>
                 </div>
                 <div v-if="defavorableCritereLabels(day.matin).length" class="facteurs-def">
                   Facteurs défavorables : {{ defavorableCritereLabels(day.matin).join(' · ') }}
@@ -870,6 +872,7 @@ const fetchForecast = async () => {
                   <span :class="critereClass(day.apres_midi, 'pluie')"><span class="mdi mdi-water-percent"></span> {{ day.apres_midi.rain }}%</span>
                   <span :class="critereClass(day.apres_midi, 'precipitations')"><span class="mdi mdi-weather-pouring"></span> {{ day.apres_midi.precip }}mm</span>
                   <span :class="critereWindClass(day.apres_midi)"><span class="mdi mdi-navigation wind-icon" :style="getWindStyle(day.apres_midi.dir)"></span> {{ day.apres_midi.wind }}km/h ({{ day.apres_midi.gust }})</span>
+                  <span :class="critereClass(day.apres_midi, 'uv')"><span class="mdi mdi-sun-wireless"></span> UV {{ day.apres_midi.uv }}</span>
                 </div>
                 <div v-if="defavorableCritereLabels(day.apres_midi).length" class="facteurs-def">
                   Facteurs défavorables : {{ defavorableCritereLabels(day.apres_midi).join(' · ') }}

@@ -139,7 +139,7 @@ app.get('/api/search', verifyToken, async (req, res) => {
   }
 });
 
-const CRITERE_KEYS = ['temperature', 'pluie', 'precipitations', 'vent', 'rafales'];
+const CRITERE_KEYS = ['temperature', 'pluie', 'precipitations', 'vent', 'rafales', 'uv'];
 
 function normalizeCriteres(aiSlice, globalFavorable) {
   const raw = aiSlice?.criteres || {};
@@ -174,7 +174,7 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
     if (!activity) return res.status(404).json({ error: "Activité introuvable" });
     activityLabel = activity.label;
     userRules = (activity.constraints || '').trim();
-    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m&timezone=auto`;
+    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index&timezone=auto`;
     const weatherRes = await axios.get(weatherUrl);
     const hourly = weatherRes.data.hourly;
     // utc_offset_seconds est fourni par Open-Meteo avec timezone=auto
@@ -200,8 +200,8 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
       if (!daysMap[date]) {
         daysMap[date] = {
           date,
-          matin: { temps: [], rains: [], precips: [], winds: [], gusts: [], dirs: [], hours: [] },
-          apres_midi: { temps: [], rains: [], precips: [], winds: [], gusts: [], dirs: [], hours: [] }
+          matin: { temps: [], rains: [], precips: [], winds: [], gusts: [], dirs: [], hours: [], uvs: [] },
+          apres_midi: { temps: [], rains: [], precips: [], winds: [], gusts: [], dirs: [], hours: [], uvs: [] }
         };
       }
 
@@ -213,6 +213,7 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
         daysMap[date].matin.gusts.push(hourly.wind_gusts_10m[i]);
         daysMap[date].matin.dirs.push(hourly.wind_direction_10m[i]);
         daysMap[date].matin.hours.push(hour);
+        daysMap[date].matin.uvs.push(hourly.uv_index[i]);
       } else if (hour >= 13 && hour <= 18) {
         daysMap[date].apres_midi.temps.push(hourly.temperature_2m[i]);
         daysMap[date].apres_midi.rains.push(hourly.precipitation_probability[i]);
@@ -221,6 +222,7 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
         daysMap[date].apres_midi.gusts.push(hourly.wind_gusts_10m[i]);
         daysMap[date].apres_midi.dirs.push(hourly.wind_direction_10m[i]);
         daysMap[date].apres_midi.hours.push(hour);
+        daysMap[date].apres_midi.uvs.push(hourly.uv_index[i]);
       }
     });
 
@@ -234,7 +236,8 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
         precip: Number(period.precips[i].toFixed(1)),
         wind: Math.round(period.winds[i]),
         gust: Math.round(period.gusts[i]),
-        dir: period.dirs[i]
+        dir: period.dirs[i],
+        uv: Number((period.uvs[i] || 0).toFixed(1))
       }));
 
       return {
@@ -244,6 +247,7 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
         wind: Math.round(Math.max(...period.winds)),
         gust: Math.round(Math.max(...period.gusts)),
         dir: period.dirs[Math.floor(period.dirs.length / 2)],
+        uv: Number(Math.max(...(period.uvs.length > 0 ? period.uvs : [0])).toFixed(1)),
         hourly: hourlyData
       };
     };
@@ -267,20 +271,21 @@ Tu DOIS mettre "favorable": false si une contrainte est enfreinte.`;
     prompt += `
             RÈGLES D'ANALYSE PRÉCISES :
             - PRÉCIPITATIONS : Si le cumul (precip) est de 0mm, ne parle pas de "pluie continue" ou de "déluge", même si la probabilité est haute. Parle plutôt de "ciel menaçant" ou "risque de bruine".
-            - SEUIL DE TOLÉRANCE : Considère que moins de 0.5mm sur une demi-journée est négligeable pour un cycliste équipé.
+            - SEUIL DE TOLÉRANCE : Considère que moins de 0.5mm sur une demi-journée est négligeable. SI la probabilité de pluie est < 15% ALORS mets "pluie": "favorable".
             - VENT : Sois intransigeant sur les rafales (gust) par rapport aux consignes de l'utilisateur.
+            - INDICE UV : Analyse si l'indice UV (uv) nécessite des conseils spécifiques (ex: crème solaire / protection si UV >= 6).
             - TON : Reste factuel et encourageant si les conditions sont à la limite.
             
             Pour CHAQUE JOUR et CHAQUE demi-journée (matin / apres_midi), détermine "favorable" true ou false en respectant STRICTEMENT les consignes.
-            Tu DOIS aussi remplir "criteres" (voir ci-dessous) : pour chaque critère, indique "favorable" si ce facteur ne milite pas contre la sortie vélo, "defavorable" s'il contribue au refus ou au verdict défavorable.
-            Correspondance avec les chiffres fournis : temperature = temp (°C max), pluie = rain (% max), precipitations = precip (mm cumul), vent = wind (km/h max), rafales = gust (km/h max).
+            Tu DOIS aussi remplir "criteres" (voir ci-dessous) : pour chaque critère, indique "favorable" si ce facteur ne milite pas contre la sortie vélo/sport, "defavorable" s'il contribue au refus ou au verdict défavorable.
+            Correspondance avec les chiffres fournis : temperature = temp (°C max), pluie = rain (% max), precipitations = precip (mm cumul), vent = wind (km/h max), rafales = gust (km/h max), uv = uv (indice max).
             Si la demi-journée est favorable, tous les critères doivent être "favorable" sauf si un critère reste objectivement limite (dans ce cas mets "favorable": false et le ou les critères concernés en "defavorable").
             Si la demi-journée est défavorable, au moins un critère doit être "defavorable" (tous ceux qui expliquent le verdict).
             `;
 
     prompt += `
 Réponds EXCLUSIVEMENT par un tableau JSON (sans markdown), un objet par jour, dans l'ordre des dates. Structure exacte pour chaque jour :
-{"date":"YYYY-MM-DD","matin":{"favorable":true,"conseil":"...","criteres":{"temperature":"favorable","pluie":"favorable","precipitations":"favorable","vent":"favorable","rafales":"favorable"}},"apres_midi":{"favorable":true,"conseil":"...","criteres":{"temperature":"favorable","pluie":"favorable","precipitations":"favorable","vent":"favorable","rafales":"favorable"}}}
+{"date":"YYYY-MM-DD","matin":{"favorable":true,"conseil":"...","criteres":{"temperature":"favorable","pluie":"favorable","precipitations":"favorable","vent":"favorable","rafales":"favorable","uv":"favorable"}},"apres_midi":{"favorable":true,"conseil":"...","criteres":{"temperature":"favorable","pluie":"favorable","precipitations":"favorable","vent":"favorable","rafales":"favorable","uv":"favorable"}}}
 Les valeurs dans criteres sont uniquement les chaînes "favorable" ou "defavorable" (pas d'autres valeurs).
 `;
 
@@ -533,7 +538,7 @@ app.get('/api/strava/activities', verifyToken, async (req, res) => {
     if (!user?.strava?.accessToken) return res.status(404).json({ error: 'Compte Strava non lié' });
 
     const accessToken = await ensureStravaToken(user);
-    
+
     // Support dynamic timeframe / custom calendar range
     let after, before;
     if (req.query.startDate) {

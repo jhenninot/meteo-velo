@@ -149,7 +149,8 @@ const chartOptions = computed(() => {
                '',
                `🌡️ Température : ${hourData.temp}°C`,
                `💧 Proba. Pluie : ${hourData.rain}%`,
-               `💨 Rafales : ${hourData.gust} km/h`
+               `💨 Rafales : ${hourData.gust} km/h`,
+               `☀️ Indice UV : ${hourData.uv}`
              ]
           }
         }
