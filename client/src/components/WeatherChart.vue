@@ -218,9 +218,6 @@ const chartOptions = computed(() => {
   width: 100%;
   margin-top: 15px;
   padding-top: 10px;
-  border-top: 1px solid rgba(0,0,0,0.1);
-}
-.weather-chart-container.theme-dark {
-  border-top-color: rgba(255,255,255,0.1);
+  border-top: 1px solid var(--border-color);
 }
 </style>

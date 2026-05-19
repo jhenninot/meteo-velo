@@ -4,6 +4,7 @@ import axios from 'axios'
 import { jwtDecode } from 'jwt-decode'
 import WeatherChart from './components/WeatherChart.vue'
 import StravaActivities from './components/StravaActivities.vue'
+import AdminPanel from './components/AdminPanel.vue'
 
 // --- ÉTATS D'AUTHENTIFICATION ---
 const isLoggedIn = ref(false)
@@ -13,12 +14,9 @@ const loginUser = ref('')
 const loginPass = ref('')
 const loginError = ref('')
 
-// --- ÉTATS ADMIN ---
+// --- ÉTATS NAVIGATION ---
 const showAdminPanel = ref(false)
 const showStravaPage = ref(false)
-const newUser = ref({ username: '', password: '', role: 'user' })
-const adminMsg = ref({ text: '', type: '' })
-const usersList = ref([])
 
 // --- ÉTATS DE L'APPLICATION MÉTÉO ---
 const city = ref('')
@@ -144,54 +142,8 @@ const handleLogout = () => {
   theme.value = 'auto'
 }
 
-const createUser = async () => {
-  adminMsg.value = { text: '', type: '' }
-  try {
-    const response = await axios.post(`${API_BASE_URL}/api/admin/create-user`, newUser.value)
-    
-    // 1. On affiche le message de succès
-    adminMsg.value = { text: `Utilisateur ${newUser.value.username} créé avec succès !`, type: 'success' }
-    
-    // 2. On vide le formulaire pour le prochain utilisateur
-    newUser.value = { username: '', password: '', role: 'user' }
-    
-    // 3. On rafraîchit la liste des utilisateurs
-    await fetchUsers() 
-    
-  } catch (err) {
-    const errorMsg = err.response?.data?.error || "Erreur lors de la création."
-    adminMsg.value = { text: errorMsg, type: 'error' }
-  }
-}
-
-const fetchUsers = async () => {
-  try {
-    const response = await axios.get(`${API_BASE_URL}/api/admin/users`)
-    usersList.value = response.data
-  } catch (err) { console.error("Erreur liste users") }
-}
-
-const deleteUser = async (id) => {
-  if (!confirm("Supprimer cet utilisateur ?")) return
-  try {
-    await axios.delete(`${API_BASE_URL}/api/admin/users/${id}`)
-    fetchUsers() // Rafraîchir la liste
-  } catch (err) { alert(err.response.data.error) }
-}
-
-const changePassword = async (id) => {
-  const newPass = prompt("Nouveau mot de passe :")
-  if (!newPass) return
-  try {
-    await axios.patch(`${API_BASE_URL}/api/admin/users/${id}/password`, { newPassword: newPass })
-    alert("Mot de passe modifié !")
-  } catch (err) { console.error(err) }
-}
-
-// Appeler fetchUsers quand on bascule sur le panel admin
 const openAdmin = () => {
   showAdminPanel.value = true
-  fetchUsers()
 }
 
 const syncPreferences = async () => {
@@ -238,8 +190,6 @@ onMounted(async () => {
       isLoggedIn.value = true
       currentUser.value = decoded.username
       userRole.value = decoded.role
-
-      if (decoded.role === 'admin') fetchUsers()
 
       await loadUserPreferences()
       initializeApp()
@@ -420,66 +370,7 @@ const fetchForecast = async () => {
       </div>
     </main>
 
-    <main v-else-if="showAdminPanel" class="admin-screen">
-      <div class="admin-container">
-        
-        <div class="admin-box">
-          <h2><span class="mdi mdi-account-plus"></span> Nouvel Utilisateur</h2>
-          
-          <div v-if="adminMsg.text" :class="['msg-banner', adminMsg.type]">
-            {{ adminMsg.text }}
-          </div>
-
-          <div class="input-group">
-            <label>Identifiant :</label>
-            <input v-model="newUser.username" type="text" placeholder="ex: julie" />
-          </div>
-          
-          <div class="input-group">
-            <label>Mot de passe :</label>
-            <input v-model="newUser.password" type="password" />
-          </div>
-
-          <div class="input-group">
-            <label>Rôle :</label>
-            <select v-model="newUser.role">
-              <option value="user">Utilisateur standard</option>
-              <option value="admin">Administrateur</option>
-            </select>
-          </div>
-          
-          <button @click="createUser" class="login-btn">Créer</button>
-        </div>
-
-        <div class="admin-box list-box">
-          <h2><span class="mdi mdi-account-group"></span> Utilisateurs existants</h2>
-          <table class="user-table">
-            <thead>
-              <tr>
-                <th>Nom</th>
-                <th>Rôle</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="u in usersList" :key="u._id">
-                <td>{{ u.username }}</td>
-                <td><span :class="['badge', u.role]">{{ u.role }}</span></td>
-                <td class="actions">
-                  <button @click="changePassword(u._id)" title="Changer MDP">
-                    <span class="mdi mdi-key-variant"></span>
-                  </button>
-                  <button @click="deleteUser(u._id)" class="del-btn" title="Supprimer">
-                    <span class="mdi mdi-trash-can-outline"></span>
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-      </div>
-    </main>
+    <AdminPanel v-else-if="showAdminPanel" :api-base-url="API_BASE_URL" :is-dark="isDark" />
     <main v-else-if="showStravaPage">
       <StravaActivities :theme="resolvedTheme" :api-base-url="API_BASE_URL" />
     </main>
@@ -581,93 +472,40 @@ const fetchForecast = async () => {
   </div>
 </template>
 
-<style>
-/* Chargement des icônes Material Design */
-@import url('https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css');
 
-html.meteo-theme-dark {
-  color-scheme: dark;
-}
-html.meteo-theme-dark body {
-  background-color: #1a1d23;
-  color: #e8eaed;
-}
-html:not(.meteo-theme-dark) body {
-  background-color: #eceff1;
-  color: #333;
-}
-</style>
 
 <style scoped>
 /* STRUCTURE GENERALE */
-.app-container { max-width: 1200px; margin: 0 auto; padding: 20px; font-family: 'Segoe UI', sans-serif; color: #333; }
+.app-container { max-width: 1200px; margin: 0 auto; padding: 20px; color: var(--text-primary); }
 @media (max-width: 600px) {
   .app-container { padding: 4px; }
 }
-header { display: flex; flex-direction: column; align-items: stretch; gap: 12px; margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 15px; }
+header { display: flex; flex-direction: column; align-items: stretch; gap: 12px; margin-bottom: 30px; border-bottom: 2px solid var(--border-color); padding-bottom: 15px; }
 header h1 { margin: 0; display: flex; align-items: center; gap: 15px; font-size: 1.5rem; align-self: flex-start; }
 .app-logo { height: 40px; width: auto; vertical-align: middle; }
 
 /* NAVIGATION & BOUTONS */
 .header-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 15px; }
-.main-nav { display: flex; background: #eee; padding: 4px; border-radius: 8px; gap: 2px; }
-.main-nav button { border: none; padding: 6px 12px; cursor: pointer; border-radius: 6px; background: transparent; font-weight: bold; color: #666; display: flex; align-items: center; gap: 5px; font-size: 0.88rem; }
-.main-nav button.active { background: white; color: #4caf50; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-.theme-select-wrapper { display: inline-flex; align-items: center; gap: 6px; background: #eee; padding: 5px 10px; border-radius: 8px; color: #666; font-weight: 600; font-size: 0.88rem; box-sizing: border-box; }
-.theme-select-wrapper .mdi { font-size: 1.1rem; color: #666; display: flex; align-items: center; }
-.theme-select { border: none !important; background: transparent !important; box-shadow: none !important; padding: 0 !important; font-weight: 600; color: #666 !important; cursor: pointer; outline: none !important; font-family: inherit; font-size: 0.88rem; width: auto; }
-.logout-btn { background: #f44336; color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; }
+.main-nav { display: flex; background: var(--nav-bg); padding: 4px; border-radius: var(--radius-md); gap: 2px; }
+.main-nav button { border: none; padding: 6px 12px; cursor: pointer; border-radius: var(--radius-sm); background: transparent; font-weight: bold; color: var(--text-secondary); display: flex; align-items: center; gap: 5px; font-size: 0.88rem; }
+.main-nav button.active { background: var(--nav-active-bg); color: var(--nav-active-color); box-shadow: var(--shadow-sm); }
+.theme-select-wrapper { display: inline-flex; align-items: center; gap: 6px; background: var(--nav-bg); padding: 5px 10px; border-radius: var(--radius-md); color: var(--text-secondary); font-weight: 600; font-size: 0.88rem; box-sizing: border-box; }
+.theme-select-wrapper .mdi { font-size: 1.1rem; color: var(--text-secondary); display: flex; align-items: center; }
+.theme-select { border: none !important; background: transparent !important; box-shadow: none !important; padding: 0 !important; font-weight: 600; color: var(--text-secondary) !important; cursor: pointer; outline: none !important; font-family: inherit; font-size: 0.88rem; width: auto; }
+.theme-select option { background: var(--bg-surface); color: var(--text-primary); }
+.logout-btn { background: var(--color-danger); color: white; border: none; padding: 8px; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; }
 
-/* ECRANS LOGIN & ADMIN */
-.login-screen, .admin-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; margin-top: 40px; gap: 20px; }
-.login-box, .admin-box { background: #f9f9f9; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; box-sizing: border-box; }
-.admin-box.list-box { max-width: 400px; margin-top: 0px; }
-.login-error { background: #ffebee; color: #d32f2f; padding: 10px; border-radius: 6px; margin-bottom: 15px; text-align: center; }
-.msg-banner { padding: 10px; border-radius: 6px; margin-bottom: 15px; text-align: center; }
-.msg-banner.success { background: #e8f5e9; color: #2e7d32; }
-.msg-banner.error { background: #ffebee; color: #c62828; }
-.login-btn { width: 100%; background: #4caf50; color: white; border: none; padding: 12px; border-radius: 8px; font-size: 1.1rem; cursor: pointer; margin-top: 10px; }
-
-/* Table d'administration */
-.user-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-.user-table th, .user-table td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; font-size: 0.95rem; }
-.user-table th { font-weight: bold; color: #666; }
-
-/* Badges rôles */
-.badge { padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; }
-.badge.admin { background: #e8f5e9; color: #2e7d32; }
-.badge.user { background: #e3f2fd; color: #1565c0; }
-
-/* Boutons d'action */
-.actions { display: flex; gap: 8px; justify-content: flex-start; }
-.actions button {
-  border: none;
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  background: #f0f0f0;
-  color: #333;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-  font-size: 0.9rem;
-}
-.actions button:hover { background: #e0e0e0; color: #4caf50; }
-.actions button.del-btn { background: #ffebee; color: #c62828; }
-.actions button.del-btn:hover { background: #ffcdd2; color: #b71c1c; }
-
-/* FORMULAIRES */
-.input-group { margin-bottom: 15px; }
-.input-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-input, textarea, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; box-sizing: border-box; }
-textarea { height: 80px; }
+/* ÉCRAN LOGIN */
+.login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; margin-top: 40px; gap: 20px; }
+.login-box { background: var(--bg-surface-2); padding: 30px; border-radius: var(--radius-lg); box-shadow: var(--shadow-md); width: 100%; max-width: 400px; box-sizing: border-box; }
+.login-error { background: #ffebee; color: #d32f2f; padding: 10px; border-radius: var(--radius-sm); margin-bottom: 15px; text-align: center; }
+.login-btn { width: 100%; background: var(--color-primary); color: white; border: none; padding: 12px; border-radius: var(--radius-md); font-size: 1.1rem; cursor: pointer; margin-top: 10px; }
 
 /* MÉTÉO GRID */
 .forecast-grid { display: grid; gap: 15px; grid-template-columns: 1fr; }
 @media (max-width: 600px) {
   .forecast-grid { gap: 10px; }
-  .day-card { padding: 8px; border-radius: 8px; }
+  .day-card { padding: 8px; border-radius: var(--radius-md); }
 }
 @media (min-width: 768px) {
   .forecast-grid { grid-template-columns: repeat(2, 1fr); gap: 20px; }
@@ -675,13 +513,13 @@ textarea { height: 80px; }
 @media (min-width: 1024px) {
   .forecast-grid { grid-template-columns: repeat(3, 1fr); }
 }
-.day-card { background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 15px; border: 1px solid #eee; }
-.day-card h3 { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 8px; margin-top: 0; }
+.day-card { background: var(--bg-surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 15px; border: 1px solid var(--border-color); }
+.day-card h3 { text-align: center; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-top: 0; color: var(--text-primary); }
 .day-split { display: flex; flex-direction: column; gap: 10px; }
-.half-day { position: relative; padding: 12px; border-radius: 8px; border-left: 6px solid #ddd; background: transparent; cursor: pointer; transition: filter 0.2s, box-shadow 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.half-day { position: relative; padding: 12px; border-radius: var(--radius-md); border-left: 6px solid var(--border-color); background: transparent; cursor: pointer; transition: filter 0.2s, box-shadow 0.2s; box-shadow: var(--shadow-sm); }
 .half-day:hover { filter: brightness(0.96); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-.half-day.favorable { border-left-color: #4caf50; background: transparent; }
-.half-day.defavorable { border-left-color: #f44336; background: transparent; }
+.half-day.favorable { border-left-color: var(--color-primary); background: transparent; }
+.half-day.defavorable { border-left-color: var(--color-danger); background: transparent; }
 .half-day h4 { margin: 0 0 10px; font-size: 1rem; }
 .half-day-heading { display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; margin-right: 3.5rem; }
 .half-day-heading-label { font-weight: 600; }
@@ -748,79 +586,41 @@ textarea { height: 80px; }
 .metrics { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; font-size: 0.85rem; font-weight: 600; margin-right: 3.5rem; }
 .metrics span { display: flex; align-items: center; gap: 3px; }
 .weather-main-icon { font-size: 2.75rem; line-height: 1; flex-shrink: 0; }
-.half-day.favorable h4 .weather-main-icon { color: #4caf50; }
-.half-day.defavorable h4 .weather-main-icon { color: #f44336; }
-.metrics .metric-critere.critere-fav .mdi { color: #2e7d32; }
-.metrics .metric-critere.critere-def .mdi { color: #c62828; }
+.half-day.favorable h4 .weather-main-icon { color: var(--color-primary); }
+.half-day.defavorable h4 .weather-main-icon { color: var(--color-danger); }
+.metrics .metric-critere.critere-fav .mdi { color: var(--color-primary-dark); }
+.metrics .metric-critere.critere-def .mdi { color: var(--color-danger-dark); }
 .metrics .metric-critere.critere-neutre .mdi { color: #757575; }
 .facteurs-def { font-size: 0.8rem; font-weight: 600; color: #b71c1c; margin: 6px 0 4px; }
-.ia-advice { font-size: 0.9rem; font-style: italic; color: #555; background: rgba(255,255,255,0.5); padding: 6px; border-radius: 4px; }
+.ia-advice { font-size: 0.9rem; font-style: italic; color: var(--text-secondary); background: rgba(255,255,255,0.5); padding: 6px; border-radius: 4px; }
 
 /* SUGGESTIONS & STATUS */
 .search-container { position: relative; margin-bottom: 3rem; }
 .search-input-wrapper { display: flex; gap: 8px; }
-.refresh-btn { flex-shrink: 0; background: #4caf50; color: white; border: none; border-radius: 8px; padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.refresh-btn { flex-shrink: 0; background: var(--color-primary); color: white; border: none; border-radius: var(--radius-md); padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.suggestions-list { position: absolute; width: 100%; background: white; border: 1px solid #ddd; z-index: 10; list-style: none; padding: 0; margin: 0; border-radius: 8px; }
-.suggestions-list li { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
-.status-msg, .error-msg { text-align: center; margin-top: 20px; padding: 10px; border-radius: 8px; }
+.suggestions-list { position: absolute; width: 100%; background: var(--bg-surface); border: 1px solid var(--border-input); z-index: 10; list-style: none; padding: 0; margin: 0; border-radius: var(--radius-md); }
+.suggestions-list li { padding: 10px; cursor: pointer; border-bottom: 1px solid var(--border-color); color: var(--text-primary); }
+.status-msg, .error-msg { text-align: center; margin-top: 20px; padding: 10px; border-radius: var(--radius-md); }
 .error-msg { background: #ffcdd2; color: #b71c1c; }
 
-/* Mode nuit */
-.app-container.theme-dark { color: #e8eaed; }
-.app-container.theme-dark header { border-bottom-color: #3d4450; }
-.app-container.theme-dark .theme-select-wrapper { background: #2d333c; color: #e8eaed; }
-.app-container.theme-dark .theme-select-wrapper .mdi { color: #e8eaed; }
-.app-container.theme-dark .theme-select { color: #e8eaed !important; }
-.app-container.theme-dark .theme-select option { background: #252a32; color: #e8eaed; }
-.app-container.theme-dark .main-nav { background: #2d333c; }
-.app-container.theme-dark .main-nav button { color: #b0b8c4; }
-.app-container.theme-dark .main-nav button.active { background: #3d4450; color: #81c784; box-shadow: none; }
-.app-container.theme-dark .login-box,
-.app-container.theme-dark .admin-box { background: #252a32; border: 1px solid #3d4450; box-shadow: 0 4px 20px rgba(0,0,0,0.35); color: #e8eaed; }
-.app-container.theme-dark .login-error { background: #4a2328; color: #ffcdd2; }
-.app-container.theme-dark .msg-banner.success { background: #1e3a24; color: #a5d6a7; }
-.app-container.theme-dark .msg-banner.error { background: #4a2328; color: #ffcdd2; }
-.app-container.theme-dark input,
-.app-container.theme-dark textarea,
-.app-container.theme-dark select { background: #1e222a; border-color: #4a515c; color: #e8eaed; }
-.app-container.theme-dark .day-card { background: #252a32; border-color: #3d4450; box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
-.app-container.theme-dark .day-card h3 { border-bottom-color: #3d4450; }
-.app-container.theme-dark .half-day { background: transparent; border-left-color: #4a515c; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
-.app-container.theme-dark .half-day:hover { filter: brightness(1.15); box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
-.app-container.theme-dark .half-day.favorable { border-left-color: #66bb6a; background: transparent; }
-.app-container.theme-dark .half-day.defavorable { border-left-color: #e57373; background: transparent; }
-.app-container.theme-dark .hourly-details { border-top-color: rgba(255,255,255,0.1); }
-.app-container.theme-dark .hourly-row { border-bottom-color: rgba(255,255,255,0.05); }
-.app-container.theme-dark .hourly-header { color: #aaa; border-bottom-color: rgba(255,255,255,0.15); }
-.app-container.theme-dark .rain-bar-container { background: rgba(255,255,255,0.1); }
-.app-container.theme-dark .rain-val { color: #bbb; }
+/* Mode nuit — les variables CSS gèrent l'essentiel automatiquement
+   Seules les surcharges non couvertes par les variables restent ici */
+.app-container.theme-dark .half-day:hover { filter: brightness(1.15); }
+.app-container.theme-dark .half-day.favorable { border-left-color: #66bb6a; }
+.app-container.theme-dark .half-day.defavorable { border-left-color: #e57373; }
 .app-container.theme-dark .bike-day-indicator { background: rgba(0, 0, 0, 0.35); }
 .app-container.theme-dark .bike-day-indicator.bike-day-favorable { background: transparent; border-color: transparent; }
-.app-container.theme-dark .bike-day-favorable { color: #81c784; }
-.app-container.theme-dark .bike-day-defavorable { color: #ef9a9a; }
-.app-container.theme-dark .half-day.favorable h4 .weather-main-icon { color: #81c784; }
-.app-container.theme-dark .half-day.defavorable h4 .weather-main-icon { color: #ef9a9a; }
+.app-container.theme-dark .bike-day-favorable { color: var(--color-primary-light); }
+.app-container.theme-dark .bike-day-defavorable { color: var(--color-danger-light); }
+.app-container.theme-dark .half-day.favorable h4 .weather-main-icon { color: var(--color-primary-light); }
+.app-container.theme-dark .half-day.defavorable h4 .weather-main-icon { color: var(--color-danger-light); }
 .app-container.theme-dark .metrics .metric-critere.critere-fav .mdi { color: #a5d6a7; }
-.app-container.theme-dark .metrics .metric-critere.critere-def .mdi { color: #ef9a9a; }
+.app-container.theme-dark .metrics .metric-critere.critere-def .mdi { color: var(--color-danger-light); }
 .app-container.theme-dark .metrics .metric-critere.critere-neutre .mdi { color: #9aa0a6; }
 .app-container.theme-dark .facteurs-def { color: #ffab91; }
 .app-container.theme-dark .ia-advice { color: #c5cad3; background: rgba(0,0,0,0.2); }
-.app-container.theme-dark .suggestions-list { background: #252a32; border-color: #4a515c; }
-.app-container.theme-dark .suggestions-list li { border-bottom-color: #3d4450; }
-.app-container.theme-dark .status-msg { color: #b0b8c4; }
+.app-container.theme-dark .login-error { background: #4a2328; color: #ffcdd2; }
 .app-container.theme-dark .error-msg { background: #4a2328; color: #ffcdd2; }
-.app-container.theme-dark .refresh-btn { background: #3d4450; color: #e8eaed; border: none; border-radius: 8px; padding: 10px 14px; cursor: pointer; }
-.app-container.theme-dark .refresh-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-
-/* Dark mode pour la table d'administration et les boutons */
-.app-container.theme-dark .user-table th { color: #b0b8c4; }
-.app-container.theme-dark .user-table th, 
-.app-container.theme-dark .user-table td { border-bottom-color: #3d4450; }
-.app-container.theme-dark .badge.admin { background: rgba(46, 125, 50, 0.2); color: #a5d6a7; }
-.app-container.theme-dark .badge.user { background: rgba(21, 101, 192, 0.2); color: #90caf9; }
-.app-container.theme-dark .actions button { background: #2d333c; color: #e5e7eb; }
-.app-container.theme-dark .actions button:hover { background: #3d4450; color: #81c784; }
-.app-container.theme-dark .actions button.del-btn { background: rgba(198, 40, 40, 0.2); color: #ef9a9a; }
-.app-container.theme-dark .actions button.del-btn:hover { background: rgba(198, 40, 40, 0.35); color: #ff8a80; }
+.app-container.theme-dark .status-msg { color: var(--text-secondary); }
 </style>

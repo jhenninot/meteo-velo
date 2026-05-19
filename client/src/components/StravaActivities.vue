@@ -776,38 +776,38 @@ onUnmounted(() => {
 /* ---- Connect screen ---- */
 .connect-screen { display: flex; justify-content: center; padding: 40px 20px; }
 .connect-card {
-  background: #fff; border-radius: 20px; box-shadow: 0 8px 40px rgba(0,0,0,0.1);
+  background: var(--bg-surface); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg);
   padding: 48px 40px; max-width: 440px; width: 100%; text-align: center;
 }
 .strava-logo-wrap { margin-bottom: 20px; }
-.strava-hero-icon { font-size: 4rem; color: #FC4C02; }
-.connect-card h2 { margin: 0 0 12px; font-size: 1.5rem; color: #1a1a1a; }
-.connect-card p { color: #555; margin-bottom: 28px; line-height: 1.5; }
+.strava-hero-icon { font-size: 4rem; color: var(--color-strava); }
+.connect-card h2 { margin: 0 0 12px; font-size: 1.5rem; color: var(--text-primary); }
+.connect-card p { color: var(--text-secondary); margin-bottom: 28px; line-height: 1.5; }
 .btn-strava-connect {
   display: inline-flex; align-items: center; gap: 10px;
-  background: #FC4C02; color: #fff; border: none;
+  background: var(--color-strava); color: #fff; border: none;
   padding: 14px 28px; border-radius: 10px; font-size: 1.05rem;
   font-weight: 700; cursor: pointer; width: 100%; justify-content: center;
   transition: background 0.2s, transform 0.15s;
 }
-.btn-strava-connect:hover:not(:disabled) { background: #e03e00; transform: translateY(-1px); }
+.btn-strava-connect:hover:not(:disabled) { background: var(--color-strava-dark); transform: translateY(-1px); }
 .btn-strava-connect:disabled { opacity: 0.6; cursor: not-allowed; }
-.connect-note { font-size: 0.78rem; color: #888; margin-top: 14px; margin-bottom: 0; }
+.connect-note { font-size: 0.78rem; color: var(--text-muted); margin-top: 14px; margin-bottom: 0; }
 
 /* ---- Athlete header ---- */
 .athlete-header {
   display: flex; align-items: center; gap: 14px;
-  background: #fff; border-radius: 14px; padding: 16px 20px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.07); margin-bottom: 20px;
+  background: var(--bg-surface); border-radius: 14px; padding: 16px 20px;
+  box-shadow: var(--shadow-sm); margin-bottom: 20px;
 }
-.athlete-avatar { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 3px solid #FC4C02; }
-.athlete-avatar-fallback { font-size: 3rem; color: #FC4C02; }
+.athlete-avatar { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 3px solid var(--color-strava); }
+.athlete-avatar-fallback { font-size: 3rem; color: var(--color-strava); }
 .athlete-info { flex: 1; }
-.athlete-name { font-weight: 700; font-size: 1.1rem; }
-.athlete-sub { font-size: 0.82rem; color: #888; margin-top: 2px; }
+.athlete-name { font-weight: 700; font-size: 1.1rem; color: var(--text-primary); }
+.athlete-sub { font-size: 0.82rem; color: var(--text-muted); margin-top: 2px; }
 .btn-disconnect {
   display: flex; align-items: center; gap: 6px; background: #fff1ee;
-  color: #FC4C02; border: 1.5px solid #FC4C02; border-radius: 8px;
+  color: var(--color-strava); border: 1.5px solid var(--color-strava); border-radius: var(--radius-md);
   padding: 7px 14px; cursor: pointer; font-weight: 600; font-size: 0.85rem;
   transition: background 0.2s;
 }
@@ -819,13 +819,13 @@ onUnmounted(() => {
 }
 @media (max-width: 640px) { .monthly-stats { grid-template-columns: repeat(2, 1fr); } }
 .stat-tile {
-  background: #fff; border-radius: 14px; padding: 20px 16px; text-align: center;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.07); border-top: 3px solid #FC4C02;
+  background: var(--bg-surface); border-radius: 14px; padding: 20px 16px; text-align: center;
+  box-shadow: var(--shadow-sm); border-top: 3px solid var(--color-strava);
 }
-.stat-icon { font-size: 1.6rem; color: #FC4C02; }
-.stat-val { font-size: 1.5rem; font-weight: 800; margin: 6px 0 2px; color: #1a1a1a; }
-.stat-val small { font-size: 0.9rem; font-weight: 600; color: #555; }
-.stat-label { font-size: 0.78rem; color: #888; font-weight: 500; }
+.stat-icon { font-size: 1.6rem; color: var(--color-strava); }
+.stat-val { font-size: 1.5rem; font-weight: 800; margin: 6px 0 2px; color: var(--text-primary); }
+.stat-val small { font-size: 0.9rem; font-weight: 600; color: var(--text-secondary); }
+.stat-label { font-size: 0.78rem; color: var(--text-muted); font-weight: 500; }
 
 /* ---- Loading / Error / Empty ---- */
 .strava-loading, .strava-error-msg, .strava-empty {
@@ -839,10 +839,10 @@ onUnmounted(() => {
 /* ---- Activity cards ---- */
 .activities-list { display: flex; flex-direction: column; gap: 12px; }
 .activity-card {
-  background: #fff; border-radius: 14px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+  background: var(--bg-surface); border-radius: 14px;
+  box-shadow: var(--shadow-sm);
   overflow: hidden; transition: box-shadow 0.2s;
-  border-left: 4px solid #FC4C02;
+  border-left: 4px solid var(--color-strava);
 }
 .activity-card.is-expanded { box-shadow: 0 6px 24px rgba(252,76,2,0.15); }
 
@@ -855,20 +855,20 @@ onUnmounted(() => {
 
 .activity-type-badge {
   flex-shrink: 0; width: 42px; height: 42px; border-radius: 50%;
-  background: #fff1ee; color: #FC4C02;
+  background: #fff1ee; color: var(--color-strava);
   display: flex; align-items: center; justify-content: center;
   font-size: 1.3rem;
 }
 .activity-main { flex: 1; min-width: 0; }
-.activity-name { font-weight: 700; font-size: 0.97rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.activity-date { font-size: 0.78rem; color: #888; margin-top: 2px; }
+.activity-name { font-weight: 700; font-size: 0.97rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-primary); }
+.activity-date { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
 
 .activity-metrics {
   display: flex; flex-wrap: wrap; gap: 8px 16px;
-  font-size: 0.82rem; font-weight: 600; color: #444;
+  font-size: 0.82rem; font-weight: 600; color: var(--text-secondary);
 }
 .metric { display: flex; align-items: center; gap: 4px; }
-.metric .mdi { color: #FC4C02; font-size: 1rem; }
+.metric .mdi { color: var(--color-strava); font-size: 1rem; }
 
 @media (max-width: 600px) {
   .activity-header { flex-wrap: wrap; }
@@ -878,39 +878,29 @@ onUnmounted(() => {
 .activity-expand-icon { font-size: 1.3rem; color: #ccc; flex-shrink: 0; }
 
 /* ---- Map ---- */
-.activity-map-wrap { border-top: 1px solid #f0f0f0; }
+.activity-map-wrap { border-top: 1px solid var(--border-color); }
 .activity-map { height: 320px; width: 100%; }
 .map-unavailable {
-  padding: 20px; text-align: center; color: #aaa;
+  padding: 20px; text-align: center; color: var(--text-muted);
   display: flex; align-items: center; justify-content: center; gap: 8px;
 }
 
 /* ========== DARK MODE ========== */
-.theme-dark .connect-card { background: #252a32; color: #e8eaed; }
-.theme-dark .connect-card h2 { color: #e8eaed; }
-.theme-dark .connect-card p { color: #9aa0a6; }
-.theme-dark .connect-note { color: #6b7280; }
-.theme-dark .athlete-header { background: #252a32; }
-.theme-dark .athlete-name { color: #e8eaed; }
-.theme-dark .btn-disconnect { background: #2d333c; border-color: #4a515c; color: #FC4C02; }
-.theme-dark .btn-disconnect:hover { background: #3d4450; }
-.theme-dark .stat-tile { background: #252a32; }
-.theme-dark .stat-val { color: #e8eaed; }
-.theme-dark .stat-val small { color: #9aa0a6; }
-.theme-dark .activity-card { background: #252a32; border-left-color: #FC4C02; }
-.theme-dark .activity-card.is-expanded { background: #252a32; box-shadow: 0 6px 24px rgba(252,76,2,0.2); }
+.theme-dark .connect-card { background: var(--bg-surface); }
+.theme-dark .connect-note { color: var(--text-muted); }
+.theme-dark .athlete-header { background: var(--bg-surface); }
+.theme-dark .btn-disconnect { background: #2d333c; border-color: var(--border-input); }
+.theme-dark .btn-disconnect:hover { background: var(--border-color); }
+.theme-dark .stat-tile { background: var(--bg-surface); }
+.theme-dark .activity-card { background: var(--bg-surface); }
+.theme-dark .activity-card.is-expanded { box-shadow: 0 6px 24px rgba(252,76,2,0.2); }
 .theme-dark .activity-header:hover { background: rgba(255, 255, 255, 0.03); }
-.theme-dark .activity-name { color: #e8eaed; }
-.theme-dark .activity-date { color: #6b7280; }
-.theme-dark .activity-metrics { color: #c5cad3; }
-.theme-dark .activity-type-badge { background: #2d333c; border: 1px solid #3d4450; }
-.theme-dark .activity-map-wrap { border-top-color: #3d4450; }
+.theme-dark .activity-type-badge { background: #2d333c; border: 1px solid var(--border-color); }
+.theme-dark .activity-map-wrap { border-top-color: var(--border-color); }
 .theme-dark .activity-map { background: #1a1d23; }
 .theme-dark .strava-notif.success { background: #1e3a24; color: #86efac; }
 .theme-dark .strava-notif.strava-error { background: #4a2328; color: #fca5a5; }
 .theme-dark .strava-error-msg { background: #4a2328; color: #fca5a5; }
-.theme-dark .strava-loading { color: #6b7280; }
-.theme-dark .strava-empty { color: #6b7280; }
 
 /* ---- Filter controls ---- */
 .filter-controls {
@@ -943,10 +933,10 @@ onUnmounted(() => {
 .sort-btn.active { background: #FC4C02; color: #fff; border-color: #FC4C02; }
 .sort-btn .mdi { font-size: 0.9rem; }
 
-.theme-dark .sort-label { color: #6b7280; }
-.theme-dark .sort-btn { background: #2d333c; border-color: #3d4450; color: #9aa0a6; }
-.theme-dark .sort-btn:hover { border-color: #FC4C02; color: #FC4C02; background: #3d4450; }
-.theme-dark .sort-btn.active { background: #FC4C02; color: #fff; border-color: #FC4C02; }
+.theme-dark .sort-label { color: var(--text-muted); }
+.theme-dark .sort-btn { background: #2d333c; border-color: var(--border-color); color: var(--text-secondary); }
+.theme-dark .sort-btn:hover { border-color: var(--color-strava); color: var(--color-strava); background: var(--border-color); }
+.theme-dark .sort-btn.active { background: var(--color-strava); color: #fff; border-color: var(--color-strava); }
 
 /* ---- Custom date pickers ---- */
 .custom-date-pickers {
