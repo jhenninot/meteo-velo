@@ -7,8 +7,8 @@ WORKDIR /app
 # Copie des fichiers de configuration
 COPY package*.json ./
 
-# Installation de git et docker CLI (pour le webhook de déploiement)
-RUN apk add --no-cache git docker-cli
+# Installation de git, docker CLI et le plugin docker compose V2
+RUN apk add --no-cache git docker-cli docker-cli-compose
 
 # Installation des dépendances
 RUN npm install
