@@ -713,7 +713,7 @@ const fetchForecast = async () => {
     fallbackWarning.value = response.data.fallbackMessage || ''
   } catch (err) {
     if (err.response?.status !== 401) {
-      error.value = "Impossible de récupérer les prévisions !"
+      error.value = "Impossible de récupérer les prévisions"
     }
   } finally {
     loading.value = false
