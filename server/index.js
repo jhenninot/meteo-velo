@@ -139,6 +139,20 @@ app.get('/api/search', verifyToken, async (req, res) => {
   }
 });
 
+app.get('/api/reverse', verifyToken, async (req, res) => {
+  const { lat, lon } = req.query;
+  if (!lat || !lon) {
+    return res.status(400).json({ error: "Paramètres lat et lon requis." });
+  }
+  try {
+    const response = await axios.get(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}`);
+    res.json(response.data.features);
+  } catch (error) {
+    console.error("Erreur Photon Reverse:", error.message);
+    res.status(500).json({ error: "Erreur lors de la géolocalisation inversée" });
+  }
+});
+
 const CRITERE_KEYS = ['temperature', 'pluie', 'precipitations', 'vent', 'rafales', 'uv'];
 
 function normalizeCriteres(aiSlice, globalFavorable) {
@@ -168,12 +182,18 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
 
   try {
     if (!activityId) return res.status(400).json({ error: "L'activité est obligatoire" });
-    const user = await User.findById(req.user.id).select('activities');
-    if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
-    const activity = user.activities.id(activityId);
-    if (!activity) return res.status(404).json({ error: "Activité introuvable" });
-    activityLabel = activity.label;
-    userRules = (activity.constraints || '').trim();
+    
+    if (activityId === 'none') {
+      activityLabel = 'plein air';
+      userRules = '';
+    } else {
+      const user = await User.findById(req.user.id).select('activities');
+      if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
+      const activity = user.activities.id(activityId);
+      if (!activity) return res.status(404).json({ error: "Activité introuvable" });
+      activityLabel = activity.label;
+      userRules = (activity.constraints || '').trim();
+    }
     const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index&timezone=auto`;
     const weatherRes = await axios.get(weatherUrl);
     const hourly = weatherRes.data.hourly;

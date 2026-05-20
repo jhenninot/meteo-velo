@@ -24,7 +24,7 @@ const userActivities = ref([])
 const activityForm = ref({ id: null, label: '', icon: 'mdi-bike', constraints: '' })
 const activityMsg = ref({ text: '', type: '' })
 const activityLoading = ref(false)
-const selectedActivityId = ref(localStorage.getItem('selected_activity_id') || '')
+const selectedActivityId = ref(localStorage.getItem('selected_activity_id') || 'none')
 const showIconSuggestions = ref(false)
 
 // --- ÉTATS NAVIGATION ---
@@ -41,6 +41,7 @@ const consignes = ref(localStorage.getItem('user_consignes') || '')
 const forecastData = ref(null)
 const loading = ref(false)
 const error = ref(null)
+const geoLoading = ref(false)
 const expandedPeriods = ref({})
 
 const togglePeriod = (dayIndex, period) => {
@@ -66,10 +67,21 @@ const isDark = computed(() => {
 const resolvedTheme = computed(() => isDark.value ? 'dark' : 'light')
 
 const selectedActivity = computed(() => {
+  if (selectedActivityId.value === 'none') {
+    return {
+      _id: 'none',
+      label: 'Aucune',
+      icon: '',
+      constraints: 'Aucune contrainte d\'activité.'
+    }
+  }
   return userActivities.value.find(activity => activity._id === selectedActivityId.value) || null
 })
 
-const selectedActivityIcon = computed(() => selectedActivity.value?.icon || 'mdi-bike')
+const selectedActivityIcon = computed(() => {
+  if (selectedActivityId.value === 'none') return ''
+  return selectedActivity.value?.icon || 'mdi-bike'
+})
 
 const themeIcon = computed(() => {
   if (theme.value === 'light') return 'mdi-white-balance-sunny'
@@ -318,8 +330,8 @@ const loadUserActivities = async () => {
   try {
     const { data } = await axios.get(`${API_BASE_URL}/api/user/activities`)
     userActivities.value = data
-    if (!userActivities.value.some(activity => activity._id === selectedActivityId.value)) {
-      selectedActivityId.value = userActivities.value[0]?._id || ''
+    if (selectedActivityId.value !== 'none' && !userActivities.value.some(activity => activity._id === selectedActivityId.value)) {
+      selectedActivityId.value = userActivities.value[0]?._id || 'none'
     }
     if (selectedActivityId.value) {
       localStorage.setItem('selected_activity_id', selectedActivityId.value)
@@ -540,6 +552,70 @@ const selectCity = (selectedFeature) => {
   syncPreferences()
 }
 
+const useDeviceLocation = () => {
+  if (!navigator.geolocation) {
+    error.value = "La géolocalisation n'est pas supportée par votre navigateur."
+    return
+  }
+  
+  geoLoading.value = true
+  error.value = null
+  suggestions.value = []
+  
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      const { latitude, longitude } = position.coords
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/reverse?lat=${latitude}&lon=${longitude}`)
+        const features = response.data
+        
+        let resolvedCity = 'Ma position'
+        if (features && features.length > 0) {
+          const props = features[0].properties
+          resolvedCity = props.city || props.town || props.village || props.name || 'Ma position'
+        }
+        
+        lat.value = latitude
+        lon.value = longitude
+        city.value = resolvedCity
+        query.value = resolvedCity
+        
+        await fetchForecast()
+        await syncPreferences()
+      } catch (err) {
+        console.error("Reverse geocoding error:", err)
+        lat.value = latitude
+        lon.value = longitude
+        city.value = 'Ma position'
+        query.value = 'Ma position'
+        
+        await fetchForecast()
+        await syncPreferences()
+      } finally {
+        geoLoading.value = false
+      }
+    },
+    (err) => {
+      console.error("Geolocation error:", err)
+      geoLoading.value = false
+      if (err.code === 1) {
+        error.value = "Accès à la géolocalisation refusé. Veuillez autoriser l'accès ou saisir une ville."
+      } else if (err.code === 2) {
+        error.value = "Position géographique indisponible."
+      } else if (err.code === 3) {
+        error.value = "Délai d'attente de la géolocalisation dépassé."
+      } else {
+        error.value = "Impossible de récupérer votre position actuelle."
+      }
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0
+    }
+  )
+}
+
 const fetchForecast = async () => {
   if (!city.value || !lat.value || !lon.value) return;
   if (!selectedActivityId.value) {
@@ -610,7 +686,7 @@ const fetchForecast = async () => {
             <span class="mdi mdi-weather-sunny"></span> Météo
           </button>
           <button @click="openStrava" :class="{ active: showStravaPage }">
-            <span class="mdi mdi-bike"></span> Activités
+            <img src="/strava_logo.png" alt="Strava" class="strava-nav-logo" /> Activités
           </button>
           <button v-if="userRole === 'admin'" @click="openAdmin" :class="{ active: showAdminPanel }">
             <span class="mdi mdi-shield-account"></span> Admin
@@ -790,18 +866,22 @@ const fetchForecast = async () => {
       <section class="config-section">
         <div class="input-group">
           <label><span class="mdi mdi-format-list-checks"></span> Activité à analyser :</label>
-          <select v-model="selectedActivityId" @change="handleActivitySelection" :disabled="activityLoading || userActivities.length === 0">
-            <option value="" disabled>{{ activityLoading ? 'Chargement des activités...' : 'Sélectionnez une activité' }}</option>
+          <select v-model="selectedActivityId" @change="handleActivitySelection" :disabled="activityLoading">
+            <option value="none">Aucune (Plein air général)</option>
             <option v-for="activity in userActivities" :key="activity._id" :value="activity._id">{{ activity.label }}</option>
           </select>
-          <p v-if="selectedActivity" class="selected-activity-constraints"><span class="mdi" :class="selectedActivity.icon || 'mdi-bike'"></span> {{ selectedActivity.constraints || 'Aucune contrainte renseignée pour cette activité.' }}</p>
+          <p v-if="selectedActivity" class="selected-activity-constraints"><span v-if="selectedActivity.icon" class="mdi" :class="selectedActivity.icon"></span> {{ selectedActivity.constraints || 'Aucune contrainte renseignée pour cette activité.' }}</p>
           <p v-else class="selected-activity-constraints">Ajoutez vos activités depuis la page Mon compte.</p>
         </div>
 
         <div class="search-container">
           <div class="search-input-wrapper">
             <input v-model="query" @input="searchCities" placeholder="Ville..." @keyup.enter="fetchForecast"/>
-            <button @click="fetchForecast" :disabled="loading || !city" class="refresh-btn">
+            <button type="button" @click="useDeviceLocation" :disabled="loading || geoLoading" class="geo-btn" title="Utiliser ma position actuelle">
+              <span v-if="!geoLoading" class="mdi mdi-crosshairs-gps"></span>
+              <span v-else class="mdi mdi-loading mdi-spin"></span>
+            </button>
+            <button @click="fetchForecast" :disabled="loading || !city || geoLoading" class="refresh-btn" title="Actualiser">
               <span v-if="!loading" class="mdi mdi-refresh"></span>
               <span v-else class="mdi mdi-loading mdi-spin"></span>
             </button>
