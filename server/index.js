@@ -6,9 +6,50 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import mongoose from 'mongoose'; // <-- AJOUTÉ
 import bcrypt from 'bcryptjs';    // <-- AJOUTÉ
 import jwt from 'jsonwebtoken';   // <-- AJOUTÉ
+import crypto from 'crypto';
+import { exec } from 'child_process';
 // j
 const app = express();
 app.use(cors());
+// Route brute webhook avant bodyParser (express.json)
+app.post('/api/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+  const secret = process.env.WEBHOOK_SECRET;
+  const stackDir = process.env.STACK_DIR || '/app/stack';
+
+  // 1. Vérification de la signature HMAC-SHA256
+  const sig = req.headers['x-hub-signature-256'];
+  if (!sig || !secret) {
+    console.warn('[webhook] Signature ou secret manquant.');
+    return res.status(401).send('Unauthorized');
+  }
+  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(req.body).digest('hex');
+  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+    console.warn('[webhook] Signature invalide.');
+    return res.status(401).send('Signature invalide');
+  }
+
+  // 2. Filtrer sur l'événement push uniquement
+  const event = req.headers['x-github-event'];
+  if (event !== 'push') {
+    return res.status(200).send(`Événement "${event}" ignoré.`);
+  }
+
+  // 3. Répondre immédiatement à GitHub (timeout 10s)
+  res.status(200).send('Déploiement lancé.');
+
+  // 4. Exécuter git pull + docker compose up en arrière-plan
+  const cmd = `cd ${stackDir} && git pull && docker compose up -d --build`;
+  console.log(`[webhook] Exécution : ${cmd}`);
+  exec(cmd, (err, stdout, stderr) => {
+    if (err) {
+      console.error('[webhook] Erreur :', err.message);
+      console.error('[webhook] stderr :', stderr);
+    } else {
+      console.log('[webhook] Succès :\n', stdout);
+    }
+  });
+});
+
 app.use(express.json());
 
 const PORT = process.env.PORT || 3001;

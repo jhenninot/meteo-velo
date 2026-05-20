@@ -23,6 +23,11 @@ services:
       - STRAVA_CLIENT_SECRET=${STRAVA_CLIENT_SECRET}
       - STRAVA_CALLBACK_URL=${STRAVA_CALLBACK_URL}
       - FRONTEND_URL=${FRONTEND_URL}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - STACK_DIR=/app/stack
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /srv/appdata/dockge/stacks/meteo-velo:/app/stack
     restart: always
     depends_on:
       - mongodb

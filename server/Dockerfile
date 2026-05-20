@@ -7,6 +7,9 @@ WORKDIR /app
 # Copie des fichiers de configuration
 COPY package*.json ./
 
+# Installation de git et docker CLI (pour le webhook de déploiement)
+RUN apk add --no-cache git docker-cli
+
 # Installation des dépendances
 RUN npm install
 

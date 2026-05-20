@@ -15,6 +15,7 @@ const loginUser = ref('')
 const loginPass = ref('')
 const loginError = ref('')
 const showAccountPanel = ref(false)
+const showBurgerMenu = ref(false)
 const passwordForm = ref({ currentPassword: '', newPassword: '', confirmPassword: '' })
 const passwordMsg = ref({ text: '', type: '' })
 const passwordLoading = ref(false)
@@ -285,6 +286,7 @@ const openAdmin = () => {
   showAdminPanel.value = true
   showStravaPage.value = false
   showAccountPanel.value = false
+  showBurgerMenu.value = false
 }
 
 const openWeather = () => {
@@ -303,7 +305,13 @@ const openAccount = () => {
   showAdminPanel.value = false
   showStravaPage.value = false
   showAccountPanel.value = true
+  showBurgerMenu.value = false
   loadUserActivities()
+}
+
+const closeBurgerOnLogout = () => {
+  showBurgerMenu.value = false
+  handleLogout()
 }
 
 const handlePasswordChange = async () => {
@@ -717,6 +725,7 @@ const fetchForecast = async () => {
 <template>
   <div class="app-container" :class="{ 'theme-dark': isDark }">
     <header>
+      <!-- Rangée 1 : brand + burger -->
       <div class="header-top">
         <div class="header-brand">
           <img src="/actiweather-transparent.png" alt="Logo" class="app-logo" />
@@ -725,25 +734,70 @@ const fetchForecast = async () => {
             <p class="app-subtitle">Analyse météo intelligente</p>
           </div>
         </div>
+
         <div v-if="isLoggedIn" class="header-actions">
-          <div class="theme-select-wrapper">
-            <span class="mdi" :class="themeIcon"></span>
-            <select :value="theme" @change="setTheme($event.target.value)" class="theme-select" aria-label="Sélectionner le thème">
-              <option value="light">Jour</option>
-              <option value="auto">Auto</option>
-              <option value="dark">Nuit</option>
-            </select>
-          </div>
-          <button @click="openAccount" class="account-btn" :class="{ active: showAccountPanel }" title="Mon compte">
-            <span class="mdi mdi-account-cog"></span>
-            <span>Compte</span>
+          <!-- Bouton burger -->
+          <button
+            class="burger-btn"
+            :class="{ active: showBurgerMenu }"
+            @click.stop="showBurgerMenu = !showBurgerMenu"
+            aria-label="Menu utilisateur"
+            title="Menu"
+          >
+            <span class="mdi" :class="showBurgerMenu ? 'mdi-close' : 'mdi-menu'" style="font-size:1.4rem"></span>
           </button>
-          <button @click="handleLogout" class="logout-btn" title="Déconnexion">
-            <span class="mdi mdi-logout"></span>
-          </button>
+
+          <!-- Menu déroulant -->
+          <Transition name="burger-menu">
+            <div
+              v-if="showBurgerMenu"
+              class="burger-menu-dropdown"
+              @click.stop
+            >
+              <!-- Thème -->
+              <div class="burger-menu-item burger-theme-item">
+                <span class="burger-menu-icon mdi" :class="themeIcon"></span>
+                <span class="burger-menu-label">Thème</span>
+                <select :value="theme" @change="setTheme($event.target.value)" class="theme-select burger-theme-select" aria-label="Sélectionner le thème">
+                  <option value="light">Jour</option>
+                  <option value="auto">Auto</option>
+                  <option value="dark">Nuit</option>
+                </select>
+              </div>
+
+              <div class="burger-menu-divider"></div>
+
+              <!-- Compte -->
+              <button @click="openAccount" class="burger-menu-item burger-menu-btn" :class="{ active: showAccountPanel }">
+                <span class="burger-menu-icon mdi mdi-account-cog"></span>
+                <span class="burger-menu-label">Compte</span>
+              </button>
+
+              <!-- Admin (si admin) -->
+              <template v-if="userRole === 'admin'">
+                <div class="burger-menu-divider"></div>
+                <button @click="openAdmin" class="burger-menu-item burger-menu-btn burger-admin" :class="{ active: showAdminPanel }">
+                  <span class="burger-menu-icon mdi mdi-shield-account"></span>
+                  <span class="burger-menu-label">Administration</span>
+                </button>
+              </template>
+
+              <div class="burger-menu-divider"></div>
+
+              <!-- Déconnexion -->
+              <button @click="closeBurgerOnLogout" class="burger-menu-item burger-menu-btn burger-logout">
+                <span class="burger-menu-icon mdi mdi-logout"></span>
+                <span class="burger-menu-label">Déconnexion</span>
+              </button>
+            </div>
+          </Transition>
+
+          <!-- Overlay pour fermer le menu -->
+          <div v-if="showBurgerMenu" class="burger-overlay" @click="showBurgerMenu = false"></div>
         </div>
       </div>
 
+      <!-- Rangée 2 : navigation Météo / Activités, alignée à droite -->
       <div v-if="isLoggedIn" class="header-controls">
         <nav class="main-nav">
           <button @click="openWeather" :class="{ active: !showAdminPanel && !showStravaPage && !showAccountPanel }">
@@ -751,9 +805,6 @@ const fetchForecast = async () => {
           </button>
           <button @click="openStrava" :class="{ active: showStravaPage }">
             <img src="/strava_logo.png" alt="Strava" class="strava-nav-logo" /> Activités
-          </button>
-          <button v-if="userRole === 'admin'" @click="openAdmin" :class="{ active: showAdminPanel }">
-            <span class="mdi mdi-shield-account"></span> Admin
           </button>
         </nav>
       </div>
