@@ -507,13 +507,14 @@ html.meteo-theme-dark .icon-grid-item:hover, html.meteo-theme-dark .icon-grid-it
 .strava-empty-icon { font-size: 3rem; display: block; margin-bottom: 10px; }
 
 .activities-list { display: flex; flex-direction: column; gap: 12px; }
-.activity-card {
+.strava-activity-card {
+  display: block;
   background: var(--bg-surface); border-radius: 14px;
   box-shadow: var(--shadow-sm);
   overflow: hidden; transition: box-shadow 0.2s;
   border-left: 4px solid var(--color-strava);
 }
-.activity-card.is-expanded { box-shadow: 0 6px 24px rgba(252,76,2,0.15); }
+.strava-activity-card.is-expanded { box-shadow: 0 6px 24px rgba(252,76,2,0.15); }
 
 .activity-header {
   display: flex; align-items: center; gap: 14px;
@@ -559,8 +560,8 @@ html.meteo-theme-dark .icon-grid-item:hover, html.meteo-theme-dark .icon-grid-it
 .theme-dark .btn-disconnect { background: #2d333c; border-color: var(--border-input); }
 .theme-dark .btn-disconnect:hover { background: var(--border-color); }
 .theme-dark .stat-tile { background: var(--bg-surface); }
-.theme-dark .activity-card { background: var(--bg-surface); }
-.theme-dark .activity-card.is-expanded { box-shadow: 0 6px 24px rgba(252,76,2,0.2); }
+.theme-dark .strava-activity-card { background: var(--bg-surface); }
+.theme-dark .strava-activity-card.is-expanded { box-shadow: 0 6px 24px rgba(252,76,2,0.2); }
 .theme-dark .activity-header:hover { background: rgba(255, 255, 255, 0.03); }
 .theme-dark .activity-type-badge { background: #2d333c; border: 1px solid var(--border-color); }
 .theme-dark .activity-map-wrap { border-top-color: var(--border-color); }

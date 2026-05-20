@@ -4,12 +4,16 @@ import axios from 'axios'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
+import markerIcon from 'leaflet/dist/images/marker-icon.png'
+import markerShadow from 'leaflet/dist/images/marker-shadow.png'
+
 // Fix Leaflet default icon path for Vite
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).href,
-  iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).href,
-  shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).href,
+  iconRetinaUrl: markerIcon2x,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
 })
 
 const props = defineProps({
@@ -301,9 +305,28 @@ const initMap = (activityId, encodedPolyline) => {
   const container = document.getElementById(containerId)
   if (!container) return
 
+  // Check if we have an existing map instance for this activity
   if (mapInstances[activityId]) {
-    mapInstances[activityId].invalidateSize()
-    return
+    // If the map instance is bound to the exact same container element currently in the DOM,
+    // we just need to invalidate size (re-rendering visibility transition).
+    if (mapInstances[activityId]._container === container) {
+      mapInstances[activityId].invalidateSize()
+      return
+    } else {
+      // The DOM container was destroyed and recreated. We must properly remove the old map instance.
+      try {
+        mapInstances[activityId].remove()
+      } catch (e) {
+        console.error('Error removing stale map instance:', e)
+      }
+      delete mapInstances[activityId]
+    }
+  }
+
+  // Prevent Leaflet "Map container is already initialized" error if the element survived
+  // but Leaflet still has an internal reference to it.
+  if (container._leaflet_id) {
+    container._leaflet_id = null
   }
 
   const map = L.map(containerId, { zoomControl: true, scrollWheelZoom: false })
@@ -407,12 +430,24 @@ const fullscreenActivity = ref(null)
 let fullscreenMapInstance = null
 
 const openFullscreenMap = async (activity) => {
+  // Clean up any existing fullscreen map instance
+  if (fullscreenMapInstance) {
+    try {
+      fullscreenMapInstance.remove()
+    } catch {}
+    fullscreenMapInstance = null
+  }
+
   fullscreenActivity.value = activity
   await nextTick()
 
   const containerId = 'fullscreen-map'
   const container = document.getElementById(containerId)
   if (!container) return
+
+  if (container._leaflet_id) {
+    container._leaflet_id = null
+  }
 
   fullscreenMapInstance = L.map(containerId, { zoomControl: true, scrollWheelZoom: true })
 
@@ -683,7 +718,7 @@ onUnmounted(() => {
         <div
           v-for="activity in displayedActivities"
           :key="activity.id"
-          class="activity-card"
+          class="strava-activity-card"
           :class="{ 'is-expanded': expandedId === activity.id }"
         >
           <!-- En-tête de la carte (cliquable) -->
