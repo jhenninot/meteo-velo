@@ -37,8 +37,8 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), (req, res) =
   // 3. Répondre immédiatement à GitHub (timeout 10s)
   res.status(200).send('Déploiement lancé.');
 
-  // 4. Exécuter git pull + docker compose up en arrière-plan
-  const cmd = `cd ${stackDir} && git pull && docker compose up -d --build`;
+  // 4. Exécuter la mise à jour (fetch + reset pour éviter les conflits et l'identité Git) + docker compose
+  const cmd = `cd ${stackDir} && git fetch --all && git reset --hard origin/main && docker compose up -d --build`;
   console.log(`[webhook] Exécution : ${cmd}`);
   exec(cmd, (err, stdout, stderr) => {
     if (err) {
