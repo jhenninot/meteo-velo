@@ -731,7 +731,7 @@ const fetchForecast = async () => {
           <img src="/actiweather-transparent.png" alt="Logo" class="app-logo" />
           <div class="header-title-group">
             <h1>ActiWeather</h1>
-            <p class="app-subtitle">Analyse météo intelligente</p>
+            <p class="app-subtitle">Analyse météo intelligente par jhenninot</p>
           </div>
         </div>
 
