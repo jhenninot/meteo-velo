@@ -104,7 +104,8 @@ header { position: sticky; top: 0; z-index: 100; display: flex; flex-direction: 
 .header-brand { display: flex; align-items: center; gap: 15px; flex-shrink: 0; }
 .header-title-group { display: flex; flex-direction: column; gap: 0; }
 header h1 { margin: 0; font-size: 1.5rem; line-height: 1.1; }
-.app-logo { height: 40px; width: auto; vertical-align: middle; }
+.app-logo { height: 40px; width: auto; vertical-align: middle; transition: filter 0.3s; }
+html.meteo-theme-dark .app-logo { filter: brightness(0) invert(1); opacity: 0.9; }
 .app-subtitle { margin: -1px 0 0 0; font-size: 0.82rem; color: var(--text-muted); font-weight: 600; letter-spacing: 0.02em; line-height: 1.2; }
 .header-controls { display: flex; justify-content: flex-end; }
 .header-actions { display: flex; align-items: center; justify-content: flex-end; position: relative; flex-shrink: 0; }
@@ -118,11 +119,12 @@ header h1 { margin: 0; font-size: 1.5rem; line-height: 1.1; }
   height: 40px;
   border: none;
   border-radius: var(--radius-md);
-  background: var(--nav-bg);
+  background: transparent;
   cursor: pointer;
   transition: background 0.2s, box-shadow 0.2s;
   z-index: 201;
   position: relative;
+  color: var(--text-primary);
 }
 .burger-btn:hover { background: var(--nav-active-bg); }
 .burger-btn.active { background: var(--nav-active-bg); box-shadow: var(--shadow-sm); }
