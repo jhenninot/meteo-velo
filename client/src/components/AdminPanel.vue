@@ -14,6 +14,9 @@ const newUser = ref({ username: '', password: '', role: 'user' })
 const adminMsg = ref({ text: '', type: '' })
 const usersList = ref([])
 const showNewUserPassword = ref(false)
+const selectedModel = ref('gemini-3.1-flash-lite')
+const settingsMsg = ref({ text: '', type: '' })
+const settingsLoading = ref(false)
 
 // --- MÉTHODES ---
 const fetchUsers = async () => {
@@ -52,9 +55,33 @@ const changePassword = async (id) => {
     alert("Mot de passe modifié !")
   } catch (err) { alert(err.response?.data?.error || "Erreur lors de la modification du mot de passe") }
 }
+const fetchSettings = async () => {
+  try {
+    const response = await axios.get(`${props.apiBaseUrl}/api/admin/settings`)
+    if (response.data && response.data.value) {
+      selectedModel.value = response.data.value
+    }
+  } catch (err) {
+    console.error("Erreur de récupération des paramètres", err)
+  }
+}
 
-// Charger la liste à la création du composant
+const saveSettings = async () => {
+  settingsMsg.value = { text: '', type: '' }
+  settingsLoading.value = true
+  try {
+    await axios.post(`${props.apiBaseUrl}/api/admin/settings`, { value: selectedModel.value })
+    settingsMsg.value = { text: "Paramètres de l'IA mis à jour avec succès !", type: 'success' }
+  } catch (err) {
+    settingsMsg.value = { text: err.response?.data?.error || "Erreur d'enregistrement.", type: 'error' }
+  } finally {
+    settingsLoading.value = false
+  }
+}
+
+// Charger la liste et les paramètres à la création du composant
 fetchUsers()
+fetchSettings()
 </script>
 
 <template>
@@ -93,6 +120,26 @@ fetchUsers()
         </div>
 
         <button @click="createUser" class="login-btn">Créer</button>
+      </div>
+
+      <div class="admin-box">
+        <h2><span class="mdi mdi-brain"></span> Paramètres de l'IA</h2>
+
+        <div v-if="settingsMsg.text" :class="['msg-banner', settingsMsg.type]">
+          {{ settingsMsg.text }}
+        </div>
+
+        <div class="input-group">
+          <label>Modèle Gemini actif :</label>
+          <select v-model="selectedModel" :disabled="settingsLoading">
+            <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Rapide & Économe)</option>
+            <option value="gemini-3.5-flash">Gemini 3.5 Flash (Plus Performant)</option>
+          </select>
+        </div>
+
+        <button @click="saveSettings" class="login-btn" :disabled="settingsLoading">
+          {{ settingsLoading ? 'Enregistrement...' : 'Enregistrer' }}
+        </button>
       </div>
 
       <div class="admin-box list-box">

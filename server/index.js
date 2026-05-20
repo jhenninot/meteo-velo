@@ -54,6 +54,11 @@ const userSchema = new mongoose.Schema({
     icon: { type: String, default: 'mdi-bike', trim: true, maxlength: 60 },
     constraints: { type: String, default: '', trim: true, maxlength: 4000 }
   }],
+  favorites: [{
+    city: { type: String, required: true, trim: true },
+    lat: { type: Number, required: true },
+    lon: { type: Number, required: true }
+  }],
   strava: {
     athleteId: Number,
     accessToken: String,
@@ -64,6 +69,12 @@ const userSchema = new mongoose.Schema({
   }
 });
 const User = mongoose.model('User', userSchema);
+
+const systemSettingSchema = new mongoose.Schema({
+  key: { type: String, required: true, unique: true },
+  value: { type: String, required: true }
+});
+const SystemSetting = mongoose.model('SystemSetting', systemSettingSchema);
 
 // --- HELPER STRAVA : Rafraîchit le token si expiré ---
 const ensureStravaToken = async (user) => {
@@ -150,6 +161,71 @@ app.get('/api/reverse', verifyToken, async (req, res) => {
   } catch (error) {
     console.error("Erreur Photon Reverse:", error.message);
     res.status(500).json({ error: "Erreur lors de la géolocalisation inversée" });
+  }
+});
+
+app.get('/api/user/favorites', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('favorites');
+    if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
+    res.json(user.favorites || []);
+  } catch (error) {
+    console.error("Erreur GET favorites:", error.message);
+    res.status(500).json({ error: "Impossible de récupérer les favoris" });
+  }
+});
+
+app.post('/api/user/favorites', verifyToken, async (req, res) => {
+  const { city, lat, lon } = req.body;
+  if (!city || lat === undefined || lon === undefined) {
+    return res.status(400).json({ error: "Ville, latitude et longitude requises." });
+  }
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
+    
+    if (!user.favorites) user.favorites = [];
+    
+    const exists = user.favorites.some(fav => fav.city.toLowerCase() === city.toLowerCase() || (Math.abs(fav.lat - lat) < 0.001 && Math.abs(fav.lon - lon) < 0.001));
+    if (exists) {
+      return res.status(400).json({ error: "Cette localisation est déjà dans vos favoris" });
+    }
+    
+    user.favorites.push({ city, lat, lon });
+    await user.save();
+    res.status(201).json(user.favorites);
+  } catch (error) {
+    console.error("Erreur POST favorites:", error.message);
+    res.status(500).json({ error: "Impossible d'ajouter aux favoris" });
+  }
+});
+
+app.delete('/api/user/favorites', verifyToken, async (req, res) => {
+  const { city, lat, lon } = req.query;
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
+    
+    if (!user.favorites) user.favorites = [];
+    
+    const initialLength = user.favorites.length;
+    user.favorites = user.favorites.filter(fav => {
+      if (city && fav.city.toLowerCase() === city.toLowerCase()) return false;
+      if (lat !== undefined && lon !== undefined) {
+        return !(Math.abs(fav.lat - parseFloat(lat)) < 0.001 && Math.abs(fav.lon - parseFloat(lon)) < 0.001);
+      }
+      return true;
+    });
+    
+    if (user.favorites.length === initialLength) {
+      return res.status(404).json({ error: "Favori introuvable" });
+    }
+    
+    await user.save();
+    res.json(user.favorites);
+  } catch (error) {
+    console.error("Erreur DELETE favorites:", error.message);
+    res.status(500).json({ error: "Impossible de supprimer des favoris" });
   }
 });
 
@@ -277,7 +353,17 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
       .filter(d => d.matin !== null || d.apres_midi !== null)
       .slice(0, 7);
 
-    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
+    let activeModel = 'gemini-3.1-flash-lite';
+    try {
+      const setting = await SystemSetting.findOne({ key: 'gemini_model' });
+      if (setting && (setting.value === 'gemini-3.1-flash-lite' || setting.value === 'gemini-3.5-flash')) {
+        activeModel = setting.value;
+      }
+    } catch (err) {
+      console.error("Erreur de lecture du modèle Gemini configuré :", err);
+    }
+
+    const model = genAI.getGenerativeModel({ model: activeModel });
 
     let prompt = `Tu es un algorithme de filtrage intransigeant pour l'activité suivante : ${activityLabel}. Voici la météo agrégée (Matin / Après-midi) pour ${city} : ${JSON.stringify(structuredWeather)}`;
 
@@ -485,6 +571,39 @@ app.delete('/api/admin/users/:id', verifyToken, async (req, res) => {
   if (req.params.id === req.user.id) return res.status(400).json({ error: "Impossible de supprimer votre propre compte" });
   await User.findByIdAndDelete(req.params.id);
   res.json({ message: "Utilisateur supprimé" });
+});
+
+// Obtenir le modèle Gemini sélectionné (Admin uniquement)
+app.get('/api/admin/settings', verifyToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: "Accès refusé (Admin requis)" });
+  try {
+    let setting = await SystemSetting.findOne({ key: 'gemini_model' });
+    if (!setting) {
+      setting = { key: 'gemini_model', value: 'gemini-3.1-flash-lite' };
+    }
+    res.json(setting);
+  } catch (err) {
+    res.status(500).json({ error: "Impossible de récupérer les paramètres" });
+  }
+});
+
+// Modifier le modèle Gemini (Admin uniquement)
+app.post('/api/admin/settings', verifyToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: "Accès refusé (Admin requis)" });
+  const { value } = req.body;
+  if (value !== 'gemini-3.1-flash-lite' && value !== 'gemini-3.5-flash') {
+    return res.status(400).json({ error: "Modèle invalide. Choisissez entre gemini-3.1-flash-lite et gemini-3.5-flash." });
+  }
+  try {
+    const setting = await SystemSetting.findOneAndUpdate(
+      { key: 'gemini_model' },
+      { value },
+      { upsert: true, new: true }
+    );
+    res.json(setting);
+  } catch (err) {
+    res.status(500).json({ error: "Impossible d'enregistrer les paramètres" });
+  }
 });
 
 // --- ROUTES STRAVA ---

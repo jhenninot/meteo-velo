@@ -901,3 +901,82 @@ html.meteo-theme-dark .icon-grid-item:hover, html.meteo-theme-dark .icon-grid-it
   padding-top: 10px;
   border-top: 1px solid var(--border-color);
 }
+
+/* Favoris de recherche */
+.fav-btn {
+  flex-shrink: 0;
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease-in-out;
+}
+
+.fav-btn:hover:not(:disabled) {
+  background: var(--border-color);
+  color: #fbc02d;
+  border-color: #fbc02d;
+}
+
+.fav-btn .text-warning {
+  color: #fbc02d;
+}
+
+.fav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Conteneur et Badges de favoris cliquables */
+.favorites-container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
+
+.favorites-title {
+  color: var(--text-secondary);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.favorites-title .mdi-star {
+  color: #fbc02d;
+}
+
+.fav-badge-btn {
+  background: rgba(251, 192, 45, 0.08);
+  color: var(--text-primary);
+  border: 1px solid rgba(251, 192, 45, 0.25);
+  padding: 4px 12px;
+  border-radius: var(--radius-xl);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.fav-badge-btn:hover {
+  background: rgba(251, 192, 45, 0.2);
+  border-color: #fbc02d;
+  transform: translateY(-1px);
+}
+
+.app-container.theme-dark .fav-badge-btn {
+  background: rgba(251, 192, 45, 0.12);
+  border-color: rgba(251, 192, 45, 0.35);
+}
+
+.app-container.theme-dark .fav-badge-btn:hover {
+  background: rgba(251, 192, 45, 0.25);
+}

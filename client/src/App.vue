@@ -43,6 +43,7 @@ const loading = ref(false)
 const error = ref(null)
 const geoLoading = ref(false)
 const expandedPeriods = ref({})
+const favorites = ref([])
 
 const togglePeriod = (dayIndex, period) => {
   const key = `${dayIndex}-${period}`
@@ -65,6 +66,14 @@ const isDark = computed(() => {
 })
 
 const resolvedTheme = computed(() => isDark.value ? 'dark' : 'light')
+
+const isCurrentCityFavorite = computed(() => {
+  if (!city.value || lat.value === null || lon.value === null) return false
+  return favorites.value.some(fav => 
+    fav.city.toLowerCase() === city.value.toLowerCase() || 
+    (Math.abs(fav.lat - lat.value) < 0.001 && Math.abs(fav.lon - lon.value) < 0.001)
+  )
+})
 
 const selectedActivity = computed(() => {
   if (selectedActivityId.value === 'none') {
@@ -247,6 +256,7 @@ const handleLogin = async () => {
     }
 
     await loadUserActivities()
+    await loadFavorites()
     initializeApp()
   } catch (err) {
     loginError.value = "Identifiant ou mot de passe incorrect."
@@ -262,6 +272,7 @@ const handleLogout = () => {
   currentUser.value = ''
   forecastData.value = null
   userActivities.value = []
+  favorites.value = []
   selectedActivityId.value = ''
   showAdminPanel.value = false
   showStravaPage.value = false
@@ -453,6 +464,7 @@ onMounted(async () => {
 
       await loadUserPreferences()
       await loadUserActivities()
+      await loadFavorites()
       initializeApp()
 
       // Retour callback Strava → ouvrir la page Activités
@@ -614,6 +626,56 @@ const useDeviceLocation = () => {
       maximumAge: 0
     }
   )
+}
+
+const loadFavorites = async () => {
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}/api/user/favorites`)
+    favorites.value = data
+  } catch (err) {
+    console.error("Erreur lors de la récupération des favoris", err)
+  }
+}
+
+const toggleFavorite = async () => {
+  if (!city.value || lat.value === null || lon.value === null) return
+  
+  const existing = favorites.value.find(fav => 
+    fav.city.toLowerCase() === city.value.toLowerCase() || 
+    (Math.abs(fav.lat - lat.value) < 0.001 && Math.abs(fav.lon - lon.value) < 0.001)
+  )
+  
+  try {
+    if (existing) {
+      const response = await axios.delete(`${API_BASE_URL}/api/user/favorites`, {
+        params: {
+          city: existing.city,
+          lat: existing.lat,
+          lon: existing.lon
+        }
+      })
+      favorites.value = response.data
+    } else {
+      const response = await axios.post(`${API_BASE_URL}/api/user/favorites`, {
+        city: city.value,
+        lat: lat.value,
+        lon: lon.value
+      })
+      favorites.value = response.data
+    }
+  } catch (err) {
+    console.error("Erreur lors de la modification des favoris:", err.response?.data?.error || err.message)
+  }
+}
+
+const selectFavorite = (fav) => {
+  city.value = fav.city
+  query.value = fav.city
+  lat.value = fav.lat
+  lon.value = fav.lon
+  suggestions.value = []
+  fetchForecast()
+  syncPreferences()
 }
 
 const fetchForecast = async () => {
@@ -877,6 +939,9 @@ const fetchForecast = async () => {
         <div class="search-container">
           <div class="search-input-wrapper">
             <input v-model="query" @input="searchCities" placeholder="Ville..." @keyup.enter="fetchForecast"/>
+            <button type="button" @click="toggleFavorite" :disabled="!city || loading" class="fav-btn" :title="isCurrentCityFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'">
+              <span class="mdi" :class="isCurrentCityFavorite ? 'mdi-star text-warning' : 'mdi-star-outline'"></span>
+            </button>
             <button type="button" @click="useDeviceLocation" :disabled="loading || geoLoading" class="geo-btn" title="Utiliser ma position actuelle">
               <span v-if="!geoLoading" class="mdi mdi-crosshairs-gps"></span>
               <span v-else class="mdi mdi-loading mdi-spin"></span>
@@ -884,6 +949,12 @@ const fetchForecast = async () => {
             <button @click="fetchForecast" :disabled="loading || !city || geoLoading" class="refresh-btn" title="Actualiser">
               <span v-if="!loading" class="mdi mdi-refresh"></span>
               <span v-else class="mdi mdi-loading mdi-spin"></span>
+            </button>
+          </div>
+          <div v-if="favorites.length > 0" class="favorites-container">
+            <span class="favorites-title"><span class="mdi mdi-star"></span> Favoris :</span>
+            <button v-for="fav in favorites" :key="fav._id || fav.city" @click="selectFavorite(fav)" class="fav-badge-btn" type="button" title="Charger cette ville">
+              {{ fav.city }}
             </button>
           </div>
           <ul v-if="suggestions.length > 0" class="suggestions-list">
