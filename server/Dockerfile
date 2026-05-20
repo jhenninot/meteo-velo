@@ -7,8 +7,8 @@ WORKDIR /app
 # Copie des fichiers de configuration
 COPY package*.json ./
 
-# Installation de git, docker CLI et le plugin docker compose V2
-RUN apk add --no-cache git docker-cli docker-cli-compose
+# Installation de git, docker CLI et le plugin docker compose V2 (avec buildx)
+RUN apk add --no-cache git docker-cli docker-cli-compose docker-cli-buildx
 
 # Installation des dépendances
 RUN npm install

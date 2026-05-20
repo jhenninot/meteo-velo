@@ -38,7 +38,8 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), (req, res) =
   res.status(200).send('Déploiement lancé.');
 
   // 4. Exécuter la mise à jour (fetch + reset pour éviter les conflits et l'identité Git) + docker compose
-  const cmd = `cd ${stackDir} && git fetch --all && git reset --hard origin/main && docker compose up -d --build`;
+  // On utilise -p meteo-velo pour forcer le nom du projet Docker, car le dossier s'appelle /app/stack et changerait le nom en "stack"
+  const cmd = `cd ${stackDir} && git fetch --all && git reset --hard origin/main && docker compose -p meteo-velo up -d --build`;
   console.log(`[webhook] Exécution : ${cmd}`);
   exec(cmd, (err, stdout, stderr) => {
     if (err) {
