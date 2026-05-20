@@ -363,8 +363,6 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
       console.error("Erreur de lecture du modèle Gemini configuré :", err);
     }
 
-    const model = genAI.getGenerativeModel({ model: activeModel });
-
     let prompt = `Tu es un algorithme de filtrage intransigeant pour l'activité suivante : ${activityLabel}. Voici la météo agrégée (Matin / Après-midi) pour ${city} : ${JSON.stringify(structuredWeather)}`;
 
     if (userRules !== "") {
@@ -395,12 +393,27 @@ Réponds EXCLUSIVEMENT par un tableau JSON (sans markdown), un objet par jour, d
 Les valeurs dans criteres sont uniquement les chaînes "favorable" ou "defavorable" (pas d'autres valeurs).
 `;
 
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
-    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) throw new Error("JSON IA invalide");
+    const callGemini = async (modelName) => {
+      const m = genAI.getGenerativeModel({ model: modelName });
+      const result = await m.generateContent(prompt);
+      const responseText = result.response.text();
+      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) throw new Error("JSON IA invalide");
+      return JSON.parse(jsonMatch[0]);
+    };
 
-    const aiData = JSON.parse(jsonMatch[0]);
+    let aiData;
+    let fallback = false;
+    const fallbackModel = activeModel === 'gemini-3.5-flash' ? 'gemini-3.1-flash-lite' : 'gemini-3.5-flash';
+
+    try {
+      aiData = await callGemini(activeModel);
+    } catch (aiErr) {
+      console.error(`Erreur modèle ${activeModel} :`, aiErr.message);
+      console.warn(`Bascule vers ${fallbackModel}...`);
+      aiData = await callGemini(fallbackModel);
+      fallback = true;
+    }
 
     const finalData = structuredWeather.map(day => {
       const ai = aiData.find(a => a.date === day.date) || { matin: {}, apres_midi: {} };
@@ -411,7 +424,13 @@ Les valeurs dans criteres sont uniquement les chaînes "favorable" ou "defavorab
       };
     });
 
-    res.json(finalData);
+    res.json({
+      forecast: finalData,
+      fallback,
+      fallbackMessage: fallback
+        ? `Le modèle ${activeModel} est temporairement indisponible. L'analyse a été réalisée avec ${fallbackModel}.`
+        : null
+    });
 
   } catch (error) {
     console.error("Erreur API:", error);

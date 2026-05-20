@@ -41,6 +41,7 @@ const consignes = ref(localStorage.getItem('user_consignes') || '')
 const forecastData = ref(null)
 const loading = ref(false)
 const error = ref(null)
+const fallbackWarning = ref('')
 const geoLoading = ref(false)
 const expandedPeriods = ref({})
 const favorites = ref([])
@@ -700,7 +701,8 @@ const fetchForecast = async () => {
       lon: lon.value,
       activityId: selectedActivityId.value
     })
-    forecastData.value = response.data
+    forecastData.value = response.data.forecast
+    fallbackWarning.value = response.data.fallbackMessage || ''
   } catch (err) {
     if (err.response?.status !== 401) {
       error.value = "Impossible de récupérer les prévisions."
@@ -968,6 +970,10 @@ const fetchForecast = async () => {
 
       <div v-if="loading" class="status-msg"><span class="mdi mdi-brain"></span> Analyse IA en cours...</div>
       <div v-if="error" class="error-msg"><span class="mdi mdi-alert-circle"></span> {{ error }}</div>
+      <div v-if="fallbackWarning" class="fallback-msg">
+        <span class="mdi mdi-alert"></span> {{ fallbackWarning }}
+        <button class="fallback-close" @click="fallbackWarning = ''" aria-label="Fermer">&times;</button>
+      </div>
 
       <section v-if="forecastData && !loading" class="results-section">
         <div class="forecast-grid">
