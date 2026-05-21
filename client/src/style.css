@@ -228,6 +228,34 @@ html.meteo-theme-dark .burger-admin.active { background: rgba(76, 175, 80, 0.15)
 
 /* --- Navigation principale --- */
 .header-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 15px; }
+.header-location {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  margin-right: auto;
+  background: transparent;
+  padding: 6px 0;
+  border: none;
+  box-shadow: none;
+  transition: all 0.2s ease-in-out;
+}
+.header-location .mdi {
+  color: var(--color-primary);
+  font-size: 1.15rem;
+  animation: pulse-marker 2.5s infinite ease-in-out;
+}
+html.meteo-theme-dark .header-location .mdi {
+  color: var(--color-primary-light);
+}
+
+@keyframes pulse-marker {
+  0% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.9; }
+}
 .main-nav { display: flex; background: var(--nav-bg); padding: 4px; border-radius: var(--radius-md); gap: 2px; }
 .main-nav button { border: none; padding: 6px 12px; cursor: pointer; border-radius: var(--radius-sm); background: transparent; font-weight: bold; color: var(--text-secondary); display: flex; align-items: center; gap: 5px; font-size: 0.88rem; }
 .main-nav button.active { background: var(--nav-active-bg); color: var(--nav-active-color); box-shadow: var(--shadow-sm); }

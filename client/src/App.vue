@@ -45,6 +45,7 @@ const showIconSuggestions = ref(false)
 // --- ÉTATS NAVIGATION ---
 const showAdminPanel = ref(false)
 const showStravaPage = ref(false)
+const isWeatherPage = computed(() => !showAdminPanel.value && !showStravaPage.value && !showAccountPanel.value)
 
 // --- ÉTATS DE L'APPLICATION MÉTÉO ---
 const city = ref('')
@@ -345,6 +346,7 @@ const handleLogin = async () => {
 
     await loadUserActivities()
     await loadFavorites()
+    await loadSystemSettings()
     initializeApp()
   } catch (err) {
     loginError.value = "Identifiant ou mot de passe incorrect."
@@ -578,6 +580,7 @@ onMounted(async () => {
       await loadUserPreferences()
       await loadUserActivities()
       await loadFavorites()
+      await loadSystemSettings()
       initializeApp()
 
       // Retour callback Strava → ouvrir la page Activités
@@ -1009,7 +1012,18 @@ onUnmounted(() => {
 
 
 const CACHE_KEY = 'weather_forecast_cache'
-const CACHE_MAX_AGE_MS = 60 * 60 * 1000 // 1 heure
+const cacheMaxAge = ref(60) // en minutes
+
+const loadSystemSettings = async () => {
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}/api/settings`)
+    if (data && data.cache_max_age !== undefined) {
+      cacheMaxAge.value = parseInt(data.cache_max_age, 10) || 60
+    }
+  } catch (err) {
+    console.error("Erreur de récupération des paramètres système", err)
+  }
+}
 
 const roundCoord = (value) => {
   if (value === null || value === undefined) return ''
@@ -1043,7 +1057,8 @@ const loadCachedForecast = () => {
   if (!item) return null
 
   const age = Date.now() - Number(item.fetchedAt || 0)
-  if (age > CACHE_MAX_AGE_MS) {
+  const cacheMaxAgeMs = cacheMaxAge.value * 60 * 1000
+  if (age > cacheMaxAgeMs) {
     delete cache[key]
     saveForecastCache(cache)
     return null
@@ -1201,8 +1216,12 @@ const fetchForecast = async (useCache = true) => {
 
       <!-- Rangée 2 : navigation Météo / Activités, alignée à droite -->
       <div v-if="isLoggedIn" class="header-controls">
+        <div v-if="isWeatherPage && city" class="header-location">
+          <span class="mdi mdi-map-marker"></span>
+          <span class="location-name">{{ city }}</span>
+        </div>
         <nav class="main-nav">
-          <button @click="openWeather" :class="{ active: !showAdminPanel && !showStravaPage && !showAccountPanel }">
+          <button @click="openWeather" :class="{ active: isWeatherPage }">
             <span class="mdi mdi-weather-sunny"></span> Météo
           </button>
           <button @click="openStrava" :class="{ active: showStravaPage }">
@@ -1485,13 +1504,8 @@ const fetchForecast = async (useCache = true) => {
         <span class="mdi mdi-alert"></span> {{ fallbackWarning }}
         <button class="fallback-close" @click="fallbackWarning = ''" aria-label="Fermer">&times;</button>
       </div>
-
+      
       <section v-if="forecastData && !loading" class="results-section">
-        <div class="forecast-meta">
-          <span>Données collectées le </span>
-          <strong>{{ formatDateTime(forecastCollectedAt) }}</strong>
-          <span v-if="forecastLoadedFromCache"> · données chargées depuis le cache</span>
-        </div>
         <div class="forecast-grid">
           <div v-for="(day, index) in forecastData" :key="index" class="day-card">
             <h3><span class="mdi mdi-calendar"></span> {{ formatDate(day.date) }}</h3>

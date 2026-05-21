@@ -15,6 +15,7 @@ const adminMsg = ref({ text: '', type: '' })
 const usersList = ref([])
 const showNewUserPassword = ref(false)
 const selectedModel = ref('gemini-3.1-flash-lite')
+const cacheMaxAge = ref(60)
 const settingsMsg = ref({ text: '', type: '' })
 const settingsLoading = ref(false)
 
@@ -58,8 +59,9 @@ const changePassword = async (id) => {
 const fetchSettings = async () => {
   try {
     const response = await axios.get(`${props.apiBaseUrl}/api/admin/settings`)
-    if (response.data && response.data.value) {
-      selectedModel.value = response.data.value
+    if (response.data) {
+      selectedModel.value = response.data.gemini_model || 'gemini-3.1-flash-lite'
+      cacheMaxAge.value = parseInt(response.data.cache_max_age, 10) || 60
     }
   } catch (err) {
     console.error("Erreur de récupération des paramètres", err)
@@ -70,8 +72,11 @@ const saveSettings = async () => {
   settingsMsg.value = { text: '', type: '' }
   settingsLoading.value = true
   try {
-    await axios.post(`${props.apiBaseUrl}/api/admin/settings`, { value: selectedModel.value })
-    settingsMsg.value = { text: "Paramètres de l'IA mis à jour avec succès !", type: 'success' }
+    await axios.post(`${props.apiBaseUrl}/api/admin/settings`, {
+      gemini_model: selectedModel.value,
+      cache_max_age: cacheMaxAge.value
+    })
+    settingsMsg.value = { text: "Paramètres système mis à jour avec succès !", type: 'success' }
   } catch (err) {
     settingsMsg.value = { text: err.response?.data?.error || "Erreur d'enregistrement.", type: 'error' }
   } finally {
@@ -123,7 +128,7 @@ fetchSettings()
       </div>
 
       <div class="admin-box">
-        <h2><span class="mdi mdi-brain"></span> Paramètres de l'IA</h2>
+        <h2><span class="mdi mdi-cogs"></span> Configuration Système</h2>
 
         <div v-if="settingsMsg.text" :class="['msg-banner', settingsMsg.type]">
           {{ settingsMsg.text }}
@@ -135,6 +140,19 @@ fetchSettings()
             <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Rapide & Économe)</option>
             <option value="gemini-3.5-flash">Gemini 3.5 Flash (Plus Performant)</option>
           </select>
+        </div>
+
+        <div class="input-group">
+          <label>Validité du cache météo (minutes) :</label>
+          <input
+            v-model.number="cacheMaxAge"
+            type="number"
+            min="1"
+            max="43200"
+            :disabled="settingsLoading"
+            required
+            placeholder="Ex: 60"
+          />
         </div>
 
         <button @click="saveSettings" class="login-btn" :disabled="settingsLoading">

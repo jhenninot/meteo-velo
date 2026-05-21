@@ -635,35 +635,74 @@ app.delete('/api/admin/users/:id', verifyToken, async (req, res) => {
 });
 
 // Obtenir le modèle Gemini sélectionné (Admin uniquement)
+// Obtenir les paramètres d'administration (Admin uniquement)
 app.get('/api/admin/settings', verifyToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: "Accès refusé (Admin requis)" });
   try {
-    let setting = await SystemSetting.findOne({ key: 'gemini_model' });
-    if (!setting) {
-      setting = { key: 'gemini_model', value: 'gemini-3.1-flash-lite' };
-    }
-    res.json(setting);
+    const settings = await SystemSetting.find({ key: { $in: ['gemini_model', 'cache_max_age'] } });
+    const result = {
+      gemini_model: 'gemini-3.1-flash-lite',
+      cache_max_age: '60'
+    };
+    settings.forEach(s => {
+      if (s.key === 'gemini_model') result.gemini_model = s.value;
+      if (s.key === 'cache_max_age') result.cache_max_age = s.value;
+    });
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: "Impossible de récupérer les paramètres" });
   }
 });
 
-// Modifier le modèle Gemini (Admin uniquement)
+// Modifier les paramètres d'administration (Admin uniquement)
 app.post('/api/admin/settings', verifyToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: "Accès refusé (Admin requis)" });
-  const { value } = req.body;
-  if (value !== 'gemini-3.1-flash-lite' && value !== 'gemini-3.5-flash') {
-    return res.status(400).json({ error: "Modèle invalide. Choisissez entre gemini-3.1-flash-lite et gemini-3.5-flash." });
-  }
+  const { gemini_model, cache_max_age } = req.body;
   try {
-    const setting = await SystemSetting.findOneAndUpdate(
-      { key: 'gemini_model' },
-      { value },
-      { upsert: true, new: true }
-    );
-    res.json(setting);
+    if (gemini_model) {
+      if (gemini_model !== 'gemini-3.1-flash-lite' && gemini_model !== 'gemini-3.5-flash') {
+        return res.status(400).json({ error: "Modèle Gemini invalide." });
+      }
+      await SystemSetting.findOneAndUpdate(
+        { key: 'gemini_model' },
+        { value: gemini_model },
+        { upsert: true }
+      );
+    }
+    
+    if (cache_max_age !== undefined) {
+      const minutes = parseInt(cache_max_age, 10);
+      if (isNaN(minutes) || minutes < 1) {
+        return res.status(400).json({ error: "Durée du cache invalide (minimum 1 minute)." });
+      }
+      await SystemSetting.findOneAndUpdate(
+        { key: 'cache_max_age' },
+        { value: String(minutes) },
+        { upsert: true }
+      );
+    }
+    
+    res.json({ message: "Paramètres enregistrés avec succès" });
   } catch (err) {
     res.status(500).json({ error: "Impossible d'enregistrer les paramètres" });
+  }
+});
+
+// Obtenir les paramètres publics/système (Tout utilisateur connecté)
+app.get('/api/settings', verifyToken, async (req, res) => {
+  try {
+    const settings = await SystemSetting.find({ key: { $in: ['gemini_model', 'cache_max_age'] } });
+    const result = {
+      gemini_model: 'gemini-3.1-flash-lite',
+      cache_max_age: 60
+    };
+    settings.forEach(s => {
+      if (s.key === 'gemini_model') result.gemini_model = s.value;
+      if (s.key === 'cache_max_age') result.cache_max_age = parseInt(s.value, 10) || 60;
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: "Impossible de récupérer les paramètres système" });
   }
 });
 
