@@ -347,7 +347,7 @@ const initMap = (activityId, encodedPolyline) => {
   )
 
   // Default to standard layer
-  standardLayer.addTo(map)
+  topoLayer.addTo(map)
 
   // Add premium layers control
   const baseLayers = {
@@ -359,7 +359,10 @@ const initMap = (activityId, encodedPolyline) => {
 
   const points = decodePolyline(encodedPolyline)
   if (points.length) {
-    const poly = L.polyline(points, { color: '#FC4C02', weight: 4, opacity: 0.9 })
+    // Dessiner d'abord un contour/halo blanc épais pour le contraste (particulièrement visible sur la carte topographique)
+    L.polyline(points, { color: '#ffffff', weight: 8, opacity: 0.85 }).addTo(map)
+    // Dessiner ensuite l'itinéraire orange de Strava par-dessus
+    const poly = L.polyline(points, { color: '#FC4C02', weight: 4.5, opacity: 1.0 })
     poly.addTo(map)
     // Start marker (green) and end marker (red)
     L.circleMarker(points[0], { radius: 6, fillColor: '#22c55e', color: '#fff', weight: 2, fillOpacity: 1 }).addTo(map)
@@ -467,7 +470,7 @@ const openFullscreenMap = async (activity) => {
   )
 
   // Default to standard layer
-  standardLayer.addTo(fullscreenMapInstance)
+  topoLayer.addTo(fullscreenMapInstance)
 
   // Add premium layers control
   const baseLayers = {
@@ -479,7 +482,10 @@ const openFullscreenMap = async (activity) => {
 
   const points = decodePolyline(activity.map?.summary_polyline)
   if (points.length) {
-    const poly = L.polyline(points, { color: '#FC4C02', weight: 5, opacity: 0.9 })
+    // Dessiner d'abord un contour/halo blanc épais pour le contraste (particulièrement visible sur la carte topographique)
+    L.polyline(points, { color: '#ffffff', weight: 9, opacity: 0.85 }).addTo(fullscreenMapInstance)
+    // Dessiner ensuite l'itinéraire orange de Strava par-dessus
+    const poly = L.polyline(points, { color: '#FC4C02', weight: 5.5, opacity: 1.0 })
     poly.addTo(fullscreenMapInstance)
 
     L.circleMarker(points[0], { radius: 7, fillColor: '#22c55e', color: '#fff', weight: 2.5, fillOpacity: 1 }).addTo(fullscreenMapInstance)

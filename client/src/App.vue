@@ -1,11 +1,25 @@
 <script setup>
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
 import axios from 'axios'
 import { jwtDecode } from 'jwt-decode'
 import WeatherChart from './components/WeatherChart.vue'
 import StravaActivities from './components/StravaActivities.vue'
 import AdminPanel from './components/AdminPanel.vue'
 import { MDI_ICONS } from './utils/mdi-icons.js'
+
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
+import markerIcon from 'leaflet/dist/images/marker-icon.png'
+import markerShadow from 'leaflet/dist/images/marker-shadow.png'
+
+// Fix Leaflet default icon path for Vite
+delete L.Icon.Default.prototype._getIconUrl
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: markerIcon2x,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+})
 
 // --- ÉTATS D'AUTHENTIFICATION ---
 const isLoggedIn = ref(false)
@@ -49,6 +63,14 @@ const geoLoading = ref(false)
 const expandedPeriods = ref({})
 const favorites = ref([])
 
+// --- ÉTATS DE LA CARTE DE LOCALISATION ---
+const showMap = ref(false)
+let weatherMapInstance = null
+let weatherMarkerInstance = null
+const showWeatherFullscreen = ref(false)
+let weatherFullscreenMapInstance = null
+let weatherFullscreenMarkerInstance = null
+
 const togglePeriod = (dayIndex, period) => {
   const key = `${dayIndex}-${period}`
   expandedPeriods.value[key] = !expandedPeriods.value[key]
@@ -78,6 +100,68 @@ const isCurrentCityFavorite = computed(() => {
     (Math.abs(fav.lat - lat.value) < 0.001 && Math.abs(fav.lon - lon.value) < 0.001)
   )
 })
+
+const selectedFavoriteIndex = computed({
+  get() {
+    if (!city.value) return "-1"
+    const index = favorites.value.findIndex(fav => 
+      fav.city.toLowerCase() === city.value.toLowerCase() || 
+      (lat.value !== null && lon.value !== null && Math.abs(fav.lat - lat.value) < 0.001 && Math.abs(fav.lon - lon.value) < 0.001)
+    )
+    return index !== -1 ? String(index) : "-1"
+  },
+  set(newIndex) {
+    const idx = parseInt(newIndex, 10)
+    if (isNaN(idx) || idx < 0 || idx >= favorites.value.length) return
+    const fav = favorites.value[idx]
+    selectFavorite(fav)
+  }
+})
+
+const isSuggestionFavorite = (s) => {
+  if (!s || !s.properties) return false
+  
+  const name = s.properties.name
+  const lonVal = s.geometry.coordinates[0]
+  const latVal = s.geometry.coordinates[1]
+  
+  // Normalisation des chaînes de caractères pour une comparaison robuste des noms de villes
+  const normalizeString = (str) => {
+    if (!str) return ''
+    return str
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // Supprimer les accents
+      .replace(/[^a-z0-9]/g, ' ')      // Remplacer les tirets/caractères spéciaux par des espaces
+      .replace(/\s+/g, ' ')            // Condenser les espaces multiples
+      .trim()
+  }
+
+  const normName = normalizeString(name)
+
+  return favorites.value.some(fav => {
+    const normFavCity = normalizeString(fav.city)
+    
+    // 1. Correspondance exacte par nom normalisé (ex: "hardelot-plage" et "hardelot plage" correspondront)
+    if (normName === normFavCity) return true
+    
+    // 2. Correspondance par proximité géographique, mais uniquement s'il s'agit d'une localité/ville
+    // pour éviter de marquer des POIs comme des pharmacies ou des clubs de voile situés à proximité.
+    const isPlaceOrBeach = s.properties.osm_key === 'place' || 
+                           ['city', 'town', 'village', 'hamlet', 'suburb', 'administrative', 'beach'].includes(s.properties.osm_value)
+    
+    if (isPlaceOrBeach) {
+      const latDiff = Math.abs(fav.lat - latVal)
+      const lonDiff = Math.abs(fav.lon - lonVal)
+      // Seuil de proximité serré à 0.005 degrés (environ 500m)
+      if (latDiff < 0.005 && lonDiff < 0.005) {
+        return true
+      }
+    }
+    
+    return false
+  })
+}
 
 const selectedActivity = computed(() => {
   if (selectedActivityId.value === 'none') {
@@ -577,7 +661,28 @@ const searchCities = async () => {
   if (query.value.length < 3) { suggestions.value = []; return; }
   try {
     const response = await axios.get(`${API_BASE_URL}/api/search?q=${query.value}`)
-    suggestions.value = response.data 
+    
+    // Déduplication par nom, région (state) et pays pour éviter les doublons visuels comme "Paris - Île-de-France"
+    const seen = new Set()
+    const uniqueSuggestions = []
+    
+    if (Array.isArray(response.data)) {
+      for (const feature of response.data) {
+        if (!feature.properties) continue
+        
+        const name = (feature.properties.name || '').trim().toLowerCase()
+        const state = (feature.properties.state || '').trim().toLowerCase()
+        const country = (feature.properties.country || '').trim().toLowerCase()
+        
+        const key = `${name}|${state}|${country}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          uniqueSuggestions.push(feature)
+        }
+      }
+    }
+    
+    suggestions.value = uniqueSuggestions
   } catch (err) { console.error(err) }
 }
 
@@ -695,6 +800,21 @@ const toggleFavorite = async () => {
   }
 }
 
+const removeFavorite = async (fav) => {
+  try {
+    const response = await axios.delete(`${API_BASE_URL}/api/user/favorites`, {
+      params: {
+        city: fav.city,
+        lat: fav.lat,
+        lon: fav.lon
+      }
+    })
+    favorites.value = response.data
+  } catch (err) {
+    console.error("Erreur lors de la suppression du favori:", err.response?.data?.error || err.message)
+  }
+}
+
 const selectFavorite = (fav) => {
   city.value = fav.city
   query.value = fav.city
@@ -704,6 +824,174 @@ const selectFavorite = (fav) => {
   fetchForecast()
   syncPreferences()
 }
+
+const toggleMap = () => {
+  showMap.value = !showMap.value
+}
+
+const initOrUpdateWeatherMap = async () => {
+  if (!lat.value || !lon.value) return
+
+  await nextTick()
+
+  const container = document.getElementById('weather-map-container')
+  if (!container) return
+
+  const latitude = parseFloat(lat.value)
+  const longitude = parseFloat(lon.value)
+
+  if (!weatherMapInstance) {
+    if (container._leaflet_id) {
+      container._leaflet_id = null
+    }
+
+    weatherMapInstance = L.map(container, {
+      zoomControl: true,
+      scrollWheelZoom: false
+    }).setView([latitude, longitude], 13)
+
+    const standardLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19
+    })
+
+    const topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+      attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)',
+      maxZoom: 17
+    })
+
+    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+      maxZoom: 19
+    })
+
+    topoLayer.addTo(weatherMapInstance)
+
+    const baseLayers = {
+      "Standard": standardLayer,
+      "Topographique": topoLayer,
+      "Satellite": satelliteLayer
+    }
+    L.control.layers(baseLayers, null, { position: 'bottomleft' }).addTo(weatherMapInstance)
+
+    weatherMarkerInstance = L.marker([latitude, longitude]).addTo(weatherMapInstance)
+  } else {
+    weatherMapInstance.setView([latitude, longitude], 13)
+    if (weatherMarkerInstance) {
+      weatherMarkerInstance.setLatLng([latitude, longitude])
+    } else {
+      weatherMarkerInstance = L.marker([latitude, longitude]).addTo(weatherMapInstance)
+    }
+    // Force Leaflet recalculation for dynamic visibility/sizing
+    setTimeout(() => {
+      if (weatherMapInstance) {
+        weatherMapInstance.invalidateSize()
+      }
+    }, 100)
+  }
+}
+
+const openWeatherFullscreen = async () => {
+  if (!lat.value || !lon.value) return
+  showWeatherFullscreen.value = true
+
+  await nextTick()
+
+  const container = document.getElementById('weather-fullscreen-map')
+  if (!container) return
+
+  const latitude = parseFloat(lat.value)
+  const longitude = parseFloat(lon.value)
+
+  if (weatherFullscreenMapInstance) {
+    try {
+      weatherFullscreenMapInstance.remove()
+    } catch (e) {
+      console.error(e)
+    }
+    weatherFullscreenMapInstance = null
+  }
+
+  if (container._leaflet_id) {
+    container._leaflet_id = null
+  }
+
+  weatherFullscreenMapInstance = L.map(container, {
+    zoomControl: true,
+    scrollWheelZoom: true
+  }).setView([latitude, longitude], 13)
+
+  const standardLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 19
+  })
+
+  const topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+    attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)',
+    maxZoom: 17
+  })
+
+  const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+    maxZoom: 19
+  })
+
+  topoLayer.addTo(weatherFullscreenMapInstance)
+
+  const baseLayers = {
+    "Standard": standardLayer,
+    "Topographique": topoLayer,
+    "Satellite": satelliteLayer
+  }
+  L.control.layers(baseLayers, null, { position: 'bottomleft' }).addTo(weatherFullscreenMapInstance)
+
+  weatherFullscreenMarkerInstance = L.marker([latitude, longitude]).addTo(weatherFullscreenMapInstance)
+}
+
+const closeWeatherFullscreen = () => {
+  if (weatherFullscreenMapInstance) {
+    try {
+      weatherFullscreenMapInstance.remove()
+    } catch (e) {
+      console.error(e)
+    }
+    weatherFullscreenMapInstance = null
+  }
+  weatherFullscreenMarkerInstance = null
+  showWeatherFullscreen.value = false
+}
+
+watch(showMap, (newVal) => {
+  if (newVal) {
+    initOrUpdateWeatherMap()
+  }
+})
+
+watch([lat, lon], ([newLat, newLon]) => {
+  if (!newLat || !newLon) {
+    showMap.value = false
+    closeWeatherFullscreen()
+  } else {
+    if (showMap.value) {
+      initOrUpdateWeatherMap()
+    }
+    if (showWeatherFullscreen.value) {
+      openWeatherFullscreen()
+    }
+  }
+})
+
+onUnmounted(() => {
+  if (weatherMapInstance) {
+    try { weatherMapInstance.remove() } catch (e) {}
+    weatherMapInstance = null
+  }
+  if (weatherFullscreenMapInstance) {
+    try { weatherFullscreenMapInstance.remove() } catch (e) {}
+    weatherFullscreenMapInstance = null
+  }
+})
+
 
 const CACHE_KEY = 'weather_forecast_cache'
 const CACHE_MAX_AGE_MS = 60 * 60 * 1000 // 1 heure
@@ -1098,21 +1386,43 @@ const fetchForecast = async (useCache = true) => {
               <span v-if="!geoLoading" class="mdi mdi-crosshairs-gps"></span>
               <span v-else class="mdi mdi-loading mdi-spin"></span>
             </button>
+            <button type="button" @click="toggleMap" :disabled="!lat || !lon" class="map-btn" :class="{ 'map-active': showMap }" :title="showMap ? 'Masquer la carte' : 'Afficher la carte'">
+              <span class="mdi" :class="showMap ? 'mdi-map-legend' : 'mdi-map'"></span>
+            </button>
             <button @click="fetchForecast(false)" :disabled="loading || !city || geoLoading" class="refresh-btn" title="Actualiser">
               <span v-if="!loading" class="mdi mdi-refresh"></span>
               <span v-else class="mdi mdi-loading mdi-spin"></span>
             </button>
           </div>
-          <div v-if="favorites.length > 0" class="favorites-container">
-            <span class="favorites-title"><span class="mdi mdi-star"></span> Favoris :</span>
-            <button v-for="fav in favorites" :key="fav._id || fav.city" @click="selectFavorite(fav)" class="fav-badge-btn" type="button" title="Charger cette ville">
-              {{ fav.city }}
-            </button>
+          <!-- Carte de localisation interactive -->
+          <div v-show="showMap" class="weather-map-container-wrapper">
+            <div class="map-container-relative">
+              <div class="map-actions-overlay">
+                <button type="button" class="btn-map-action" @click="openWeatherFullscreen" title="Ouvrir la carte en plein écran">
+                  <span class="mdi mdi-fullscreen"></span> Plein écran
+                </button>
+              </div>
+              <div id="weather-map-container" class="weather-map-container"></div>
+            </div>
+          </div>
+          <div v-if="favorites.length > 0" class="favorites-dropdown-container">
+            <label for="favorites-select" class="favorites-dropdown-label">
+              <span class="mdi mdi-star"></span> Favoris :
+            </label>
+            <select id="favorites-select" v-model="selectedFavoriteIndex" class="favorites-select" aria-label="Sélectionner une ville favorite">
+              <option value="-1" disabled>Choisir une ville favorite...</option>
+              <option v-for="(fav, index) in favorites" :key="fav._id || fav.city" :value="index">
+                {{ fav.city }}
+              </option>
+            </select>
           </div>
           <ul v-if="suggestions.length > 0" class="suggestions-list">
-            <li v-for="(s, index) in suggestions" :key="index" @click="selectCity(s)">
-              <strong>{{ s.properties.name }}</strong>
-              <span class="region-text" v-if="s.properties.state">- {{ s.properties.state }}</span>
+            <li v-for="(s, index) in suggestions" :key="index" @click="selectCity(s)" class="suggestion-item">
+              <div class="suggestion-info">
+                <span v-if="isSuggestionFavorite(s)" class="mdi mdi-star suggestion-fav-star" title="Cette ville est dans vos favoris"></span>
+                <strong>{{ s.properties.name }}</strong>
+                <span class="region-text" v-if="s.properties.state">- {{ s.properties.state }}</span>
+              </div>
             </li>
           </ul>
         </div>
@@ -1200,5 +1510,26 @@ const fetchForecast = async (useCache = true) => {
         </div>
       </section>
     </main>
+
+    <!-- Modal Carte Plein Écran pour la météo -->
+    <div v-if="showWeatherFullscreen" class="map-fullscreen-modal">
+      <div class="fullscreen-header">
+        <div class="fullscreen-title-group">
+          <div class="fullscreen-type-badge">
+            <span class="mdi mdi-map-marker-radius"></span>
+          </div>
+          <div class="fullscreen-title-main">
+            <h2>{{ city || 'Localisation' }}</h2>
+            <span class="fullscreen-date">Localisation météo</span>
+          </div>
+        </div>
+        <div class="fullscreen-actions">
+          <button type="button" class="btn-fullscreen-close" @click="closeWeatherFullscreen">
+            <span class="mdi mdi-close"></span> Fermer
+          </button>
+        </div>
+      </div>
+      <div id="weather-fullscreen-map" class="fullscreen-map-container"></div>
+    </div>
   </div>
 </template>
