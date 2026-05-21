@@ -418,6 +418,7 @@ Tu DOIS mettre "favorable": false si une contrainte est enfreinte.`;
             RÈGLES D'ANALYSE PRÉCISES :
             - PRÉCIPITATIONS : Si le cumul (precip) est de 0mm, ne parle pas de "pluie continue" ou de "déluge", même si la probabilité est haute. Parle plutôt de "ciel menaçant" ou "risque de bruine".
             - SEUIL DE TOLÉRANCE : Considère que moins de 0.5mm sur une demi-journée est négligeable. SI la probabilité de pluie est < 15% ALORS mets "pluie": "favorable".
+            - PLUIE : si lea probabilité de précipitations est de moins de 20%, alors considère qu'il ne pleut pas.
             - VENT : Sois intransigeant sur les rafales (gust) par rapport aux consignes de l'utilisateur.
             - INDICE UV : Analyse si l'indice UV (uv) nécessite des conseils spécifiques (ex: crème solaire / protection si UV >= 6).
             - TON : Reste factuel et encourageant si les conditions sont à la limite.
@@ -716,7 +717,7 @@ app.get('/api/strava/authorize', verifyToken, (req, res) => {
     response_type: 'code',
     redirect_uri: process.env.STRAVA_CALLBACK_URL,
     approval_prompt: 'auto',
-    scope: 'activity:read_all',
+    scope: 'activity:read_all,read_all',
     state
   });
   res.json({ url: `https://www.strava.com/oauth/authorize?${params}` });
@@ -824,7 +825,42 @@ app.get('/api/strava/activities', verifyToken, async (req, res) => {
   }
 });
 
-// 5. Délier le compte Strava
+// 5. Récupérer les parcours (routes) Strava de l'athlète
+app.get('/api/strava/routes', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user?.strava?.accessToken) return res.status(404).json({ error: 'Compte Strava non lié' });
+
+    const accessToken = await ensureStravaToken(user);
+    const athleteId = user.strava.athleteId;
+
+    const response = await axios.get(`https://www.strava.com/api/v3/athletes/${athleteId}/routes`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      params: { per_page: 100 }
+    });
+
+    const routes = response.data.map(r => ({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      distance: r.distance,
+      elevation_gain: r.elevation_gain,
+      type: r.type,
+      sport_type: r.sport_type,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+      estimated_moving_time: r.estimated_moving_time,
+      map: { summary_polyline: r.map?.summary_polyline }
+    }));
+
+    res.json(routes);
+  } catch (err) {
+    console.error('Strava routes error:', err.message);
+    res.status(500).json({ error: 'Erreur récupération parcours Strava' });
+  }
+});
+
+// 6. Délier le compte Strava
 app.delete('/api/strava/disconnect', verifyToken, async (req, res) => {
   try {
     await User.findByIdAndUpdate(req.user.id, { $unset: { strava: '' } });

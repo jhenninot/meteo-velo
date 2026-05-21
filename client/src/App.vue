@@ -4,6 +4,7 @@ import axios from 'axios'
 import { jwtDecode } from 'jwt-decode'
 import WeatherChart from './components/WeatherChart.vue'
 import StravaActivities from './components/StravaActivities.vue'
+import StravaRoutes from './components/StravaRoutes.vue'
 import AdminPanel from './components/AdminPanel.vue'
 import { MDI_ICONS } from './utils/mdi-icons.js'
 
@@ -45,7 +46,8 @@ const showIconSuggestions = ref(false)
 // --- ÉTATS NAVIGATION ---
 const showAdminPanel = ref(false)
 const showStravaPage = ref(false)
-const isWeatherPage = computed(() => !showAdminPanel.value && !showStravaPage.value && !showAccountPanel.value)
+const showStravaRoutesPage = ref(false)
+const isWeatherPage = computed(() => !showAdminPanel.value && !showStravaPage.value && !showStravaRoutesPage.value && !showAccountPanel.value)
 
 // --- ÉTATS DE L'APPLICATION MÉTÉO ---
 const city = ref('')
@@ -366,6 +368,7 @@ const handleLogout = () => {
   selectedActivityId.value = ''
   showAdminPanel.value = false
   showStravaPage.value = false
+  showStravaRoutesPage.value = false
   showAccountPanel.value = false
   theme.value = 'auto'
 }
@@ -373,6 +376,7 @@ const handleLogout = () => {
 const openAdmin = () => {
   showAdminPanel.value = true
   showStravaPage.value = false
+  showStravaRoutesPage.value = false
   showAccountPanel.value = false
   showBurgerMenu.value = false
 }
@@ -380,18 +384,28 @@ const openAdmin = () => {
 const openWeather = () => {
   showAdminPanel.value = false
   showStravaPage.value = false
+  showStravaRoutesPage.value = false
   showAccountPanel.value = false
 }
 
 const openStrava = () => {
   showAdminPanel.value = false
   showStravaPage.value = true
+  showStravaRoutesPage.value = false
+  showAccountPanel.value = false
+}
+
+const openStravaRoutes = () => {
+  showAdminPanel.value = false
+  showStravaPage.value = false
+  showStravaRoutesPage.value = true
   showAccountPanel.value = false
 }
 
 const openAccount = () => {
   showAdminPanel.value = false
   showStravaPage.value = false
+  showStravaRoutesPage.value = false
   showAccountPanel.value = true
   showBurgerMenu.value = false
   loadUserActivities()
@@ -1227,6 +1241,9 @@ const fetchForecast = async (useCache = true) => {
           <button @click="openStrava" :class="{ active: showStravaPage }">
             <img src="/strava_logo.png" alt="Strava" class="strava-nav-logo" /> Activités
           </button>
+          <button @click="openStravaRoutes" :class="{ active: showStravaRoutesPage }">
+            <img src="/strava_logo.png" alt="Strava" class="strava-nav-logo" /> Itinéraires
+          </button>
         </nav>
       </div>
     </header>
@@ -1396,6 +1413,9 @@ const fetchForecast = async (useCache = true) => {
     </main>
     <main v-else-if="showStravaPage">
       <StravaActivities :theme="resolvedTheme" :api-base-url="API_BASE_URL" />
+    </main>
+    <main v-else-if="showStravaRoutesPage">
+      <StravaRoutes :theme="resolvedTheme" :api-base-url="API_BASE_URL" />
     </main>
     <main v-else>
       <section class="config-section">
