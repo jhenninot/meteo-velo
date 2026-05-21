@@ -1,14 +1,14 @@
-# Meteo-Velo
+# ActiWeather
 
 ![node](https://img.shields.io/badge/node-%3E%3D16-brightgreen.svg)
 ![docker](https://img.shields.io/badge/docker-ready-blue.svg)
 ![CI](https://github.com/jhenninot/meteo-velo/actions/workflows/ci.yml/badge.svg?branch=main)
 
-Application web pour consulter les données météo et suivre des activités vélo (Strava).
+Application web pour consulter les données météo et suivre des activités (Strava).
 
 ## Description
 
-Meteo-Velo est une application full‑stack composée d'un backend Node.js et d'un frontend Vite (+Vue). Elle centralise les prévisions météo et les activités Strava pour aider les cyclistes à planifier leurs sorties.
+ActiWeather est une application full‑stack composée d'un backend Node.js et d'un frontend Vite (+Vue). Elle centralise les prévisions météo et les activités Strava pour aider les sportifs à planifier leurs sorties.
 
 ## Principales fonctionnalités
 
