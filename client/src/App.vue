@@ -40,6 +40,8 @@ const query = ref('')
 const suggestions = ref([])
 const consignes = ref(localStorage.getItem('user_consignes') || '')
 const forecastData = ref(null)
+const forecastCollectedAt = ref(null)
+const forecastLoadedFromCache = ref(false)
 const loading = ref(false)
 const error = ref(null)
 const fallbackWarning = ref('')
@@ -424,6 +426,10 @@ const handleActivitySelection = () => {
     localStorage.removeItem('selected_activity_id')
   }
   forecastData.value = null
+
+  if (city.value && lat.value !== null && lon.value !== null) {
+    fetchForecast()
+  }
 }
 
 const syncPreferences = async () => {
@@ -493,7 +499,11 @@ const initializeApp = () => {
   if (savedCity && lat.value && lon.value) {
     city.value = savedCity
     query.value = savedCity
-    fetchForecast()
+    if (selectedActivityId.value && selectedActivityId.value !== 'none') {
+      if (!restoreCachedForecast()) {
+        fetchForecast()
+      }
+    }
   }
 }
 
@@ -509,6 +519,14 @@ const formatDate = (dateString) => {
   const options = { weekday: 'long', day: 'numeric', month: 'long' };
   const formatted = new Intl.DateTimeFormat('fr-FR', options).format(date);
   return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
+
+const formatDateTime = (isoString) => {
+  if (!isoString) return '';
+  return new Intl.DateTimeFormat('fr-FR', {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  }).format(new Date(isoString));
 }
 
 const getWindStyle = (degrees) => ({ transform: `rotate(${degrees}deg)`, display: 'inline-block' })
@@ -687,16 +705,95 @@ const selectFavorite = (fav) => {
   syncPreferences()
 }
 
-const fetchForecast = async () => {
+const CACHE_KEY = 'weather_forecast_cache'
+const CACHE_MAX_AGE_MS = 60 * 60 * 1000 // 1 heure
+
+const roundCoord = (value) => {
+  if (value === null || value === undefined) return ''
+  return Number(value).toFixed(5)
+}
+
+const getForecastCacheKey = () => {
+  return [roundCoord(lat.value), roundCoord(lon.value), selectedActivityId.value].join('::')
+}
+
+const loadForecastCache = () => {
+  try {
+    return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}')
+  } catch (e) {
+    return {}
+  }
+}
+
+const saveForecastCache = (cache) => {
+  localStorage.setItem(CACHE_KEY, JSON.stringify(cache))
+}
+
+const loadCachedForecast = () => {
+  if (!city.value || lat.value === null || lon.value === null || !selectedActivityId.value || selectedActivityId.value === 'none') {
+    return null
+  }
+
+  const cache = loadForecastCache()
+  const key = getForecastCacheKey()
+  const item = cache[key]
+  if (!item) return null
+
+  const age = Date.now() - Number(item.fetchedAt || 0)
+  if (age > CACHE_MAX_AGE_MS) {
+    delete cache[key]
+    saveForecastCache(cache)
+    return null
+  }
+  return item
+}
+
+const restoreCachedForecast = () => {
+  const cached = loadCachedForecast()
+  if (!cached) return false
+
+  forecastData.value = cached.forecast
+  fallbackWarning.value = cached.fallbackMessage || ''
+  forecastCollectedAt.value = cached.collectedAt || new Date(Number(cached.fetchedAt || Date.now())).toISOString()
+  forecastLoadedFromCache.value = true
+  return true
+}
+
+const saveForecastToCache = (forecast, fallbackMessage = '') => {
+  if (!city.value || lat.value === null || lon.value === null || !selectedActivityId.value || selectedActivityId.value === 'none') {
+    return
+  }
+
+  const cache = loadForecastCache()
+  const key = getForecastCacheKey()
+  cache[key] = {
+    city: city.value,
+    lat: lat.value,
+    lon: lon.value,
+    activityId: selectedActivityId.value,
+    fetchedAt: Date.now(),
+    collectedAt: new Date().toISOString(),
+    forecast,
+    fallbackMessage
+  }
+  saveForecastCache(cache)
+}
+
+const fetchForecast = async (useCache = true) => {
   if (!city.value || !lat.value || !lon.value) return;
   if (!selectedActivityId.value) {
     error.value = "Veuillez sélectionner une activité avant de lancer l'analyse."
     return
   }
+  if (useCache && restoreCachedForecast()) {
+    return
+  }
+
   loading.value = true
   error.value = null
   suggestions.value = [] 
-  
+  forecastLoadedFromCache.value = false
+
   localStorage.setItem('selected_city', city.value)
   localStorage.setItem('selected_lat', lat.value)
   localStorage.setItem('selected_lon', lon.value)
@@ -711,6 +808,8 @@ const fetchForecast = async () => {
     })
     forecastData.value = response.data.forecast
     fallbackWarning.value = response.data.fallbackMessage || ''
+    forecastCollectedAt.value = new Date().toISOString()
+    saveForecastToCache(response.data.forecast, fallbackWarning.value)
   } catch (err) {
     if (err.response?.status !== 401) {
       error.value = "Impossible de récupérer les prévisions"
@@ -999,7 +1098,7 @@ const fetchForecast = async () => {
               <span v-if="!geoLoading" class="mdi mdi-crosshairs-gps"></span>
               <span v-else class="mdi mdi-loading mdi-spin"></span>
             </button>
-            <button @click="fetchForecast" :disabled="loading || !city || geoLoading" class="refresh-btn" title="Actualiser">
+            <button @click="fetchForecast(false)" :disabled="loading || !city || geoLoading" class="refresh-btn" title="Actualiser">
               <span v-if="!loading" class="mdi mdi-refresh"></span>
               <span v-else class="mdi mdi-loading mdi-spin"></span>
             </button>
@@ -1027,6 +1126,11 @@ const fetchForecast = async () => {
       </div>
 
       <section v-if="forecastData && !loading" class="results-section">
+        <div class="forecast-meta">
+          <span>Données collectées le </span>
+          <strong>{{ formatDateTime(forecastCollectedAt) }}</strong>
+          <span v-if="forecastLoadedFromCache"> · données chargées depuis le cache</span>
+        </div>
         <div class="forecast-grid">
           <div v-for="(day, index) in forecastData" :key="index" class="day-card">
             <h3><span class="mdi mdi-calendar"></span> {{ formatDate(day.date) }}</h3>
