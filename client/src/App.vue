@@ -499,7 +499,7 @@ const initializeApp = () => {
   if (savedCity && lat.value && lon.value) {
     city.value = savedCity
     query.value = savedCity
-    if (selectedActivityId.value && selectedActivityId.value !== 'none') {
+    if (selectedActivityId.value) {
       if (!restoreCachedForecast()) {
         fetchForecast()
       }
@@ -730,7 +730,7 @@ const saveForecastCache = (cache) => {
 }
 
 const loadCachedForecast = () => {
-  if (!city.value || lat.value === null || lon.value === null || !selectedActivityId.value || selectedActivityId.value === 'none') {
+  if (!city.value || lat.value === null || lon.value === null || !selectedActivityId.value) {
     return null
   }
 
@@ -760,7 +760,7 @@ const restoreCachedForecast = () => {
 }
 
 const saveForecastToCache = (forecast, fallbackMessage = '') => {
-  if (!city.value || lat.value === null || lon.value === null || !selectedActivityId.value || selectedActivityId.value === 'none') {
+  if (!city.value || lat.value === null || lon.value === null || !selectedActivityId.value) {
     return
   }
 
