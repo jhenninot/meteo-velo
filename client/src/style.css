@@ -517,9 +517,9 @@ html.meteo-theme-dark .icon-grid-item:hover, html.meteo-theme-dark .icon-grid-it
 .metrics .metric-critere.critere-def .mdi { color: var(--color-danger-dark); }
 .metrics .metric-critere.critere-neutre .mdi { color: #757575; }
 .facteurs-def { font-size: 0.8rem; font-weight: 600; color: #b71c1c; margin: 6px 0 4px; }
-.ia-advice { font-size: 0.9rem; font-style: italic; color: var(--text-secondary); background: rgba(255,255,255,0.5); padding: 6px; border-radius: 4px; }.search-container {
+.ia-advice { font-size: 0.9rem; font-style: italic; color: var(--text-secondary); background: rgba(255,255,255,0.5); padding: 6px; border-radius: 4px; }.search-container {
   position: relative;
-  margin-bottom: 3rem;
+  margin-bottom: 1.25rem;
   padding: 24px;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
@@ -565,7 +565,7 @@ html.meteo-theme-dark .icon-grid-item:hover, html.meteo-theme-dark .icon-grid-it
   border-radius: var(--radius-md);
 }
 .suggestions-list li { padding: 10px; cursor: pointer; border-bottom: 1px solid var(--border-color); color: var(--text-primary); }
-.status-msg, .error-msg { text-align: center; margin-top: 20px; padding: 10px; border-radius: var(--radius-md); }
+.status-msg, .error-msg { text-align: center; margin-top: 12px; padding: 10px; border-radius: var(--radius-md); }
 .error-msg { background: #ffcdd2; color: #b71c1c; }
 .fallback-msg {
   display: flex;
