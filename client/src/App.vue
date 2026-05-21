@@ -176,7 +176,7 @@ const selectedActivity = computed(() => {
 })
 
 const selectedActivityIcon = computed(() => {
-  if (selectedActivityId.value === 'none') return ''
+  if (selectedActivityId.value === 'none') return 'mdi-compass-outline'
   return selectedActivity.value?.icon || 'mdi-bike'
 })
 
@@ -516,6 +516,19 @@ const handleActivitySelection = () => {
   }
 }
 
+const showActivityDropdown = ref(false)
+const toggleActivityDropdown = () => {
+  showActivityDropdown.value = !showActivityDropdown.value
+}
+const selectActivityCustom = (activityId) => {
+  selectedActivityId.value = activityId
+  showActivityDropdown.value = false
+  handleActivitySelection()
+}
+const closeActivityDropdown = () => {
+  showActivityDropdown.value = false
+}
+
 const syncPreferences = async () => {
   if (!isLoggedIn.value) return
   try {
@@ -552,6 +565,7 @@ const setTheme = (mode) => {
 }
 
 onMounted(async () => {
+  document.addEventListener('click', closeActivityDropdown)
   const token = localStorage.getItem('auth_token')
   if (token) {
     try {
@@ -982,6 +996,7 @@ watch([lat, lon], ([newLat, newLon]) => {
 })
 
 onUnmounted(() => {
+  document.removeEventListener('click', closeActivityDropdown)
   if (weatherMapInstance) {
     try { weatherMapInstance.remove() } catch (e) {}
     weatherMapInstance = null
@@ -1346,7 +1361,6 @@ const fetchForecast = async (useCache = true) => {
             <article v-for="activity in userActivities" :key="activity._id" class="activity-card">
               <div class="activity-card-content">
                 <h4><span class="mdi" :class="activity.icon || 'mdi-bike'"></span> {{ activity.label }}</h4>
-                <p>{{ activity.constraints || 'Aucune contrainte renseignée.' }}</p>
               </div>
               <div class="activity-actions">
                 <button type="button" @click="editActivity(activity)" title="Modifier">
@@ -1366,33 +1380,69 @@ const fetchForecast = async (useCache = true) => {
     </main>
     <main v-else>
       <section class="config-section">
-        <div class="input-group">
-          <label><span class="mdi mdi-format-list-checks"></span> Activité à analyser :</label>
-          <select v-model="selectedActivityId" @change="handleActivitySelection" :disabled="activityLoading">
-            <option value="none">Aucune (Plein air général)</option>
-            <option v-for="activity in userActivities" :key="activity._id" :value="activity._id">{{ activity.label }}</option>
-          </select>
-          <p v-if="selectedActivity" class="selected-activity-constraints"><span v-if="selectedActivity.icon" class="mdi" :class="selectedActivity.icon"></span> {{ selectedActivity.constraints || 'Aucune contrainte renseignée pour cette activité.' }}</p>
-          <p v-else class="selected-activity-constraints">Ajoutez vos activités depuis la page Mon compte.</p>
-        </div>
-
         <div class="search-container">
-          <div class="search-input-wrapper">
-            <input v-model="query" @input="searchCities" placeholder="Ville..." @keyup.enter="fetchForecast"/>
-            <button type="button" @click="toggleFavorite" :disabled="!city || loading" class="fav-btn" :title="isCurrentCityFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'">
-              <span class="mdi" :class="isCurrentCityFavorite ? 'mdi-star text-warning' : 'mdi-star-outline'"></span>
-            </button>
-            <button type="button" @click="useDeviceLocation" :disabled="loading || geoLoading" class="geo-btn" title="Utiliser ma position actuelle">
-              <span v-if="!geoLoading" class="mdi mdi-crosshairs-gps"></span>
-              <span v-else class="mdi mdi-loading mdi-spin"></span>
-            </button>
-            <button type="button" @click="toggleMap" :disabled="!lat || !lon" class="map-btn" :class="{ 'map-active': showMap }" :title="showMap ? 'Masquer la carte' : 'Afficher la carte'">
-              <span class="mdi" :class="showMap ? 'mdi-map-legend' : 'mdi-map'"></span>
-            </button>
-            <button @click="fetchForecast(false)" :disabled="loading || !city || geoLoading" class="refresh-btn" title="Actualiser">
-              <span v-if="!loading" class="mdi mdi-refresh"></span>
-              <span v-else class="mdi mdi-loading mdi-spin"></span>
-            </button>
+          <div class="input-group">
+            <label><span class="mdi mdi-format-list-checks"></span> Activité à analyser :</label>
+            <div class="custom-select-container">
+              <button
+                type="button"
+                class="custom-select-trigger"
+                @click.stop="toggleActivityDropdown"
+                :disabled="activityLoading"
+                aria-haspopup="listbox"
+                :aria-expanded="showActivityDropdown"
+              >
+                <span class="mdi custom-select-trigger-icon" :class="selectedActivityIcon"></span>
+                <span class="custom-select-trigger-text">
+                  {{ selectedActivityId === 'none' ? 'Aucune (Plein air général)' : (selectedActivity?.label || 'Aucune') }}
+                </span>
+                <span class="mdi mdi-chevron-down custom-select-arrow" :class="{ 'arrow-rotate': showActivityDropdown }"></span>
+              </button>
+              
+              <ul v-if="showActivityDropdown" class="custom-select-options" role="listbox">
+                <li
+                  class="custom-select-option"
+                  :class="{ 'is-selected': selectedActivityId === 'none' }"
+                  role="option"
+                  @click="selectActivityCustom('none')"
+                >
+                  <span class="mdi option-icon mdi-compass-outline"></span>
+                  <span class="option-label">Aucune (Plein air général)</span>
+                </li>
+                <li
+                  v-for="activity in userActivities"
+                  :key="activity._id"
+                  class="custom-select-option"
+                  :class="{ 'is-selected': selectedActivityId === activity._id }"
+                  role="option"
+                  @click="selectActivityCustom(activity._id)"
+                >
+                  <span class="mdi option-icon" :class="activity.icon || 'mdi-bike'"></span>
+                  <span class="option-label">{{ activity.label }}</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label><span class="mdi mdi-map-marker"></span> Localisation :</label>
+            <div class="search-input-wrapper">
+              <input v-model="query" @input="searchCities" placeholder="Ville..." @keyup.enter="fetchForecast"/>
+              <button type="button" @click="toggleFavorite" :disabled="!city || loading" class="fav-btn" :title="isCurrentCityFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'">
+                <span class="mdi" :class="isCurrentCityFavorite ? 'mdi-star text-warning' : 'mdi-star-outline'"></span>
+              </button>
+              <button type="button" @click="useDeviceLocation" :disabled="loading || geoLoading" class="geo-btn" title="Utiliser ma position actuelle">
+                <span v-if="!geoLoading" class="mdi mdi-crosshairs-gps"></span>
+                <span v-else class="mdi mdi-loading mdi-spin"></span>
+              </button>
+              <button type="button" @click="toggleMap" :disabled="!lat || !lon" class="map-btn" :class="{ 'map-active': showMap }" :title="showMap ? 'Masquer la carte' : 'Afficher la carte'">
+                <span class="mdi" :class="showMap ? 'mdi-map-legend' : 'mdi-map'"></span>
+              </button>
+              <button @click="fetchForecast(false)" :disabled="loading || !city || geoLoading" class="refresh-btn" title="Actualiser">
+                <span v-if="!loading" class="mdi mdi-refresh"></span>
+                <span v-else class="mdi mdi-loading mdi-spin"></span>
+              </button>
+            </div>
           </div>
           <!-- Carte de localisation interactive -->
           <div v-show="showMap" class="weather-map-container-wrapper">
@@ -1405,6 +1455,16 @@ const fetchForecast = async (useCache = true) => {
               <div id="weather-map-container" class="weather-map-container"></div>
             </div>
           </div>
+          <ul v-if="suggestions.length > 0" class="suggestions-list">
+            <li v-for="(s, index) in suggestions" :key="index" @click="selectCity(s)" class="suggestion-item">
+              <div class="suggestion-info">
+                <span v-if="isSuggestionFavorite(s)" class="mdi mdi-star suggestion-fav-star" title="Cette ville est dans vos favoris"></span>
+                <strong>{{ s.properties.name }}</strong>
+                <span class="region-text" v-if="s.properties.state">- {{ s.properties.state }}</span>
+              </div>
+            </li>
+          </ul>
+
           <div v-if="favorites.length > 0" class="favorites-dropdown-container">
             <label for="favorites-select" class="favorites-dropdown-label">
               <span class="mdi mdi-star"></span> Favoris :
@@ -1416,15 +1476,6 @@ const fetchForecast = async (useCache = true) => {
               </option>
             </select>
           </div>
-          <ul v-if="suggestions.length > 0" class="suggestions-list">
-            <li v-for="(s, index) in suggestions" :key="index" @click="selectCity(s)" class="suggestion-item">
-              <div class="suggestion-info">
-                <span v-if="isSuggestionFavorite(s)" class="mdi mdi-star suggestion-fav-star" title="Cette ville est dans vos favoris"></span>
-                <strong>{{ s.properties.name }}</strong>
-                <span class="region-text" v-if="s.properties.state">- {{ s.properties.state }}</span>
-              </div>
-            </li>
-          </ul>
         </div>
       </section>
 
