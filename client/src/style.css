@@ -514,6 +514,7 @@ html.meteo-theme-dark .icon-grid-item:hover, html.meteo-theme-dark .icon-grid-it
 .half-day.favorable h4 .weather-main-icon { color: var(--color-primary); }
 .half-day.defavorable h4 .weather-main-icon { color: var(--color-danger); }
 .metrics .metric-critere.critere-fav .mdi { color: var(--color-primary-dark); }
+.metrics .metric-critere.critere-def { background: rgba(244, 67, 54, 0.15); border-radius: var(--radius-sm); padding: 2px 6px; margin: -2px 0; }
 .metrics .metric-critere.critere-def .mdi { color: var(--color-danger-dark); }
 .metrics .metric-critere.critere-neutre .mdi { color: #757575; }
 .facteurs-def { font-size: 0.8rem; font-weight: 600; color: #b71c1c; margin: 6px 0 4px; }
@@ -610,6 +611,7 @@ html.meteo-theme-dark .icon-grid-item:hover, html.meteo-theme-dark .icon-grid-it
 .app-container.theme-dark .half-day.favorable h4 .weather-main-icon { color: var(--color-primary-light); }
 .app-container.theme-dark .half-day.defavorable h4 .weather-main-icon { color: var(--color-danger-light); }
 .app-container.theme-dark .metrics .metric-critere.critere-fav .mdi { color: #a5d6a7; }
+.app-container.theme-dark .metrics .metric-critere.critere-def { background: rgba(244, 67, 54, 0.2); }
 .app-container.theme-dark .metrics .metric-critere.critere-def .mdi { color: var(--color-danger-light); }
 .app-container.theme-dark .metrics .metric-critere.critere-neutre .mdi { color: #9aa0a6; }
 .app-container.theme-dark .facteurs-def { color: #ffab91; }
