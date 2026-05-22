@@ -1673,9 +1673,6 @@ const fetchForecast = async (useCache = true) => {
                   <span :class="critereClass(day.matin, 'rafales')"><span class="mdi mdi-weather-windy" title="Rafales"></span> {{ day.matin.gust }}km/h</span>
                   <span :class="critereClass(day.matin, 'uv')"><span class="mdi mdi-sun-wireless"></span> UV {{ day.matin.uv }}</span>
                 </div>
-                <div v-if="defavorableCritereLabels(day.matin).length" class="facteurs-def">
-                  Facteurs défavorables : {{ defavorableCritereLabels(day.matin).join(' · ') }}
-                </div>
                 <div class="ia-advice">{{ day.matin.conseil }}</div>
                 
                 <div v-if="expandedPeriods[`${index}-matin`] && day.matin.hourly">
@@ -1703,9 +1700,6 @@ const fetchForecast = async (useCache = true) => {
                   <span :class="critereClass(day.apres_midi, 'vent')"><span class="mdi mdi-navigation wind-icon" :style="getWindStyle(day.apres_midi.dir)"></span> {{ day.apres_midi.wind }}km/h</span>
                   <span :class="critereClass(day.apres_midi, 'rafales')"><span class="mdi mdi-weather-windy" title="Rafales"></span> {{ day.apres_midi.gust }}km/h</span>
                   <span :class="critereClass(day.apres_midi, 'uv')"><span class="mdi mdi-sun-wireless"></span> UV {{ day.apres_midi.uv }}</span>
-                </div>
-                <div v-if="defavorableCritereLabels(day.apres_midi).length" class="facteurs-def">
-                  Facteurs défavorables : {{ defavorableCritereLabels(day.apres_midi).join(' · ') }}
                 </div>
                 <div class="ia-advice">{{ day.apres_midi.conseil }}</div>
                 
