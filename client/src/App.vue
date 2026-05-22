@@ -402,6 +402,20 @@ const openStravaRoutes = () => {
   showAccountPanel.value = false
 }
 
+const updateGlobalLocation = (newLoc) => {
+  city.value = newLoc.city
+  lat.value = newLoc.lat
+  lon.value = newLoc.lon
+  query.value = newLoc.city
+  localStorage.setItem('selected_city', newLoc.city)
+  localStorage.setItem('selected_lat', newLoc.lat)
+  localStorage.setItem('selected_lon', newLoc.lon)
+  if (isLoggedIn.value) {
+    fetchForecast()
+    syncPreferences()
+  }
+}
+
 const openAccount = () => {
   showAdminPanel.value = false
   showStravaPage.value = false
@@ -686,6 +700,63 @@ const getWeatherIcon = (periodData) => {
   if (periodData.wind > 35) return 'mdi-weather-windy';
   if (periodData.rain > 20) return 'mdi-weather-partly-cloudy';
   return 'mdi-weather-sunny';
+}
+
+const getShortDayName = (dateString) => {
+  if (!dateString) return '';
+  const [year, month, day] = dateString.split('-');
+  const date = new Date(year, month - 1, day);
+  const formatted = new Intl.DateTimeFormat('fr-FR', { weekday: 'short' }).format(date);
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
+
+const getDailyMinTemp = (day) => {
+  const temps = [];
+  if (day.matin?.temp !== undefined) temps.push(day.matin.temp);
+  if (day.apres_midi?.temp !== undefined) temps.push(day.apres_midi.temp);
+  if (temps.length === 0) return '-';
+  return Math.min(...temps);
+}
+
+const getDailyMaxTemp = (day) => {
+  const temps = [];
+  if (day.matin?.temp !== undefined) temps.push(day.matin.temp);
+  if (day.apres_midi?.temp !== undefined) temps.push(day.apres_midi.temp);
+  if (temps.length === 0) return '-';
+  return Math.max(...temps);
+}
+
+const getDailyWind = (day) => {
+  const winds = [];
+  if (day.matin?.wind !== undefined) winds.push(day.matin.wind);
+  if (day.apres_midi?.wind !== undefined) winds.push(day.apres_midi.wind);
+  if (winds.length === 0) return '-';
+  return Math.max(...winds);
+}
+
+const getDailyWindDir = (day) => {
+  if (day.apres_midi?.dir !== undefined) return day.apres_midi.dir;
+  if (day.matin?.dir !== undefined) return day.matin.dir;
+  return 0;
+}
+
+const getDailyPrecip = (day) => {
+  let precip = 0;
+  if (day.matin?.precip) precip += day.matin.precip;
+  if (day.apres_midi?.precip) precip += day.apres_midi.precip;
+  return Number(precip.toFixed(1));
+}
+
+const getDailyWeatherIcon = (day) => {
+  const mainPeriod = day.apres_midi || day.matin;
+  return getWeatherIcon(mainPeriod);
+}
+
+const scrollToDay = (index) => {
+  const el = document.getElementById('day-detail-' + index);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 const searchCities = async () => {
@@ -1415,7 +1486,15 @@ const fetchForecast = async (useCache = true) => {
       <StravaActivities :theme="resolvedTheme" :api-base-url="API_BASE_URL" />
     </main>
     <main v-else-if="showStravaRoutesPage">
-      <StravaRoutes :theme="resolvedTheme" :api-base-url="API_BASE_URL" />
+      <StravaRoutes
+        :theme="resolvedTheme"
+        :api-base-url="API_BASE_URL"
+        :initial-city="city"
+        :initial-lat="lat"
+        :initial-lon="lon"
+        :favorites="favorites"
+        @update:location="updateGlobalLocation"
+      />
     </main>
     <main v-else>
       <section class="config-section">
@@ -1525,9 +1604,29 @@ const fetchForecast = async (useCache = true) => {
         <button class="fallback-close" @click="fallbackWarning = ''" aria-label="Fermer">&times;</button>
       </div>
       
+      <div v-if="forecastData && !loading" class="daily-summary-container">
+        <div class="daily-summary-scroll">
+          <div v-for="(day, index) in forecastData" :key="'summary-'+index" class="daily-summary-card" @click="scrollToDay(index)">
+            <div class="summary-day">{{ getShortDayName(day.date) }}</div>
+            <div class="summary-icon"><span class="mdi" :class="getDailyWeatherIcon(day)"></span></div>
+            <div class="summary-temps">
+              <span class="temp-min">{{ getDailyMinTemp(day) }}°</span> /
+              <span class="temp-max">{{ getDailyMaxTemp(day) }}°</span>
+            </div>
+            <div class="summary-wind">
+              <span class="mdi mdi-navigation wind-icon" :style="getWindStyle(getDailyWindDir(day))"></span>
+              {{ getDailyWind(day) }} km/h
+            </div>
+            <div class="summary-precip">
+              <span class="mdi mdi-weather-pouring"></span> {{ getDailyPrecip(day) }} mm
+            </div>
+          </div>
+        </div>
+      </div>
+
       <section v-if="forecastData && !loading" class="results-section">
         <div class="forecast-grid">
-          <div v-for="(day, index) in forecastData" :key="index" class="day-card">
+          <div v-for="(day, index) in forecastData" :key="index" class="day-card" :id="'day-detail-' + index">
             <h3><span class="mdi mdi-calendar"></span> {{ formatDate(day.date) }}</h3>
             <div class="day-split">
               <div v-if="day.matin" class="half-day" :class="[day.matin.favorable ? 'favorable' : 'defavorable', { 'is-expanded': expandedPeriods[`${index}-matin`] }]" @click="togglePeriod(index, 'matin')">

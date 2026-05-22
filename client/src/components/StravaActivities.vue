@@ -734,13 +734,16 @@ onUnmounted(() => {
             </div>
             <div class="activity-main">
               <div class="activity-name">{{ activity.name }}</div>
-              <div class="activity-date">{{ formatDate(activity.start_date) }}</div>
-            </div>
-            <div class="activity-metrics">
-              <span class="metric"><span class="mdi mdi-map-marker-distance"></span>{{ formatDistance(activity.distance) }}</span>
-              <span class="metric"><span class="mdi mdi-summit"></span>{{ formatElevation(activity.total_elevation_gain) }}</span>
-              <span class="metric"><span class="mdi mdi-speedometer"></span>{{ formatSpeed(activity.average_speed, activity.type) }}</span>
-              <span class="metric"><span class="mdi mdi-timer-outline"></span>{{ formatDuration(activity.moving_time) }}</span>
+              <div class="activity-date" style="font-size: 0.85rem; opacity: 0.8; margin: 4px 0 10px 0; line-height: 1.4; white-space: normal;">
+                {{ formatDate(activity.start_date) }}
+                <span v-if="activity.description"> - {{ activity.description }}</span>
+              </div>
+              <div class="activity-metrics" style="margin-top: 6px;">
+                <span class="metric"><span class="mdi mdi-map-marker-distance"></span>{{ formatDistance(activity.distance) }}</span>
+                <span class="metric"><span class="mdi mdi-summit"></span>{{ formatElevation(activity.total_elevation_gain) }}</span>
+                <span class="metric"><span class="mdi mdi-speedometer"></span>{{ formatSpeed(activity.average_speed, activity.type) }}</span>
+                <span class="metric"><span class="mdi mdi-timer-outline"></span>{{ formatDuration(activity.moving_time) }}</span>
+              </div>
             </div>
             <span class="activity-expand-icon mdi" :class="expandedId === activity.id ? 'mdi-chevron-up' : 'mdi-chevron-down'"></span>
           </div>

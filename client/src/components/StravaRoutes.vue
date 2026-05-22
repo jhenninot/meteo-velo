@@ -18,8 +18,14 @@ L.Icon.Default.mergeOptions({
 
 const props = defineProps({
   theme: String,
-  apiBaseUrl: { type: String, default: 'http://localhost:3001' }
+  apiBaseUrl: { type: String, default: 'http://localhost:3001' },
+  initialCity: String,
+  initialLat: [Number, String],
+  initialLon: [Number, String],
+  favorites: { type: Array, default: () => [] }
 })
+
+const emit = defineEmits(['update:location'])
 
 const stravaStatus = ref({ connected: false, athleteName: null, athleteProfile: null })
 const routes = ref([])
@@ -27,6 +33,21 @@ const loading = ref(false)
 const loadingConnect = ref(false)
 const error = ref(null)
 const expandedId = ref(null)
+
+const query = ref(props.initialCity || '')
+const suggestions = ref([])
+const enableGeoFilter = ref(false)
+const geoRadius = ref(20)
+
+// Filtres métriques
+const minDistance = ref(null)
+const maxDistance = ref(null)
+const minElevation = ref(null)
+const maxElevation = ref(null)
+
+watch(() => props.initialCity, (newCity) => {
+  query.value = newCity || ''
+})
 
 // ---- Tri ----
 const sortField = ref('updated')
@@ -60,9 +81,31 @@ const availableTypes = computed(() => {
 })
 
 const displayedRoutes = computed(() => {
-  const filtered = activeTypeFilters.value.length === 0
+  let filtered = activeTypeFilters.value.length === 0
     ? routes.value
     : routes.value.filter(r => activeTypeFilters.value.includes(getSportType(r)))
+
+  if (enableGeoFilter.value && props.initialLat !== null && props.initialLon !== null) {
+    filtered = filtered.filter(r => {
+      const startPoint = getPolylineFirstPoint(r.map?.summary_polyline)
+      if (!startPoint) return false
+      const distance = getHaversineDistance(props.initialLat, props.initialLon, startPoint[0], startPoint[1])
+      return distance <= geoRadius.value
+    })
+  }
+
+  if (minDistance.value !== null && minDistance.value !== '') {
+    filtered = filtered.filter(r => (r.distance / 1000) >= Number(minDistance.value))
+  }
+  if (maxDistance.value !== null && maxDistance.value !== '') {
+    filtered = filtered.filter(r => (r.distance / 1000) <= Number(maxDistance.value))
+  }
+  if (minElevation.value !== null && minElevation.value !== '') {
+    filtered = filtered.filter(r => r.elevation_gain >= Number(minElevation.value))
+  }
+  if (maxElevation.value !== null && maxElevation.value !== '') {
+    filtered = filtered.filter(r => r.elevation_gain <= Number(maxElevation.value))
+  }
 
   return [...filtered].sort((a, b) => {
     let va, vb
@@ -118,6 +161,42 @@ function decodePolyline(encoded) {
     points.push([lat / 1e5, lng / 1e5])
   }
   return points
+}
+
+// Fast decoder for only the first coordinate
+function getPolylineFirstPoint(encoded) {
+  if (!encoded) return null
+  let index = 0, lat = 0, lng = 0
+  if (index < encoded.length) {
+    let b, shift = 0, result = 0
+    do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5 } while (b >= 0x20)
+    lat += ((result & 1) ? ~(result >> 1) : (result >> 1))
+    shift = 0; result = 0
+    do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5 } while (b >= 0x20)
+    lng += ((result & 1) ? ~(result >> 1) : (result >> 1))
+    return [lat / 1e5, lng / 1e5]
+  }
+  return null
+}
+
+// Haversine formula to calculate orthodromic distance in km
+function getHaversineDistance(lat1, lon1, lat2, lon2) {
+  if (lat1 === null || lon1 === null || lat2 === null || lon2 === null) return 0
+  const R = 6371 // Earth radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+const getRouteDistanceToSelected = (route) => {
+  if (props.initialLat === null || props.initialLon === null) return null
+  const startPoint = getPolylineFirstPoint(route.map?.summary_polyline)
+  if (!startPoint) return null
+  return getHaversineDistance(props.initialLat, props.initialLon, startPoint[0], startPoint[1])
 }
 
 // ---- Formatters ----
@@ -413,6 +492,78 @@ const toggleRoute = async (route) => {
   }
 }
 
+const searchCities = async () => {
+  if (query.value.length < 3) { suggestions.value = []; return; }
+  try {
+    const response = await axios.get(`${props.apiBaseUrl}/api/search?q=${query.value}`)
+    const seen = new Set()
+    const uniqueSuggestions = []
+    
+    if (Array.isArray(response.data)) {
+      for (const feature of response.data) {
+        if (!feature.properties) continue
+        const name = (feature.properties.name || '').trim().toLowerCase()
+        const state = (feature.properties.state || '').trim().toLowerCase()
+        const country = (feature.properties.country || '').trim().toLowerCase()
+        const key = `${name}|${state}|${country}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          uniqueSuggestions.push(feature)
+        }
+      }
+    }
+    suggestions.value = uniqueSuggestions
+  } catch (err) { console.error(err) }
+}
+
+const selectCity = (selectedFeature) => {
+  const cityName = selectedFeature.properties.name
+  const lonVal = selectedFeature.geometry.coordinates[0] 
+  const latVal = selectedFeature.geometry.coordinates[1] 
+  suggestions.value = [] 
+  query.value = cityName
+  
+  emit('update:location', {
+    city: cityName,
+    lat: latVal,
+    lon: lonVal
+  })
+}
+
+const isSuggestionFavorite = (s) => {
+  if (!s || !s.properties || !props.favorites) return false
+  const name = s.properties.name
+  const lonVal = s.geometry.coordinates[0]
+  const latVal = s.geometry.coordinates[1]
+  
+  return props.favorites.some(fav => 
+    fav.city.toLowerCase() === name.toLowerCase() || 
+    (Math.abs(fav.lat - latVal) < 0.001 && Math.abs(fav.lon - lonVal) < 0.001)
+  )
+}
+
+const selectedFavoriteIndex = computed({
+  get() {
+    if (!props.initialCity || !props.favorites) return "-1"
+    const index = props.favorites.findIndex(fav => 
+      fav.city.toLowerCase() === props.initialCity.toLowerCase() || 
+      (props.initialLat !== null && props.initialLon !== null && Math.abs(fav.lat - props.initialLat) < 0.001 && Math.abs(fav.lon - props.initialLon) < 0.001)
+    )
+    return index !== -1 ? String(index) : "-1"
+  },
+  set(newIndex) {
+    const idx = parseInt(newIndex, 10)
+    if (isNaN(idx) || idx < 0 || idx >= props.favorites.length) return
+    const fav = props.favorites[idx]
+    
+    emit('update:location', {
+      city: fav.city,
+      lat: fav.lat,
+      lon: fav.lon
+    })
+  }
+})
+
 onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
   if (params.get('strava') === 'success') stravaNotif.value = 'success'
@@ -483,6 +634,128 @@ onUnmounted(() => {
         </button>
       </div>
 
+      <!-- Panel de Filtres Avancés -->
+      <div v-if="!loading && routes.length" class="search-container geo-filter-panel" style="margin-bottom: 24px;">
+        <div class="geo-panel-title" style="margin-bottom: 20px;">
+          <span class="mdi mdi-filter-cog-outline" style="font-size: 1.35rem;"></span>
+          <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700;">Filtres de recherche avancés</h3>
+        </div>
+        
+        <h4 style="margin: 0 0 16px 0; font-size: 0.95rem; color: var(--color-strava); border-bottom: 1px solid var(--border-color); padding-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+          <span class="mdi mdi-map-marker-radius"></span> Proximité géographique
+        </h4>
+        
+        <div class="geo-inputs-grid">
+          <!-- Recherche de ville -->
+          <div class="input-group" style="position: relative;">
+            <label style="font-weight: 600; margin-bottom: 6px; display: block;"><span class="mdi mdi-map-marker" style="color: var(--color-strava);"></span> Localisation de référence :</label>
+            <div class="search-input-wrapper">
+              <input 
+                v-model="query" 
+                @input="searchCities" 
+                placeholder="Rechercher une ville..."
+                @keyup.enter="suggestions = []"
+                style="width: 100%;"
+              />
+              <button 
+                type="button" 
+                v-if="query"
+                @click="query = ''; suggestions = []" 
+                class="geo-btn" 
+                title="Effacer la recherche"
+                style="padding: 10px 14px;"
+              >
+                <span class="mdi mdi-close"></span>
+              </button>
+            </div>
+            
+            <!-- Liste d'autocomplétion -->
+            <ul v-if="suggestions.length > 0" class="suggestions-list" style="width: 100%; left: 0; margin-top: 5px; position: absolute; box-shadow: var(--shadow-lg); z-index: 1000;">
+              <li v-for="(s, index) in suggestions" :key="index" @click="selectCity(s)" class="suggestion-item">
+                <div class="suggestion-info">
+                  <span v-if="isSuggestionFavorite(s)" class="mdi mdi-star suggestion-fav-star" title="Cette ville est dans vos favoris"></span>
+                  <strong>{{ s.properties.name }}</strong>
+                  <span class="region-text" v-if="s.properties.state">- {{ s.properties.state }}</span>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Favoris -->
+          <div v-if="favorites && favorites.length > 0" class="input-group">
+            <label for="favorites-select-routes" style="font-weight: 600; margin-bottom: 6px; display: block;"><span class="mdi mdi-star" style="color: #fbc02d;"></span> Vos favoris :</label>
+            <div class="favorites-dropdown-container" style="margin: 0;">
+              <select 
+                id="favorites-select-routes" 
+                v-model="selectedFavoriteIndex" 
+                class="favorites-select"
+                style="max-width: 100%; width: 100%;"
+                aria-label="Sélectionner une ville favorite"
+              >
+                <option value="-1" disabled>Choisir un favori...</option>
+                <option v-for="(fav, index) in favorites" :key="fav._id || fav.city" :value="index">
+                  {{ fav.city }}
+                </option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Curseur de rayon et activation du filtre -->
+        <div class="geo-slider-controls">
+          <div class="geo-toggle-wrapper">
+            <label class="switch-container">
+              <input type="checkbox" v-model="enableGeoFilter" />
+              <span class="switch-slider"></span>
+            </label>
+            <span class="geo-toggle-label" @click="enableGeoFilter = !enableGeoFilter">
+              Activer le filtrage par distance
+            </span>
+          </div>
+
+          <div class="slider-wrapper" :class="{ 'is-disabled': !enableGeoFilter }">
+            <span class="slider-min">2 km</span>
+            <input 
+              type="range" 
+              v-model.number="geoRadius" 
+              min="2" 
+              max="100" 
+              step="1"
+              :disabled="!enableGeoFilter"
+              class="range-slider"
+            />
+            <span class="slider-max">100 km ({{ geoRadius }} km)</span>
+          </div>
+        </div>
+        
+        <h4 style="margin: 28px 0 16px 0; font-size: 0.95rem; color: var(--color-strava); border-bottom: 1px solid var(--border-color); padding-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+          <span class="mdi mdi-tune"></span> Critères du parcours
+        </h4>
+        <div class="metrics-filter-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+          
+          <!-- Filtre Distance -->
+          <div class="filter-group">
+            <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; display: block;">Distance (km)</label>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <input type="number" v-model.number="minDistance" min="0" placeholder="Min" class="filter-number-input" />
+              <span style="color: var(--text-muted);">à</span>
+              <input type="number" v-model.number="maxDistance" min="0" placeholder="Max" class="filter-number-input" />
+            </div>
+          </div>
+
+          <!-- Filtre Dénivelé -->
+          <div class="filter-group">
+            <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; display: block;">Dénivelé (m)</label>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <input type="number" v-model.number="minElevation" min="0" placeholder="Min" class="filter-number-input" />
+              <span style="color: var(--text-muted);">à</span>
+              <input type="number" v-model.number="maxElevation" min="0" placeholder="Max" class="filter-number-input" />
+            </div>
+          </div>
+
+        </div>
+      </div>
+
       <!-- Chargement -->
       <div v-if="loading" class="strava-loading">
         <span class="mdi mdi-loading mdi-spin"></span> Chargement des parcours…
@@ -498,6 +771,8 @@ onUnmounted(() => {
         <span class="mdi mdi-map-marker-off strava-empty-icon"></span>
         <p>Aucun itinéraire trouvé sur votre compte Strava.</p>
       </div>
+
+      <!-- Fin du panneau des filtres avancés (intégré au-dessus) -->
 
       <!-- Filtres par type -->
       <div v-if="!loading && routes.length && availableTypes.length > 1" class="filter-controls">
@@ -582,15 +857,19 @@ onUnmounted(() => {
             </div>
             <div class="activity-main">
               <div class="activity-name">{{ route.name }}</div>
-              <div class="activity-date" style="font-size: 0.8rem; opacity: 0.7;">
-                {{ route.description || 'Aucune description' }}
+              <div v-if="route.description" class="activity-date" style="font-size: 0.85rem; opacity: 0.8; margin: 4px 0 10px 0; line-height: 1.4; white-space: normal;">
+                {{ route.description }}
               </div>
-            </div>
-            <div class="activity-metrics">
-              <span class="metric"><span class="mdi mdi-map-marker-distance"></span>{{ formatDistance(route.distance) }}</span>
-              <span class="metric"><span class="mdi mdi-summit"></span>{{ formatElevation(route.elevation_gain) }}</span>
-              <span class="metric"><span class="mdi mdi-timer-outline"></span>{{ formatDuration(route.estimated_moving_time) }}</span>
-              <span class="metric" style="font-size: 0.8rem;"><span class="mdi mdi-calendar"></span>{{ formatDate(route.updated_at || route.created_at) }}</span>
+              <div class="activity-metrics" style="margin-top: 6px;">
+                <span v-if="enableGeoFilter && getRouteDistanceToSelected(route) !== null" class="metric distance-to-ref" title="Distance à vol d'oiseau depuis la ville de référence">
+                  <span class="mdi mdi-near-me"></span>
+                  {{ getRouteDistanceToSelected(route).toFixed(1) }} km de {{ initialCity }}
+                </span>
+                <span class="metric"><span class="mdi mdi-map-marker-distance"></span>{{ formatDistance(route.distance) }}</span>
+                <span class="metric"><span class="mdi mdi-summit"></span>{{ formatElevation(route.elevation_gain) }}</span>
+                <span class="metric"><span class="mdi mdi-timer-outline"></span>{{ formatDuration(route.estimated_moving_time) }}</span>
+                <span class="metric" style="font-size: 0.8rem;"><span class="mdi mdi-calendar"></span>{{ formatDate(route.updated_at || route.created_at) }}</span>
+              </div>
             </div>
             <span class="activity-expand-icon mdi" :class="expandedId === route.id ? 'mdi-chevron-up' : 'mdi-chevron-down'"></span>
           </div>
