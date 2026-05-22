@@ -288,8 +288,27 @@ function normalizeCriteres(aiSlice, globalFavorable) {
 
 function enrichPeriod(aggregated, aiSlice) {
   const merged = { ...aggregated, ...aiSlice };
-  const fav = merged.favorable === true;
+  let fav = merged.favorable === true;
   merged.criteres = normalizeCriteres(aiSlice, fav);
+
+  // POST-PROCESSING : Forcer la probabilité de pluie à favorable si < 15%
+  if (merged.rain < 15) {
+    if (merged.criteres.pluie === 'defavorable') {
+      merged.criteres.pluie = 'favorable';
+      // Si la pluie était le seul facteur défavorable, on rend la période favorable
+      const hasOtherDefavorable = Object.values(merged.criteres).some(v => v === 'defavorable');
+      if (!hasOtherDefavorable && !fav) {
+        merged.favorable = true;
+      }
+    }
+    // Nettoyage du conseil si l'IA parle de pluie alors qu'elle ne devrait pas
+    if (merged.conseil && merged.conseil.toLowerCase().includes('pluie')) {
+      if (merged.favorable) {
+         merged.conseil = "Conditions correctes, pas de risque significatif de pluie.";
+      }
+    }
+  }
+
   return merged;
 }
 
@@ -417,8 +436,8 @@ Tu DOIS mettre "favorable": false si une contrainte est enfreinte.`;
     prompt += `
             RÈGLES D'ANALYSE PRÉCISES :
             - PRÉCIPITATIONS : Si le cumul (precip) est de 0mm, ne parle pas de "pluie continue" ou de "déluge", même si la probabilité est haute. Parle plutôt de "ciel menaçant" ou "risque de bruine".
-            - SEUIL DE TOLÉRANCE : Considère que moins de 0.5mm sur une demi-journée est négligeable. SI la probabilité de pluie est < 15% ALORS mets "pluie": "favorable".
-            - PLUIE : si lea probabilité de précipitations est de moins de 20%, alors considère qu'il ne pleut pas.
+            - PLUIE : Si la probabilité de pluie (rain) est inférieure à 15 %, ce critère DOIT obligatoirement être "favorable" et ne DOIT PAS rendre à lui seul l'analyse de la demi-journée défavorable. Dans ton "conseil", NE MENTIONNE JAMAIS un risque de pluie et NE DÉCONSEILLE SURTOUT PAS la sortie pour ce motif si la probabilité est < 15% ou le cumul est de 0mm.
+            - SEUIL DE TOLÉRANCE : Considère que moins de 0.5mm sur une demi-journée est négligeable.
             - VENT : Sois intransigeant sur les rafales (gust) par rapport aux consignes de l'utilisateur.
             - INDICE UV : Analyse si l'indice UV (uv) nécessite des conseils spécifiques (ex: crème solaire / protection si UV >= 6).
             - TON : Reste factuel et encourageant si les conditions sont à la limite.
