@@ -1898,7 +1898,8 @@ input:checked + .switch-slider:before {
   color: var(--text-secondary);
 }
 
-.summary-precip {
+.summary-precip,
+.summary-rain {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1907,7 +1908,8 @@ input:checked + .switch-slider:before {
   color: #1565c0;
 }
 
-.theme-dark .summary-precip {
+.theme-dark .summary-precip,
+.theme-dark .summary-rain {
   color: #90caf9;
 }
 

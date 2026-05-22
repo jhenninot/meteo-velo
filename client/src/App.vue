@@ -747,6 +747,14 @@ const getDailyPrecip = (day) => {
   return Number(precip.toFixed(1));
 }
 
+const getDailyRain = (day) => {
+  const rains = [];
+  if (day.matin?.rain !== undefined) rains.push(day.matin.rain);
+  if (day.apres_midi?.rain !== undefined) rains.push(day.apres_midi.rain);
+  if (rains.length === 0) return 0;
+  return Math.max(...rains);
+}
+
 const getDailyWeatherIcon = (day) => {
   const mainPeriod = day.apres_midi || day.matin;
   return getWeatherIcon(mainPeriod);
@@ -1618,7 +1626,10 @@ const fetchForecast = async (useCache = true) => {
               {{ getDailyWind(day) }} km/h
             </div>
             <div class="summary-precip">
-              <span class="mdi mdi-weather-pouring"></span> {{ getDailyPrecip(day) }} mm
+              <span class="mdi mdi-weather-pouring" title="Précipitations"></span> {{ getDailyPrecip(day) }} mm
+            </div>
+            <div class="summary-rain">
+              <span class="mdi mdi-water-percent" title="Probabilité de pluie"></span> {{ getDailyRain(day) }}%
             </div>
           </div>
         </div>
