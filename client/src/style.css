@@ -1889,7 +1889,8 @@ input:checked + .switch-slider:before {
   color: var(--color-danger-light);
 }
 
-.summary-wind {
+.summary-wind,
+.summary-gust {
   display: flex;
   align-items: center;
   gap: 4px;

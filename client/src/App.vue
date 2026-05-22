@@ -734,6 +734,14 @@ const getDailyWind = (day) => {
   return Math.max(...winds);
 }
 
+const getDailyGust = (day) => {
+  const gusts = [];
+  if (day.matin?.gust !== undefined) gusts.push(day.matin.gust);
+  if (day.apres_midi?.gust !== undefined) gusts.push(day.apres_midi.gust);
+  if (gusts.length === 0) return '-';
+  return Math.max(...gusts);
+}
+
 const getDailyWindDir = (day) => {
   if (day.apres_midi?.dir !== undefined) return day.apres_midi.dir;
   if (day.matin?.dir !== undefined) return day.matin.dir;
@@ -1624,6 +1632,9 @@ const fetchForecast = async (useCache = true) => {
             <div class="summary-wind">
               <span class="mdi mdi-navigation wind-icon" :style="getWindStyle(getDailyWindDir(day))"></span>
               {{ getDailyWind(day) }} km/h
+            </div>
+            <div class="summary-gust">
+              <span class="mdi mdi-weather-windy" title="Rafales"></span> {{ getDailyGust(day) }} km/h
             </div>
             <div class="summary-precip">
               <span class="mdi mdi-weather-pouring" title="Précipitations"></span> {{ getDailyPrecip(day) }} mm
