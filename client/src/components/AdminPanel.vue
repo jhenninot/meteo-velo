@@ -15,9 +15,15 @@ const adminMsg = ref({ text: '', type: '' })
 const usersList = ref([])
 const showNewUserPassword = ref(false)
 const selectedModel = ref('gemini-3.1-flash-lite')
+const selectedFallbackModel = ref('gemini-3.5-flash')
 const cacheMaxAge = ref(60)
 const settingsMsg = ref({ text: '', type: '' })
 const settingsLoading = ref(false)
+const availableModels = ref([
+  { id: 'gemini-3.1-flash-lite', displayName: 'Gemini 3.1 Flash Lite (Rapide & Économe)' },
+  { id: 'gemini-3.5-flash', displayName: 'Gemini 3.5 Flash (Plus Performant)' }
+])
+const modelsLoading = ref(false)
 
 // --- MÉTHODES ---
 const fetchUsers = async () => {
@@ -56,12 +62,29 @@ const changePassword = async (id) => {
     alert("Mot de passe modifié !")
   } catch (err) { alert(err.response?.data?.error || "Erreur lors de la modification du mot de passe") }
 }
+const ensureSelectedModelInList = () => {
+  if (selectedModel.value && !availableModels.value.some(m => m.id === selectedModel.value)) {
+    availableModels.value.push({
+      id: selectedModel.value,
+      displayName: selectedModel.value
+    })
+  }
+  if (selectedFallbackModel.value && !availableModels.value.some(m => m.id === selectedFallbackModel.value)) {
+    availableModels.value.push({
+      id: selectedFallbackModel.value,
+      displayName: selectedFallbackModel.value
+    })
+  }
+}
+
 const fetchSettings = async () => {
   try {
     const response = await axios.get(`${props.apiBaseUrl}/api/admin/settings`)
     if (response.data) {
       selectedModel.value = response.data.gemini_model || 'gemini-3.1-flash-lite'
+      selectedFallbackModel.value = response.data.gemini_fallback_model || 'gemini-3.5-flash'
       cacheMaxAge.value = parseInt(response.data.cache_max_age, 10) || 60
+      ensureSelectedModelInList()
     }
   } catch (err) {
     console.error("Erreur de récupération des paramètres", err)
@@ -74,6 +97,7 @@ const saveSettings = async () => {
   try {
     await axios.post(`${props.apiBaseUrl}/api/admin/settings`, {
       gemini_model: selectedModel.value,
+      gemini_fallback_model: selectedFallbackModel.value,
       cache_max_age: cacheMaxAge.value
     })
     settingsMsg.value = { text: "Paramètres système mis à jour avec succès !", type: 'success' }
@@ -84,9 +108,26 @@ const saveSettings = async () => {
   }
 }
 
+const fetchAvailableModels = async () => {
+  modelsLoading.value = true
+  try {
+    const response = await axios.get(`${props.apiBaseUrl}/api/admin/models`)
+    if (response.data && Array.isArray(response.data)) {
+      availableModels.value = response.data
+    }
+    ensureSelectedModelInList()
+  } catch (err) {
+    console.error("Erreur lors de la récupération des modèles Gemini", err)
+    ensureSelectedModelInList()
+  } finally {
+    modelsLoading.value = false
+  }
+}
+
 // Charger la liste et les paramètres à la création du composant
 fetchUsers()
 fetchSettings()
+fetchAvailableModels()
 </script>
 
 <template>
@@ -135,10 +176,20 @@ fetchSettings()
         </div>
 
         <div class="input-group">
-          <label>Modèle Gemini actif :</label>
-          <select v-model="selectedModel" :disabled="settingsLoading">
-            <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Rapide & Économe)</option>
-            <option value="gemini-3.5-flash">Gemini 3.5 Flash (Plus Performant)</option>
+          <label>Modèle Gemini principal :</label>
+          <select v-model="selectedModel" :disabled="settingsLoading || modelsLoading">
+            <option v-for="model in availableModels" :key="model.id" :value="model.id">
+              {{ model.displayName }}
+            </option>
+          </select>
+        </div>
+
+        <div class="input-group">
+          <label>Modèle Gemini de secours (Fallback) :</label>
+          <select v-model="selectedFallbackModel" :disabled="settingsLoading || modelsLoading">
+            <option v-for="model in availableModels" :key="model.id" :value="model.id">
+              {{ model.displayName }}
+            </option>
           </select>
         </div>
 

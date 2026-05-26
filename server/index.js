@@ -433,13 +433,15 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
       .slice(0, 7);
 
     let activeModel = 'gemini-3.1-flash-lite';
+    let fallbackModel = 'gemini-3.5-flash';
     try {
-      const setting = await SystemSetting.findOne({ key: 'gemini_model' });
-      if (setting && (setting.value === 'gemini-3.1-flash-lite' || setting.value === 'gemini-3.5-flash')) {
-        activeModel = setting.value;
-      }
+      const settings = await SystemSetting.find({ key: { $in: ['gemini_model', 'gemini_fallback_model'] } });
+      settings.forEach(s => {
+        if (s.key === 'gemini_model' && s.value) activeModel = s.value;
+        if (s.key === 'gemini_fallback_model' && s.value) fallbackModel = s.value;
+      });
     } catch (err) {
-      console.error("Erreur de lecture du modèle Gemini configuré :", err);
+      console.error("Erreur de lecture des modèles Gemini configurés :", err);
     }
 
     let prompt = `Tu es un algorithme de filtrage intransigeant pour l'activité suivante : ${activityLabel}. Voici la météo agrégée (Matin / Après-midi) pour ${city} : ${JSON.stringify(structuredWeather)}`;
@@ -484,7 +486,6 @@ Les valeurs dans criteres sont uniquement les chaînes "favorable" ou "defavorab
 
     let aiData;
     let fallback = false;
-    const fallbackModel = activeModel === 'gemini-3.5-flash' ? 'gemini-3.1-flash-lite' : 'gemini-3.5-flash';
 
     try {
       aiData = await callGemini(activeModel);
@@ -675,18 +676,51 @@ app.delete('/api/admin/users/:id', verifyToken, async (req, res) => {
   res.json({ message: "Utilisateur supprimé" });
 });
 
-// Obtenir le modèle Gemini sélectionné (Admin uniquement)
+// Obtenir la liste des modèles Gemini disponibles (Admin uniquement)
+app.get('/api/admin/models', verifyToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: "Accès refusé (Admin requis)" });
+  
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: "Clé API Gemini non configurée sur le serveur." });
+  }
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+    const response = await axios.get(url);
+    if (!response.data || !Array.isArray(response.data.models)) {
+      throw new Error("Réponse de l'API Google invalide");
+    }
+    const models = response.data.models
+      .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+      .map(m => {
+        const id = m.name.replace('models/', '');
+        return {
+          id: id,
+          displayName: m.displayName || id,
+          description: m.description || ''
+        };
+      });
+    res.json(models);
+  } catch (err) {
+    console.error("Erreur récupération modèles Gemini:", err.response?.data || err.message);
+    res.status(500).json({ error: "Impossible de récupérer la liste des modèles Gemini." });
+  }
+});
+
 // Obtenir les paramètres d'administration (Admin uniquement)
 app.get('/api/admin/settings', verifyToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: "Accès refusé (Admin requis)" });
   try {
-    const settings = await SystemSetting.find({ key: { $in: ['gemini_model', 'cache_max_age'] } });
+    const settings = await SystemSetting.find({ key: { $in: ['gemini_model', 'gemini_fallback_model', 'cache_max_age'] } });
     const result = {
       gemini_model: 'gemini-3.1-flash-lite',
+      gemini_fallback_model: 'gemini-3.5-flash',
       cache_max_age: '60'
     };
     settings.forEach(s => {
       if (s.key === 'gemini_model') result.gemini_model = s.value;
+      if (s.key === 'gemini_fallback_model') result.gemini_fallback_model = s.value;
       if (s.key === 'cache_max_age') result.cache_max_age = s.value;
     });
     res.json(result);
@@ -698,15 +732,26 @@ app.get('/api/admin/settings', verifyToken, async (req, res) => {
 // Modifier les paramètres d'administration (Admin uniquement)
 app.post('/api/admin/settings', verifyToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: "Accès refusé (Admin requis)" });
-  const { gemini_model, cache_max_age } = req.body;
+  const { gemini_model, gemini_fallback_model, cache_max_age } = req.body;
   try {
     if (gemini_model) {
-      if (gemini_model !== 'gemini-3.1-flash-lite' && gemini_model !== 'gemini-3.5-flash') {
-        return res.status(400).json({ error: "Modèle Gemini invalide." });
+      if (typeof gemini_model !== 'string' || gemini_model.trim().length === 0) {
+        return res.status(400).json({ error: "Modèle Gemini principal invalide." });
       }
       await SystemSetting.findOneAndUpdate(
         { key: 'gemini_model' },
-        { value: gemini_model },
+        { value: gemini_model.trim() },
+        { upsert: true }
+      );
+    }
+
+    if (gemini_fallback_model) {
+      if (typeof gemini_fallback_model !== 'string' || gemini_fallback_model.trim().length === 0) {
+        return res.status(400).json({ error: "Modèle Gemini de secours (fallback) invalide." });
+      }
+      await SystemSetting.findOneAndUpdate(
+        { key: 'gemini_fallback_model' },
+        { value: gemini_fallback_model.trim() },
         { upsert: true }
       );
     }
