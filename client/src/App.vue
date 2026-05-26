@@ -37,7 +37,7 @@ const passwordLoading = ref(false)
 const showLoginPassword = ref(false)
 const visiblePasswordFields = ref({})
 const userActivities = ref([])
-const activityForm = ref({ id: null, label: '', icon: 'mdi-bike', constraints: '' })
+const activityForm = ref({ id: null, label: '', icon: 'mdi-bike', constraints: '', stravaSportType: '' })
 const activityMsg = ref({ text: '', type: '' })
 const activityLoading = ref(false)
 const selectedActivityId = ref(localStorage.getItem('selected_activity_id') || 'none')
@@ -457,7 +457,7 @@ const togglePasswordVisibility = (field) => {
 }
 
 const resetActivityForm = () => {
-  activityForm.value = { id: null, label: '', icon: 'mdi-bike', constraints: '' }
+  activityForm.value = { id: null, label: '', icon: 'mdi-bike', constraints: '', stravaSportType: '' }
 }
 
 const loadUserActivities = async () => {
@@ -488,7 +488,8 @@ const saveActivity = async () => {
     const payload = {
       label: activityForm.value.label,
       icon: activityForm.value.icon,
-      constraints: activityForm.value.constraints
+      constraints: activityForm.value.constraints,
+      stravaSportType: activityForm.value.stravaSportType
     }
 
     if (activityForm.value.id) {
@@ -513,7 +514,8 @@ const editActivity = (activity) => {
     id: activity._id,
     label: activity.label || '',
     icon: activity.icon || 'mdi-bike',
-    constraints: activity.constraints || ''
+    constraints: activity.constraints || '',
+    stravaSportType: activity.stravaSportType || ''
   }
 }
 
@@ -700,6 +702,20 @@ const getWeatherIcon = (periodData) => {
   if (periodData.wind > 35) return 'mdi-weather-windy';
   if (periodData.rain > 20) return 'mdi-weather-partly-cloudy';
   return 'mdi-weather-sunny';
+}
+
+const getStravaTypeLabel = (type) => {
+  const labels = {
+    Ride: 'Vélo de Route',
+    GravelRide: 'Gravel',
+    MountainBikeRide: 'VTT',
+    EBikeRide: 'Vélo Électrique',
+    Run: 'Course à pied',
+    TrailRun: 'Trail',
+    Walk: 'Marche',
+    Hike: 'Randonnée'
+  }
+  return labels[type] || type
 }
 
 const getShortDayName = (dateString) => {
@@ -1465,6 +1481,20 @@ const fetchForecast = async (useCache = true) => {
               </div>
             </div>
             <div class="input-group">
+              <label>Activité Strava correspondante :</label>
+              <select v-model="activityForm.stravaSportType" class="favorites-select" style="max-width: 100%; width: 100%;">
+                <option value="">Aucune (Plein air général)</option>
+                <option value="Ride">Vélo de Route (Ride)</option>
+                <option value="GravelRide">Gravel (GravelRide)</option>
+                <option value="MountainBikeRide">VTT (MountainBikeRide)</option>
+                <option value="EBikeRide">Vélo Électrique (EBikeRide)</option>
+                <option value="Run">Course à pied (Run)</option>
+                <option value="TrailRun">Trail (TrailRun)</option>
+                <option value="Walk">Marche (Walk)</option>
+                <option value="Hike">Randonnée (Hike)</option>
+              </select>
+            </div>
+            <div class="input-group">
               <label>Contraintes :</label>
               <textarea v-model="activityForm.constraints" maxlength="4000" placeholder="Ex: Pas de vent supérieur à 20 km/h, pas de pluie, température minimale..."></textarea>
             </div>
@@ -1484,6 +1514,9 @@ const fetchForecast = async (useCache = true) => {
             <article v-for="activity in userActivities" :key="activity._id" class="activity-card">
               <div class="activity-card-content">
                 <h4><span class="mdi" :class="activity.icon || 'mdi-bike'"></span> {{ activity.label }}</h4>
+                <div v-if="activity.stravaSportType" style="font-size: 0.78rem; font-weight: 600; color: var(--color-strava); margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+                  <span class="mdi mdi-strava"></span> Strava : {{ getStravaTypeLabel(activity.stravaSportType) }}
+                </div>
               </div>
               <div class="activity-actions">
                 <button type="button" @click="editActivity(activity)" title="Modifier">
@@ -1509,6 +1542,7 @@ const fetchForecast = async (useCache = true) => {
         :initial-lat="lat"
         :initial-lon="lon"
         :favorites="favorites"
+        :user-activities="userActivities"
         @update:location="updateGlobalLocation"
       />
     </main>

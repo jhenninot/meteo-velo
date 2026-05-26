@@ -4,6 +4,8 @@ import axios from 'axios'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
+import WeatherChart from './WeatherChart.vue'
+
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerShadow from 'leaflet/dist/images/marker-shadow.png'
@@ -22,7 +24,8 @@ const props = defineProps({
   initialCity: String,
   initialLat: [Number, String],
   initialLon: [Number, String],
-  favorites: { type: Array, default: () => [] }
+  favorites: { type: Array, default: () => [] },
+  userActivities: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits(['update:location'])
@@ -564,6 +567,301 @@ const selectedFavoriteIndex = computed({
   }
 })
 
+// ---- AI analysis state ----
+const selectedRouteForAnalysis = ref(null)
+const isAnalyzing = ref(false)
+const analysisError = ref(null)
+const analysisForecastData = ref(null)
+const analysisFallbackWarning = ref(null)
+const analysisSelectedActivity = ref(null)
+const analysisStartCityName = ref('')
+const analysisFullscreenOpen = ref(false)
+const expandedPeriods = ref({})
+let analysisMapInstance = null
+
+// ---- Weather helpers for AI analysis display ----
+const getWeatherIcon = (periodData) => {
+  if (!periodData) return 'mdi-help-circle-outline';
+  if (periodData.precip >= 2) return 'mdi-weather-pouring';
+  if (periodData.precip > 0 || periodData.rain >= 50) return 'mdi-weather-rainy';
+  if (periodData.wind > 35) return 'mdi-weather-windy';
+  if (periodData.rain > 20) return 'mdi-weather-partly-cloudy';
+  return 'mdi-weather-sunny';
+}
+
+const getShortDayName = (dateString) => {
+  if (!dateString) return '';
+  const [year, month, day] = dateString.split('-');
+  const date = new Date(year, month - 1, day);
+  const formatted = new Intl.DateTimeFormat('fr-FR', { weekday: 'short' }).format(date);
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
+
+const getDailyMinTemp = (day) => {
+  const temps = [];
+  if (day.matin?.temp !== undefined) temps.push(day.matin.temp);
+  if (day.apres_midi?.temp !== undefined) temps.push(day.apres_midi.temp);
+  if (temps.length === 0) return '-';
+  return Math.min(...temps);
+}
+
+const getDailyMaxTemp = (day) => {
+  const temps = [];
+  if (day.matin?.temp !== undefined) temps.push(day.matin.temp);
+  if (day.apres_midi?.temp !== undefined) temps.push(day.apres_midi.temp);
+  if (temps.length === 0) return '-';
+  return Math.max(...temps);
+}
+
+const getDailyWind = (day) => {
+  const winds = [];
+  if (day.matin?.wind !== undefined) winds.push(day.matin.wind);
+  if (day.apres_midi?.wind !== undefined) winds.push(day.apres_midi.wind);
+  if (winds.length === 0) return '-';
+  return Math.max(...winds);
+}
+
+const getDailyGust = (day) => {
+  const gusts = [];
+  if (day.matin?.gust !== undefined) gusts.push(day.matin.gust);
+  if (day.apres_midi?.gust !== undefined) gusts.push(day.apres_midi.gust);
+  if (gusts.length === 0) return '-';
+  return Math.max(...gusts);
+}
+
+const getDailyWindDir = (day) => {
+  if (day.apres_midi?.dir !== undefined) return day.apres_midi.dir;
+  if (day.matin?.dir !== undefined) return day.matin.dir;
+  return 0;
+}
+
+const getDailyPrecip = (day) => {
+  let precip = 0;
+  if (day.matin?.precip) precip += day.matin.precip;
+  if (day.apres_midi?.precip) precip += day.apres_midi.precip;
+  return Number(precip.toFixed(1));
+}
+
+const getDailyRain = (day) => {
+  const rains = [];
+  if (day.matin?.rain !== undefined) rains.push(day.matin.rain);
+  if (day.apres_midi?.rain !== undefined) rains.push(day.apres_midi.rain);
+  if (rains.length === 0) return 0;
+  return Math.max(...rains);
+}
+
+const getDailyWeatherIcon = (day) => {
+  const mainPeriod = day.apres_midi || day.matin;
+  return getWeatherIcon(mainPeriod);
+}
+
+const getWindStyle = (degrees) => ({ transform: `rotate(${degrees}deg)`, display: 'inline-block' })
+
+const critereClass = (period, key) => {
+  const v = period?.criteres?.[key]
+  if (v === 'favorable') return 'metric-critere critere-fav'
+  if (v === 'defavorable') return 'metric-critere critere-def'
+  return 'metric-critere critere-neutre'
+}
+
+const togglePeriod = (dayIndex, periodName) => {
+  const key = `${dayIndex}-${periodName}`
+  expandedPeriods.value[key] = !expandedPeriods.value[key]
+}
+
+const scrollToDay = (index) => {
+  const el = document.getElementById('analysis-day-detail-' + index);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+const findMatchingActivityId = (route) => {
+  const sportType = getSportType(route) // e.g. 'Ride', 'GravelRide', etc.
+  if (!props.userActivities || props.userActivities.length === 0) {
+    return 'none'
+  }
+
+  // First try: match based on the explicitly configured Strava activity type mapping
+  const matchedConfig = props.userActivities.find(act => act.stravaSportType === sportType)
+  if (matchedConfig) return matchedConfig._id
+
+  const normalizedSportType = sportType.toLowerCase()
+
+  // Define keywords mapping to match user activities labels
+  let keywords = []
+  if (normalizedSportType.includes('ride') || normalizedSportType.includes('bike')) {
+    if (normalizedSportType.includes('gravel')) {
+      keywords = ['gravel', 'velo', 'vélo', 'bike']
+    } else if (normalizedSportType.includes('mountain') || normalizedSportType.includes('mtb')) {
+      keywords = ['vtt', 'mountain', 'gravel', 'velo', 'vélo', 'bike']
+    } else {
+      // standard Ride or EBike
+      keywords = ['route', 'cyclisme', 'velo', 'vélo', 'bike']
+    }
+  } else if (normalizedSportType.includes('run') || normalizedSportType.includes('trail')) {
+    keywords = ['course', 'pied', 'run', 'trail', 'jogging']
+  } else if (normalizedSportType.includes('walk') || normalizedSportType.includes('hike')) {
+    keywords = ['marche', 'rando', 'hike', 'walk', 'pied']
+  }
+
+  // Second try: exact or fuzzy keyword matches in order of preference
+  for (const keyword of keywords) {
+    const matched = props.userActivities.find(act => {
+      const label = act.label.toLowerCase()
+      return label.includes(keyword)
+    })
+    if (matched) return matched._id
+  }
+
+  // Third try: if no match, try to match any activity if there's only one
+  if (props.userActivities.length === 1) {
+    return props.userActivities[0]._id
+  }
+
+  return 'none'
+}
+
+const startAnalysisForRoute = async (route) => {
+  if (!route) return
+
+  const matchedActivityId = findMatchingActivityId(route)
+
+  selectedRouteForAnalysis.value = route
+  analysisFullscreenOpen.value = true
+  isAnalyzing.value = true
+  analysisError.value = null
+  analysisForecastData.value = null
+  expandedPeriods.value = {}
+
+  if (matchedActivityId === 'none') {
+    analysisSelectedActivity.value = { _id: 'none', label: 'Plein air général', icon: 'mdi-compass-outline' }
+  } else {
+    analysisSelectedActivity.value = props.userActivities.find(a => a._id === matchedActivityId) || { _id: 'none', label: 'Plein air général', icon: 'mdi-compass-outline' }
+  }
+
+  const startPoint = getPolylineFirstPoint(route.map?.summary_polyline)
+  if (!startPoint) {
+    analysisError.value = "Trace GPS non disponible ou invalide pour cet itinéraire."
+    isAnalyzing.value = false
+    return
+  }
+
+  const [lat, lon] = startPoint
+
+  // Initialize map immediately in the fullscreen view
+  await initAnalysisMap(route)
+
+  // Fetch city name via reverse geocoding
+  analysisStartCityName.value = 'Recherche du lieu...'
+  try {
+    const response = await axios.get(`${props.apiBaseUrl}/api/reverse?lat=${lat}&lon=${lon}`)
+    const features = response.data
+    if (features && features.length > 0) {
+      const properties = features[0].properties
+      analysisStartCityName.value = properties.city || properties.town || properties.village || properties.name || 'Point de départ'
+    } else {
+      analysisStartCityName.value = 'Point de départ'
+    }
+  } catch (err) {
+    console.error("Reverse geocoding error:", err)
+    analysisStartCityName.value = 'Point de départ'
+  }
+
+  // Fetch forecast analysis
+  try {
+    const response = await axios.post(`${props.apiBaseUrl}/api/forecast`, {
+      city: analysisStartCityName.value,
+      lat,
+      lon,
+      activityId: matchedActivityId
+    })
+    analysisForecastData.value = response.data.forecast
+    analysisFallbackWarning.value = response.data.fallbackMessage || ''
+  } catch (err) {
+    console.error("Forecast analysis error:", err)
+    analysisError.value = "Impossible de générer l'analyse météo par l'IA. Veuillez réessayer."
+  } finally {
+    isAnalyzing.value = false
+  }
+}
+
+const initAnalysisMap = async (route) => {
+  if (analysisMapInstance) {
+    try {
+      analysisMapInstance.remove()
+    } catch {}
+    analysisMapInstance = null
+  }
+
+  await nextTick()
+
+  const containerId = 'analysis-fullscreen-map'
+  const container = document.getElementById(containerId)
+  if (!container) return
+
+  if (container._leaflet_id) {
+    container._leaflet_id = null
+  }
+
+  analysisMapInstance = L.map(containerId, { zoomControl: true, scrollWheelZoom: true })
+
+  const standardLayer = L.tileLayer(
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    { attribution: '© OpenStreetMap contributors', maxZoom: 19 }
+  )
+
+  const topoLayer = L.tileLayer(
+    'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    { attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)', maxZoom: 17 }
+  )
+
+  const satelliteLayer = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { attribution: 'Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community', maxZoom: 19 }
+  )
+
+  topoLayer.addTo(analysisMapInstance)
+
+  const baseLayers = {
+    "Standard": standardLayer,
+    "Topographique (Dénivelés)": topoLayer,
+    "Satellite": satelliteLayer
+  }
+  L.control.layers(baseLayers, null, { position: 'bottomleft' }).addTo(analysisMapInstance)
+
+  const points = decodePolyline(route.map?.summary_polyline)
+  if (points.length) {
+    L.polyline(points, { color: '#ffffff', weight: 9, opacity: 0.85 }).addTo(analysisMapInstance)
+    const poly = L.polyline(points, { color: '#FC4C02', weight: 5.5, opacity: 1.0 })
+    poly.addTo(analysisMapInstance)
+
+    L.circleMarker(points[0], { radius: 7, fillColor: '#22c55e', color: '#fff', weight: 2.5, fillOpacity: 1 }).addTo(analysisMapInstance)
+    L.circleMarker(points[points.length - 1], { radius: 7, fillColor: '#ef4444', color: '#fff', weight: 2.5, fillOpacity: 1 }).addTo(analysisMapInstance)
+
+    analysisMapInstance.fitBounds(poly.getBounds(), { padding: [50, 50] })
+  }
+
+  setTimeout(() => {
+    if (analysisMapInstance) {
+      analysisMapInstance.invalidateSize()
+    }
+  }, 250)
+}
+
+const closeAnalysisFullscreen = () => {
+  if (analysisMapInstance) {
+    try {
+      analysisMapInstance.remove()
+    } catch {}
+    analysisMapInstance = null
+  }
+  analysisFullscreenOpen.value = false
+  analysisForecastData.value = null
+  analysisError.value = null
+  selectedRouteForAnalysis.value = null
+}
+
 onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
   if (params.get('strava') === 'success') stravaNotif.value = 'success'
@@ -584,6 +882,11 @@ onUnmounted(() => {
   Object.keys(mapInstances).forEach(k => { try { mapInstances[k].remove() } catch {} })
   if (fullscreenMapInstance) {
     fullscreenMapInstance.remove()
+  }
+  if (analysisMapInstance) {
+    try {
+      analysisMapInstance.remove()
+    } catch {}
   }
 })
 </script>
@@ -886,6 +1189,9 @@ onUnmounted(() => {
                 <a :href="`https://www.strava.com/routes/${route.id}`" target="_blank" class="btn-map-action btn-strava-link" title="Voir sur Strava (nouvel onglet)">
                   <span class="mdi mdi-open-in-new"></span> Voir sur Strava
                 </a>
+                 <button class="btn-map-action btn-analyse" @click.stop="startAnalysisForRoute(route)" title="Analyser cet itinéraire par l'IA">
+                  <span class="mdi mdi-brain"></span> Analyser
+                </button>
                 <button class="btn-map-action" @click.stop="openFullscreenMap(route)" title="Ouvrir la carte en plein écran">
                   <span class="mdi mdi-fullscreen"></span> Plein écran
                 </button>
@@ -925,6 +1231,159 @@ onUnmounted(() => {
         </div>
       </div>
       <div id="fullscreen-map" class="fullscreen-map-container"></div>
+    </div>
+
+    <!-- Modal d'Analyse Plein Écran -->
+    <div v-if="analysisFullscreenOpen && selectedRouteForAnalysis" class="analysis-fullscreen-modal">
+      <div class="fullscreen-header">
+        <div class="fullscreen-title-group">
+          <div class="fullscreen-type-badge">
+            <span class="mdi mdi-brain"></span>
+          </div>
+          <div class="fullscreen-title-main">
+            <h2>Analyse IA : {{ selectedRouteForAnalysis.name }}</h2>
+            <span class="fullscreen-date">
+              Départ : <strong>{{ analysisStartCityName }}</strong> | Activité : <strong>{{ analysisSelectedActivity?.label || 'Plein air général' }}</strong>
+            </span>
+          </div>
+        </div>
+        <div class="fullscreen-actions">
+          <button class="btn-fullscreen-close" @click="closeAnalysisFullscreen">
+            <span class="mdi mdi-close"></span> Fermer
+          </button>
+        </div>
+      </div>
+      
+      <div class="analysis-content">
+        <!-- Carte en haut -->
+        <div class="analysis-map-pane">
+          <div id="analysis-fullscreen-map" style="height: 100%; width: 100%;"></div>
+        </div>
+        
+        <!-- Résultats sous la carte -->
+        <div class="analysis-results-pane">
+          <!-- Loading state -->
+          <div v-if="isAnalyzing" class="analysis-loading-state">
+            <span class="mdi mdi-brain mdi-spin loading-brain-icon"></span>
+            <h3>Analyse météo intelligente en cours...</h3>
+            <p>Nous interrogeons les données météo locales au point de départ de votre itinéraire et laissons l'IA évaluer vos conditions.</p>
+          </div>
+          
+          <!-- Error state -->
+          <div v-else-if="analysisError" class="analysis-error-state">
+            <span class="mdi mdi-alert-circle error-icon"></span>
+            <h3>Une erreur est survenue</h3>
+            <p>{{ analysisError }}</p>
+            <button class="btn-retry" @click="startAnalysisForRoute(selectedRouteForAnalysis)">
+              <span class="mdi mdi-refresh"></span> Réessayer
+            </button>
+          </div>
+          
+          <!-- Success state / Forecast Data -->
+          <div v-else-if="analysisForecastData" class="analysis-success-state">
+            <div v-if="analysisFallbackWarning" class="fallback-msg" style="margin-bottom: 20px;">
+              <span class="mdi mdi-alert"></span> {{ analysisFallbackWarning }}
+            </div>
+
+            <h3 class="analysis-section-title">
+              <span class="mdi mdi-weather-partly-cloudy"></span> Prévisions et Analyse à 7 jours
+            </h3>
+
+            <!-- 7-day scroll summary -->
+            <div class="daily-summary-container">
+              <div class="daily-summary-scroll">
+                <div v-for="(day, idx) in analysisForecastData" :key="'analysis-sum-'+idx" class="daily-summary-card" @click="scrollToDay(idx)">
+                  <div class="summary-day">{{ getShortDayName(day.date) }}</div>
+                  <div class="summary-icon"><span class="mdi" :class="getDailyWeatherIcon(day)"></span></div>
+                  <div class="summary-temps">
+                    <span class="temp-min">{{ getDailyMinTemp(day) }}°</span> /
+                    <span class="temp-max">{{ getDailyMaxTemp(day) }}°</span>
+                  </div>
+                  <div class="summary-wind">
+                    <span class="mdi mdi-navigation wind-icon" :style="getWindStyle(getDailyWindDir(day))"></span>
+                    {{ getDailyWind(day) }} km/h
+                  </div>
+                  <div class="summary-gust">
+                    <span class="mdi mdi-weather-windy" title="Rafales"></span> {{ getDailyGust(day) }} km/h
+                  </div>
+                  <div class="summary-precip">
+                    <span class="mdi mdi-weather-pouring" title="Précipitations"></span> {{ getDailyPrecip(day) }} mm
+                  </div>
+                  <div class="summary-rain">
+                    <span class="mdi mdi-water-percent" title="Probabilité de pluie"></span> {{ getDailyRain(day) }}%
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Detailed Grid -->
+            <section class="results-section" style="margin-top: 24px; padding: 0;">
+              <div class="forecast-grid">
+                <div v-for="(day, idx) in analysisForecastData" :key="'analysis-detail-'+idx" class="day-card" :id="'analysis-day-detail-' + idx">
+                  <h3><span class="mdi mdi-calendar"></span> {{ formatDate(day.date) }}</h3>
+                  <div class="day-split">
+                    <!-- Morning -->
+                    <div v-if="day.matin" class="half-day" :class="[day.matin.favorable ? 'favorable' : 'defavorable', { 'is-expanded': expandedPeriods[`${idx}-matin`] }]" @click="togglePeriod(idx, 'matin')">
+                      <span
+                        class="bike-day-indicator"
+                        :class="day.matin.favorable ? 'bike-day-favorable' : 'bike-day-defavorable'"
+                        :title="day.matin.favorable ? 'Conditions favorables' : 'Conditions défavorables'"
+                      >
+                        <span class="mdi bike-day-indicator__icon" :class="analysisSelectedActivity?.icon || 'mdi-compass-outline'"></span>
+                      </span>
+                      <h4 class="half-day-heading">
+                        <span class="mdi weather-main-icon" :class="getWeatherIcon(day.matin)"></span>
+                        <span class="half-day-heading-label">Matin</span>
+                      </h4>
+                      <div class="metrics">
+                        <span :class="critereClass(day.matin, 'temperature')"><span class="mdi mdi-thermometer"></span> {{ day.matin.temp }}°C</span>
+                        <span :class="critereClass(day.matin, 'pluie')"><span class="mdi mdi-water-percent"></span> {{ day.matin.rain }}%</span>
+                        <span :class="critereClass(day.matin, 'precipitations')"><span class="mdi mdi-weather-pouring"></span> {{ day.matin.precip }}mm</span>
+                        <span :class="critereClass(day.matin, 'vent')"><span class="mdi mdi-navigation wind-icon" :style="getWindStyle(day.matin.dir)"></span> {{ day.matin.wind }}km/h</span>
+                        <span :class="critereClass(day.matin, 'rafales')"><span class="mdi mdi-weather-windy" title="Rafales"></span> {{ day.matin.gust }}km/h</span>
+                        <span :class="critereClass(day.matin, 'uv')"><span class="mdi mdi-sun-wireless"></span> UV {{ day.matin.uv }}</span>
+                      </div>
+                      <div class="ia-advice">{{ day.matin.conseil }}</div>
+                      
+                      <div v-if="expandedPeriods[`${idx}-matin`] && day.matin.hourly" @click.stop>
+                        <WeatherChart :hourlyData="day.matin.hourly" :theme="theme" />
+                      </div>
+                    </div>
+
+                    <!-- Afternoon -->
+                    <div v-if="day.apres_midi" class="half-day" :class="[day.apres_midi.favorable ? 'favorable' : 'defavorable', { 'is-expanded': expandedPeriods[`${idx}-apres_midi`] }]" @click="togglePeriod(idx, 'apres_midi')">
+                      <span
+                        class="bike-day-indicator"
+                        :class="day.apres_midi.favorable ? 'bike-day-favorable' : 'bike-day-defavorable'"
+                        :title="day.apres_midi.favorable ? 'Conditions favorables' : 'Conditions défavorables'"
+                      >
+                        <span class="mdi bike-day-indicator__icon" :class="analysisSelectedActivity?.icon || 'mdi-compass-outline'"></span>
+                      </span>
+                      <h4 class="half-day-heading">
+                        <span class="mdi weather-main-icon" :class="getWeatherIcon(day.apres_midi)"></span>
+                        <span class="half-day-heading-label">Après-midi</span>
+                      </h4>
+                      <div class="metrics">
+                        <span :class="critereClass(day.apres_midi, 'temperature')"><span class="mdi mdi-thermometer"></span> {{ day.apres_midi.temp }}°C</span>
+                        <span :class="critereClass(day.apres_midi, 'pluie')"><span class="mdi mdi-water-percent"></span> {{ day.apres_midi.rain }}%</span>
+                        <span :class="critereClass(day.apres_midi, 'precipitations')"><span class="mdi mdi-weather-pouring"></span> {{ day.apres_midi.precip }}mm</span>
+                        <span :class="critereClass(day.apres_midi, 'vent')"><span class="mdi mdi-navigation wind-icon" :style="getWindStyle(day.apres_midi.dir)"></span> {{ day.apres_midi.wind }}km/h</span>
+                        <span :class="critereClass(day.apres_midi, 'rafales')"><span class="mdi mdi-weather-windy" title="Rafales"></span> {{ day.apres_midi.gust }}km/h</span>
+                        <span :class="critereClass(day.apres_midi, 'uv')"><span class="mdi mdi-sun-wireless"></span> UV {{ day.apres_midi.uv }}</span>
+                      </div>
+                      <div class="ia-advice">{{ day.apres_midi.conseil }}</div>
+                      
+                      <div v-if="expandedPeriods[`${idx}-apres_midi`] && day.apres_midi.hourly" @click.stop>
+                        <WeatherChart :hourlyData="day.apres_midi.hourly" :theme="theme" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>

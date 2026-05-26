@@ -94,7 +94,8 @@ const userSchema = new mongoose.Schema({
   activities: [{
     label: { type: String, required: true, trim: true, maxlength: 80 },
     icon: { type: String, default: 'mdi-bike', trim: true, maxlength: 60 },
-    constraints: { type: String, default: '', trim: true, maxlength: 4000 }
+    constraints: { type: String, default: '', trim: true, maxlength: 4000 },
+    stravaSportType: { type: String, default: '', trim: true }
   }],
   favorites: [{
     city: { type: String, required: true, trim: true },
@@ -574,6 +575,7 @@ app.post('/api/user/activities', verifyToken, async (req, res) => {
   const label = typeof req.body.label === 'string' ? req.body.label.trim() : '';
   const icon = normalizeMdiIcon(req.body.icon);
   const constraints = typeof req.body.constraints === 'string' ? req.body.constraints.trim() : '';
+  const stravaSportType = typeof req.body.stravaSportType === 'string' ? req.body.stravaSportType.trim() : '';
 
   if (!label) return res.status(400).json({ error: "Le libellé est obligatoire" });
   if (label.length > 80) return res.status(400).json({ error: "Le libellé doit contenir 80 caractères maximum" });
@@ -582,7 +584,7 @@ app.post('/api/user/activities', verifyToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
-    user.activities.push({ label, icon, constraints });
+    user.activities.push({ label, icon, constraints, stravaSportType });
     await user.save();
     res.status(201).json(user.activities[user.activities.length - 1]);
   } catch (err) {
@@ -594,6 +596,7 @@ app.put('/api/user/activities/:activityId', verifyToken, async (req, res) => {
   const label = typeof req.body.label === 'string' ? req.body.label.trim() : '';
   const icon = normalizeMdiIcon(req.body.icon);
   const constraints = typeof req.body.constraints === 'string' ? req.body.constraints.trim() : '';
+  const stravaSportType = typeof req.body.stravaSportType === 'string' ? req.body.stravaSportType.trim() : '';
 
   if (!label) return res.status(400).json({ error: "Le libellé est obligatoire" });
   if (label.length > 80) return res.status(400).json({ error: "Le libellé doit contenir 80 caractères maximum" });
@@ -607,6 +610,7 @@ app.put('/api/user/activities/:activityId', verifyToken, async (req, res) => {
     activity.label = label;
     activity.icon = icon;
     activity.constraints = constraints;
+    activity.stravaSportType = stravaSportType;
     await user.save();
     res.json(activity);
   } catch (err) {
