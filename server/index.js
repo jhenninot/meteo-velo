@@ -119,6 +119,23 @@ const systemSettingSchema = new mongoose.Schema({
 });
 const SystemSetting = mongoose.model('SystemSetting', systemSettingSchema);
 
+const routeSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  name: { type: String, required: true },
+  description: { type: String, default: '' },
+  distance: { type: Number, default: 0 },
+  elevation_gain: { type: Number, default: 0 },
+  estimated_moving_time: { type: Number, default: 0 },
+  sport_type: { type: String, default: '' },
+  map: {
+    summary_polyline: { type: String, default: '' }
+  },
+  source: { type: String, default: 'imported' },
+  created_at: { type: Date, default: Date.now },
+  updated_at: { type: Date, default: Date.now }
+});
+const Route = mongoose.model('Route', routeSchema);
+
 // --- HELPER STRAVA : Rafraîchit le token si expiré ---
 const ensureStravaToken = async (user) => {
   const now = Math.floor(Date.now() / 1000);
@@ -890,6 +907,83 @@ app.delete('/api/strava/disconnect', verifyToken, async (req, res) => {
     res.json({ message: 'Compte Strava délié' });
   } catch (err) {
     res.status(500).json({ error: 'Erreur lors de la déconnexion Strava' });
+  }
+});
+
+// --- ROUTES POUR LES PARCOURS IMPORTÉS (GPX) ---
+
+// 1. Récupérer toutes les routes importées
+app.get('/api/routes', verifyToken, async (req, res) => {
+  try {
+    const routes = await Route.find({ userId: req.user.id }).sort({ created_at: -1 });
+    res.json(routes);
+  } catch (err) {
+    console.error('Error fetching imported routes:', err.message);
+    res.status(500).json({ error: 'Erreur lors de la récupération des parcours importés' });
+  }
+});
+
+// 2. Créer une nouvelle route importée
+app.post('/api/routes', verifyToken, async (req, res) => {
+  const { name, description, distance, elevation_gain, estimated_moving_time, sport_type, map } = req.body;
+  if (!name) {
+    return res.status(400).json({ error: 'Le nom du parcours est obligatoire' });
+  }
+  try {
+    const newRoute = new Route({
+      userId: req.user.id,
+      name,
+      description: description || '',
+      distance: distance || 0,
+      elevation_gain: elevation_gain || 0,
+      estimated_moving_time: estimated_moving_time || 0,
+      sport_type: sport_type || '',
+      map: {
+        summary_polyline: map?.summary_polyline || ''
+      },
+      source: 'imported'
+    });
+    await newRoute.save();
+    res.status(201).json(newRoute);
+  } catch (err) {
+    console.error('Error creating imported route:', err.message);
+    res.status(500).json({ error: 'Erreur lors de la création du parcours' });
+  }
+});
+
+// 3. Supprimer une route importée
+app.delete('/api/routes/:id', verifyToken, async (req, res) => {
+  try {
+    const route = await Route.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
+    if (!route) {
+      return res.status(404).json({ error: 'Parcours introuvable ou non autorisé' });
+    }
+    res.json({ message: 'Parcours supprimé avec succès' });
+  } catch (err) {
+    console.error('Error deleting route:', err.message);
+    res.status(500).json({ error: 'Erreur lors de la suppression du parcours' });
+  }
+});
+
+// 4. Modifier une route importée
+app.put('/api/routes/:id', verifyToken, async (req, res) => {
+  const { name, description, sport_type, estimated_moving_time } = req.body;
+  if (!name) {
+    return res.status(400).json({ error: 'Le nom du parcours est obligatoire' });
+  }
+  try {
+    const route = await Route.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.id },
+      { name, description: description || '', sport_type: sport_type || '', estimated_moving_time: estimated_moving_time || 0 },
+      { new: true }
+    );
+    if (!route) {
+      return res.status(404).json({ error: 'Parcours introuvable ou non autorisé' });
+    }
+    res.json(route);
+  } catch (err) {
+    console.error('Error updating route:', err.message);
+    res.status(500).json({ error: 'Erreur lors de la modification du parcours' });
   }
 });
 

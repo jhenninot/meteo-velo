@@ -31,7 +31,14 @@ const props = defineProps({
 const emit = defineEmits(['update:location'])
 
 const stravaStatus = ref({ connected: false, athleteName: null, athleteProfile: null })
-const routes = ref([])
+const stravaRoutes = ref([])
+const importedRoutes = ref([])
+const selectedSource = ref('all')
+const routes = computed(() => {
+  const sList = stravaRoutes.value.map(r => ({ ...r, source: 'strava' }))
+  const iList = importedRoutes.value.map(r => ({ ...r, id: r._id, source: 'imported' }))
+  return [...sList, ...iList]
+})
 const loading = ref(false)
 const loadingConnect = ref(false)
 const error = ref(null)
@@ -84,9 +91,14 @@ const availableTypes = computed(() => {
 })
 
 const displayedRoutes = computed(() => {
+  let list = routes.value
+  if (selectedSource.value !== 'all') {
+    list = list.filter(r => r.source === selectedSource.value)
+  }
+
   let filtered = activeTypeFilters.value.length === 0
-    ? routes.value
-    : routes.value.filter(r => activeTypeFilters.value.includes(getSportType(r)))
+    ? list
+    : list.filter(r => activeTypeFilters.value.includes(getSportType(r)))
 
   if (enableGeoFilter.value && props.initialLat !== null && props.initialLon !== null) {
     filtered = filtered.filter(r => {
@@ -229,6 +241,9 @@ const getTypeLabel = (type) => {
   return labels[type] || type
 }
 const getTypeIcon = (type) => {
+  const userAct = props.userActivities.find(act => act.label === type)
+  if (userAct && userAct.icon) return userAct.icon
+
   const icons = {
     Ride: 'mdi-road-variant',
     GravelRide: 'mdi-terrain',
@@ -265,11 +280,25 @@ const fetchRoutes = async () => {
   loading.value = true
   error.value = null
   try {
-    const { data } = await axios.get(`${props.apiBaseUrl}/api/strava/routes`)
-    routes.value = data
+    const importedRes = await axios.get(`${props.apiBaseUrl}/api/routes`)
+    importedRoutes.value = importedRes.data
+
+    if (stravaStatus.value.connected) {
+      try {
+        const stravaRes = await axios.get(`${props.apiBaseUrl}/api/strava/routes`)
+        stravaRoutes.value = stravaRes.data
+      } catch (stravaErr) {
+        console.error('Error fetching Strava routes', stravaErr)
+        error.value = 'Impossible de charger les parcours Strava.'
+      }
+    } else {
+      stravaRoutes.value = []
+    }
   } catch (e) {
-    error.value = 'Impossible de charger les parcours Strava.'
-  } finally { loading.value = false }
+    error.value = 'Impossible de charger les parcours.'
+  } finally {
+    loading.value = false
+  }
 }
 
 const connectStrava = async () => {
@@ -288,7 +317,7 @@ const disconnectStrava = async () => {
   try {
     await axios.delete(`${props.apiBaseUrl}/api/strava/disconnect`)
     stravaStatus.value = { connected: false, athleteName: null, athleteProfile: null }
-    routes.value = []
+    stravaRoutes.value = []
     Object.keys(mapInstances).forEach(k => { try { mapInstances[k].remove() } catch {} ; delete mapInstances[k] })
   } catch (e) { error.value = 'Erreur lors de la déconnexion.' }
 }
@@ -682,7 +711,11 @@ const findMatchingActivityId = (route) => {
     return 'none'
   }
 
-  // First try: match based on the explicitly configured Strava activity type mapping
+  // First try: match directly by activity label (for imported routes)
+  const matchedLabel = props.userActivities.find(act => act.label.toLowerCase() === sportType.toLowerCase())
+  if (matchedLabel) return matchedLabel._id
+
+  // Second try: match based on the explicitly configured Strava activity type mapping
   const matchedConfig = props.userActivities.find(act => act.stravaSportType === sportType)
   if (matchedConfig) return matchedConfig._id
 
@@ -862,6 +895,510 @@ const closeAnalysisFullscreen = () => {
   selectedRouteForAnalysis.value = null
 }
 
+// ---- GPX Import state and methods ----
+const showImportModal = ref(false)
+const isEditing = ref(false)
+const editingRouteId = ref(null)
+const gpxFile = ref(null)
+const importName = ref('')
+const importDescription = ref('')
+const importActivityId = ref('')
+const importError = ref(null)
+const isImporting = ref(false)
+const importMetrics = ref(null)
+
+// Duration & speed estimation states
+const importHasTimestamps = ref(false)
+const importDuration = ref(0)
+const durationCalcMode = ref('speed')
+const importSpeed = ref(25)
+const importPaceMin = ref(6)
+const importPaceSec = ref(0)
+const isInitializingEdit = ref(false)
+
+const computedImportDuration = computed(() => {
+  if (importHasTimestamps.value) {
+    return importDuration.value
+  }
+  
+  if (!importMetrics.value || !importMetrics.value.distance) return 0
+  
+  const distanceKm = importMetrics.value.distance / 1000
+  
+  if (durationCalcMode.value === 'speed') {
+    const speed = parseFloat(importSpeed.value)
+    if (isNaN(speed) || speed <= 0) return 0
+    return Math.round((distanceKm / speed) * 3600)
+  } else {
+    const min = parseInt(importPaceMin.value, 10) || 0
+    const sec = parseInt(importPaceSec.value, 10) || 0
+    const paceSecondsPerKm = min * 60 + sec
+    if (paceSecondsPerKm <= 0) return 0
+    return Math.round(distanceKm * paceSecondsPerKm)
+  }
+})
+
+const handleFileChange = async (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+
+  importError.value = null
+  importMetrics.value = null
+  gpxFile.value = file
+
+  try {
+    const parsed = await parseGPX(file)
+    importName.value = parsed.name
+    importDescription.value = parsed.description
+    
+    if (props.userActivities && props.userActivities.length > 0) {
+      importActivityId.value = props.userActivities[0]._id
+    } else {
+      importActivityId.value = ''
+    }
+
+    importDuration.value = parsed.estimated_moving_time
+    importHasTimestamps.value = parsed.has_timestamps
+
+    importMetrics.value = {
+      distance: parsed.distance,
+      elevation_gain: parsed.elevation_gain,
+      pointsCount: parsed.points.length,
+      points: parsed.points.map(p => [p.lat, p.lon])
+    }
+  } catch (err) {
+    importError.value = err.message || "Erreur de lecture du fichier GPX."
+  }
+}
+
+// Watch associated activity to update default speed/pace
+watch(importActivityId, (newId) => {
+  if (isInitializingEdit.value) return
+  const selectedAct = props.userActivities.find(a => a._id === newId)
+  if (!selectedAct) return
+
+  const label = selectedAct.label.toLowerCase()
+  if (label.includes('vtt') || label.includes('mountain')) {
+    importSpeed.value = 15
+    durationCalcMode.value = 'speed'
+  } else if (label.includes('gravel') || label.includes('terrain')) {
+    importSpeed.value = 20
+    durationCalcMode.value = 'speed'
+  } else if (label.includes('vélo') || label.includes('velo') || label.includes('cyclisme') || label.includes('ride') || label.includes('bike')) {
+    importSpeed.value = 25
+    durationCalcMode.value = 'speed'
+  } else if (label.includes('cour') || label.includes('run') || label.includes('trail') || label.includes('jog')) {
+    durationCalcMode.value = 'pace'
+    importPaceMin.value = 6
+    importPaceSec.value = 0
+  } else if (label.includes('march') || label.includes('walk') || label.includes('rando') || label.includes('hike')) {
+    durationCalcMode.value = 'pace'
+    importPaceMin.value = 12
+    importPaceSec.value = 0
+  }
+})
+
+const samplePoints = (points, maxSamples = 100) => {
+  if (points.length <= maxSamples) return points
+  const sampled = []
+  const step = (points.length - 1) / (maxSamples - 1)
+  for (let i = 0; i < maxSamples; i++) {
+    const idx = Math.min(Math.round(i * step), points.length - 1)
+    sampled.push(points[idx])
+  }
+  return sampled
+}
+
+const parseGPX = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      try {
+        const content = e.target.result
+        const parser = new DOMParser()
+        const xmlDoc = parser.parseFromString(content, "text/xml")
+        
+        const parseError = xmlDoc.getElementsByTagName("parsererror")
+        if (parseError.length > 0) {
+          reject(new Error("Fichier GPX invalide ou corrompu"))
+          return
+        }
+
+        const trkpts = xmlDoc.getElementsByTagName("trkpt")
+        if (trkpts.length === 0) {
+          reject(new Error("Aucun point de tracé (trkpt) trouvé dans le fichier GPX"))
+          return
+        }
+
+        const points = []
+        let totalDistance = 0
+        let elevationGain = 0
+        let lastPt = null
+        let hasTimestamps = true
+
+        for (let i = 0; i < trkpts.length; i++) {
+          const lat = parseFloat(trkpts[i].getAttribute("lat"))
+          const lon = parseFloat(trkpts[i].getAttribute("lon"))
+          const eleEl = trkpts[i].getElementsByTagName("ele")[0]
+          const ele = eleEl ? parseFloat(eleEl.textContent) : null
+          
+          const timeEl = trkpts[i].getElementsByTagName("time")[0]
+          const timeStr = timeEl ? timeEl.textContent : null
+          const time = timeStr ? new Date(timeStr).getTime() : null
+
+          if (!time) {
+            hasTimestamps = false
+          }
+          
+          if (isNaN(lat) || isNaN(lon)) continue
+
+          const pt = { lat, lon, ele, time }
+          points.push(pt)
+
+          if (lastPt) {
+            const dist = getHaversineDistance(lastPt.lat, lastPt.lon, pt.lat, pt.lon) * 1000
+            totalDistance += dist
+
+            if (lastPt.ele !== null && pt.ele !== null) {
+              const diff = pt.ele - lastPt.ele
+              if (diff > 0) {
+                elevationGain += diff
+              }
+            }
+          }
+          lastPt = pt
+        }
+
+        if (points.length === 0) {
+          reject(new Error("Aucun point de tracé valide trouvé dans le GPX"))
+          return
+        }
+
+        // Check if GPX actually had elevation data
+        const hasElevation = points.some(p => p.ele !== null && !isNaN(p.ele))
+        let finalElevationGain = elevationGain
+
+        if (!hasElevation) {
+          try {
+            const sampled = samplePoints(points, 100)
+            const lats = sampled.map(p => p.lat).join(',')
+            const lons = sampled.map(p => p.lon).join(',')
+            const response = await axios.get(`https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`)
+            
+            if (response.data && Array.isArray(response.data.elevation)) {
+              const elevations = response.data.elevation
+              let gain = 0
+              for (let j = 1; j < elevations.length; j++) {
+                const diff = elevations[j] - elevations[j - 1]
+                if (diff > 0) {
+                  gain += diff
+                }
+              }
+              finalElevationGain = gain
+            }
+          } catch (apiErr) {
+            console.error("Failed to fetch elevation from Open-Meteo:", apiErr)
+            finalElevationGain = 0
+          }
+        }
+
+        let calculatedDuration = 0
+        if (hasTimestamps && points.length > 1 && points[0].time && points[points.length - 1].time) {
+          calculatedDuration = Math.round((points[points.length - 1].time - points[0].time) / 1000)
+        }
+
+        let name = ""
+        const metaName = xmlDoc.querySelector("metadata > name")
+        const trkName = xmlDoc.querySelector("trk > name")
+        if (metaName && metaName.textContent) {
+          name = metaName.textContent.trim()
+        } else if (trkName && trkName.textContent) {
+          name = trkName.textContent.trim()
+        } else {
+          name = file.name.replace(/\.[^/.]+$/, "")
+        }
+
+        let description = ""
+        const metaDesc = xmlDoc.querySelector("metadata > desc")
+        const trkDesc = xmlDoc.querySelector("trk > desc")
+        if (metaDesc && metaDesc.textContent) {
+          description = metaDesc.textContent.trim()
+        } else if (trkDesc && trkDesc.textContent) {
+          description = trkDesc.textContent.trim()
+        }
+
+        resolve({
+          name,
+          description,
+          distance: totalDistance,
+          elevation_gain: finalElevationGain,
+          estimated_moving_time: calculatedDuration,
+          has_timestamps: hasTimestamps && calculatedDuration > 0,
+          points
+        })
+      } catch (err) {
+        reject(err)
+      }
+    }
+    reader.onerror = () => reject(new Error("Erreur de lecture du fichier"))
+    reader.readAsText(file)
+  })
+}
+
+function encodePolyline(points) {
+  let result = []
+  let lastLat = 0
+  let lastLng = 0
+
+  function encodeValue(val) {
+    val = Math.round(val * 1e5)
+    val = (val < 0) ? ~(val << 1) : (val << 1)
+    let chunks = []
+    while (val >= 0x20) {
+      chunks.push((0x20 | (val & 0x1f)) + 63)
+      val >>= 5
+    }
+    chunks.push(val + 63)
+    return String.fromCharCode(...chunks)
+  }
+
+  for (let i = 0; i < points.length; i++) {
+    const lat = points[i][0]
+    const lng = points[i][1]
+    result.push(encodeValue(lat - lastLat))
+    result.push(encodeValue(lng - lastLng))
+    lastLat = lat
+    lastLng = lng
+  }
+
+  return result.join('')
+}
+
+const submitImport = async () => {
+  if (!importName.value.trim()) {
+    importError.value = "Le nom du parcours est obligatoire."
+    return
+  }
+  if (!importActivityId.value) {
+    importError.value = "Veuillez associer un type d'activité."
+    return
+  }
+  if (!importMetrics.value || !importMetrics.value.points.length) {
+    importError.value = "Aucun point de tracé valide."
+    return
+  }
+
+  isImporting.value = true
+  importError.value = null
+
+  try {
+    const summaryPolyline = encodePolyline(importMetrics.value.points)
+    const selectedAct = props.userActivities.find(a => a._id === importActivityId.value)
+    const sportType = selectedAct ? selectedAct.label : 'Plein air'
+
+    const payload = {
+      name: importName.value.trim(),
+      description: importDescription.value.trim(),
+      distance: importMetrics.value.distance,
+      elevation_gain: importMetrics.value.elevation_gain,
+      estimated_moving_time: computedImportDuration.value,
+      sport_type: sportType,
+      map: {
+        summary_polyline: summaryPolyline
+      }
+    }
+
+    const { data } = await axios.post(`${props.apiBaseUrl}/api/routes`, payload)
+    importedRoutes.value.unshift(data)
+    closeImportModal()
+  } catch (err) {
+    console.error("Error importing GPX route:", err)
+    importError.value = err.response?.data?.error || "Impossible d'enregistrer le parcours."
+  } finally {
+    isImporting.value = false
+  }
+}
+
+const openImportModal = () => {
+  isEditing.value = false
+  isInitializingEdit.value = false
+  editingRouteId.value = null
+  showImportModal.value = true
+  gpxFile.value = null
+  importName.value = ''
+  importDescription.value = ''
+  importActivityId.value = ''
+  importError.value = null
+  importMetrics.value = null
+  importHasTimestamps.value = false
+  importDuration.value = 0
+  durationCalcMode.value = 'speed'
+  importSpeed.value = 25
+  importPaceMin.value = 6
+  importPaceSec.value = 0
+}
+
+const closeImportModal = () => {
+  showImportModal.value = false
+  isEditing.value = false
+  isInitializingEdit.value = false
+  editingRouteId.value = null
+  gpxFile.value = null
+  importName.value = ''
+  importDescription.value = ''
+  importActivityId.value = ''
+  importError.value = null
+  importMetrics.value = null
+  importHasTimestamps.value = false
+  importDuration.value = 0
+  durationCalcMode.value = 'speed'
+  importSpeed.value = 25
+  importPaceMin.value = 6
+  importPaceSec.value = 0
+}
+
+const openEditModal = (route) => {
+  isInitializingEdit.value = true
+  isEditing.value = true
+  editingRouteId.value = route.id || route._id
+  showImportModal.value = true
+  gpxFile.value = null
+  importName.value = route.name
+  importDescription.value = route.description || ''
+  
+  // Find matching user activity ID by sport_type
+  const matchedAct = props.userActivities.find(a => a.label === route.sport_type)
+  if (matchedAct) {
+    importActivityId.value = matchedAct._id
+  } else if (props.userActivities.length > 0) {
+    importActivityId.value = props.userActivities[0]._id
+  } else {
+    importActivityId.value = ''
+  }
+  
+  importError.value = null
+
+  // Populate importMetrics with route data to allow duration calculation/editing
+  importMetrics.value = {
+    distance: route.distance || 0,
+    elevation_gain: route.elevation_gain || 0,
+    pointsCount: route.map?.summary_polyline ? decodePolyline(route.map.summary_polyline).length : 0,
+    points: route.map?.summary_polyline ? decodePolyline(route.map.summary_polyline) : []
+  }
+
+  importHasTimestamps.value = false
+  importDuration.value = route.estimated_moving_time || 0
+
+  // Set durationCalcMode based on activity type
+  const selectedAct = props.userActivities.find(a => a._id === importActivityId.value)
+  if (selectedAct) {
+    const label = selectedAct.label.toLowerCase()
+    if (label.includes('cour') || label.includes('run') || label.includes('trail') || label.includes('jog') ||
+        label.includes('march') || label.includes('walk') || label.includes('rando') || label.includes('hike')) {
+      durationCalcMode.value = 'pace'
+    } else {
+      durationCalcMode.value = 'speed'
+    }
+  } else {
+    durationCalcMode.value = 'speed'
+  }
+
+  // Back-calculate speed/pace from existing estimated_moving_time and distance
+  if (route.estimated_moving_time && route.distance) {
+    const distanceKm = route.distance / 1000
+    const durationHours = route.estimated_moving_time / 3600
+    
+    // Calculate speed
+    const calculatedSpeed = distanceKm / durationHours
+    importSpeed.value = parseFloat(calculatedSpeed.toFixed(1))
+
+    // Calculate pace
+    const totalPaceSeconds = route.estimated_moving_time / distanceKm
+    importPaceMin.value = Math.floor(totalPaceSeconds / 60)
+    importPaceSec.value = Math.round(totalPaceSeconds % 60)
+  } else {
+    // If no estimated moving time, set default calc mode/speed/pace manually since watcher is bypassed
+    if (selectedAct) {
+      const label = selectedAct.label.toLowerCase()
+      if (label.includes('vtt') || label.includes('mountain')) {
+        importSpeed.value = 15
+      } else if (label.includes('gravel') || label.includes('terrain')) {
+        importSpeed.value = 20
+      } else if (label.includes('vélo') || label.includes('velo') || label.includes('cyclisme') || label.includes('ride') || label.includes('bike')) {
+        importSpeed.value = 25
+      } else if (label.includes('cour') || label.includes('run') || label.includes('trail') || label.includes('jog')) {
+        importPaceMin.value = 6
+        importPaceSec.value = 0
+      } else if (label.includes('march') || label.includes('walk') || label.includes('rando') || label.includes('hike')) {
+        importPaceMin.value = 12
+        importPaceSec.value = 0
+      }
+    }
+  }
+
+  nextTick(() => {
+    isInitializingEdit.value = false
+  })
+}
+
+const submitEdit = async () => {
+  if (!importName.value.trim()) {
+    importError.value = "Le nom du parcours est obligatoire."
+    return
+  }
+  if (!importActivityId.value) {
+    importError.value = "Veuillez associer un type d'activité."
+    return
+  }
+
+  isImporting.value = true
+  importError.value = null
+
+  try {
+    const selectedAct = props.userActivities.find(a => a._id === importActivityId.value)
+    const sportType = selectedAct ? selectedAct.label : 'Plein air'
+
+    const payload = {
+      name: importName.value.trim(),
+      description: importDescription.value.trim(),
+      sport_type: sportType,
+      estimated_moving_time: computedImportDuration.value
+    }
+
+    const { data } = await axios.put(`${props.apiBaseUrl}/api/routes/${editingRouteId.value}`, payload)
+    
+    // Update route in local lists
+    importedRoutes.value = importedRoutes.value.map(r => r._id === editingRouteId.value ? data : r)
+    
+    closeImportModal()
+  } catch (err) {
+    console.error("Error editing GPX route:", err)
+    importError.value = err.response?.data?.error || "Impossible de modifier le parcours."
+  } finally {
+    isImporting.value = false
+  }
+}
+
+const deleteImportedRoute = async (routeId) => {
+  if (!confirm("Voulez-vous vraiment supprimer ce parcours importé ?")) return
+  try {
+    await axios.delete(`${props.apiBaseUrl}/api/routes/${routeId}`)
+    importedRoutes.value = importedRoutes.value.filter(r => r._id !== routeId)
+    if (expandedId.value === routeId) {
+      expandedId.value = null
+    }
+    if (mapInstances[routeId]) {
+      try {
+        mapInstances[routeId].remove()
+      } catch {}
+      delete mapInstances[routeId]
+    }
+  } catch (err) {
+    console.error("Error deleting route:", err)
+    alert("Impossible de supprimer le parcours.")
+  }
+}
+
 onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
   if (params.get('strava') === 'success') stravaNotif.value = 'success'
@@ -873,9 +1410,7 @@ onMounted(async () => {
   }
 
   await fetchStatus()
-  if (stravaStatus.value.connected) {
-    await fetchRoutes()
-  }
+  await fetchRoutes()
 })
 
 onUnmounted(() => {
@@ -904,38 +1439,50 @@ onUnmounted(() => {
       <button @click="stravaNotif = null" class="notif-close">×</button>
     </div>
 
-    <!-- Écran non connecté -->
-    <div v-if="!stravaStatus.connected" class="connect-screen">
-      <div class="connect-card">
-        <div class="strava-logo-wrap">
-          <span class="mdi mdi-map-legend strava-hero-icon"></span>
-        </div>
-        <h2>Vos itinéraires de randonnée et vélo</h2>
-        <p>Visualisez vos parcours créés sur Strava, affichez leurs tracés topographiques et exportez-les.</p>
-        <button class="btn-strava-connect" @click="connectStrava" :disabled="loadingConnect">
-          <span v-if="loadingConnect" class="mdi mdi-loading mdi-spin"></span>
-          <span v-else class="mdi mdi-strava"></span>
-          {{ loadingConnect ? 'Redirection…' : 'Se connecter avec Strava' }}
+    <!-- En-tête de la page des parcours -->
+    <div class="routes-page-header">
+      <div class="header-title-section">
+        <h2><span class="mdi mdi-map-legend"></span> Mes Parcours</h2>
+        <p class="header-subtitle font-size-sm">Gérez et analysez vos tracés GPX importés et vos itinéraires Strava</p>
+      </div>
+      <div class="header-actions-section">
+        <button class="btn-import-gpx" @click="openImportModal" title="Importer un fichier GPX depuis votre ordinateur">
+          <span class="mdi mdi-file-upload-outline"></span> Importer GPX
         </button>
-        <p class="connect-note">Vos itinéraires privés et publics sont accessibles en toute sécurité.</p>
       </div>
     </div>
 
-    <!-- Écran connecté -->
-    <div v-else>
-
-      <!-- En-tête athlète -->
-      <div class="athlete-header">
-        <img v-if="stravaStatus.athleteProfile" :src="stravaStatus.athleteProfile" class="athlete-avatar" alt="avatar" />
-        <span v-else class="mdi mdi-account-circle athlete-avatar-fallback"></span>
-        <div class="athlete-info">
-          <div class="athlete-name">{{ stravaStatus.athleteName }}</div>
-          <div class="athlete-sub">Mes parcours planifiés Strava</div>
+    <!-- Bannière d'invitation Strava si non connecté -->
+    <div v-if="!stravaStatus.connected && !loading" class="strava-promo-banner">
+      <div class="promo-content">
+        <span class="mdi mdi-strava promo-icon"></span>
+        <div class="promo-text">
+          <h4>Connectez votre compte Strava</h4>
+          <p>Synchronisez automatiquement vos itinéraires planifiés Strava pour les analyser avec la météo.</p>
         </div>
-        <button class="btn-disconnect" @click="disconnectStrava" title="Délier Strava">
-          <span class="mdi mdi-link-off"></span> Délier
-        </button>
       </div>
+      <button class="btn-strava-connect-small" @click="connectStrava" :disabled="loadingConnect">
+        <span v-if="loadingConnect" class="mdi mdi-loading mdi-spin"></span>
+        <span v-else class="mdi mdi-link"></span>
+        {{ loadingConnect ? 'Redirection…' : 'Associer mon Strava' }}
+      </button>
+    </div>
+
+    <!-- En-tête athlète si connecté -->
+    <div v-if="stravaStatus.connected" class="athlete-header">
+      <img v-if="stravaStatus.athleteProfile" :src="stravaStatus.athleteProfile" class="athlete-avatar" alt="avatar" />
+      <span v-else class="mdi mdi-account-circle athlete-avatar-fallback"></span>
+      <div class="athlete-info">
+        <div class="athlete-name">{{ stravaStatus.athleteName }}</div>
+        <div class="athlete-sub">Mes parcours planifiés Strava synchronisés</div>
+      </div>
+      <button class="btn-disconnect" @click="disconnectStrava" title="Délier Strava">
+        <span class="mdi mdi-link-off"></span> Délier
+      </button>
+    </div>
+
+    <!-- Contenu principal -->
+    <div>
 
       <!-- Panel de Filtres Avancés -->
       <div v-if="!loading && routes.length" class="search-container geo-filter-panel" style="margin-bottom: 24px;">
@@ -1072,10 +1619,39 @@ onUnmounted(() => {
       <!-- Aucun parcours -->
       <div v-if="!loading && !error && routes.length === 0" class="strava-empty">
         <span class="mdi mdi-map-marker-off strava-empty-icon"></span>
-        <p>Aucun itinéraire trouvé sur votre compte Strava.</p>
+        <p>Aucun itinéraire trouvé. Importez un fichier GPX ou connectez votre compte Strava.</p>
       </div>
 
       <!-- Fin du panneau des filtres avancés (intégré au-dessus) -->
+
+      <!-- Filtres par source -->
+      <div v-if="!loading && routes.length" class="filter-controls">
+        <span class="sort-label"><span class="mdi mdi-source-branch"></span> Source :</span>
+        <div class="sort-buttons">
+          <button
+            class="sort-btn"
+            :class="{ active: selectedSource === 'all' }"
+            @click="selectedSource = 'all'"
+          >
+            <span class="mdi mdi-all-inclusive"></span> Toutes
+          </button>
+          <button
+            class="sort-btn"
+            :class="{ active: selectedSource === 'strava' }"
+            @click="selectedSource = 'strava'"
+            :disabled="!stravaStatus.connected"
+          >
+            <span class="mdi mdi-strava"></span> Strava
+          </button>
+          <button
+            class="sort-btn"
+            :class="{ active: selectedSource === 'imported' }"
+            @click="selectedSource = 'imported'"
+          >
+            <span class="mdi mdi-file-gpx"></span> Importées GPX
+          </button>
+        </div>
+      </div>
 
       <!-- Filtres par type -->
       <div v-if="!loading && routes.length && availableTypes.length > 1" class="filter-controls">
@@ -1151,7 +1727,7 @@ onUnmounted(() => {
           v-for="route in displayedRoutes"
           :key="route.id"
           class="strava-activity-card"
-          :class="{ 'is-expanded': expandedId === route.id }"
+          :class="{ 'is-expanded': expandedId === route.id, 'is-imported': route.source === 'imported' }"
         >
           <!-- En-tête de la carte (cliquable) -->
           <div class="activity-header" @click="toggleRoute(route)">
@@ -1159,7 +1735,15 @@ onUnmounted(() => {
               <span class="mdi" :class="getTypeIcon(getSportType(route))"></span>
             </div>
             <div class="activity-main">
-              <div class="activity-name">{{ route.name }}</div>
+              <div class="activity-name-row" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+                <div class="activity-name" style="margin-bottom: 0;">{{ route.name }}</div>
+                <span v-if="route.source === 'imported'" class="badge-source imported" title="Tracé GPX importé">
+                  <span class="mdi mdi-file-gpx"></span> GPX
+                </span>
+                <span v-else class="badge-source strava" title="Synchronisé depuis Strava">
+                  <span class="mdi mdi-strava"></span> Strava
+                </span>
+              </div>
               <div v-if="route.description" class="activity-date" style="font-size: 0.85rem; opacity: 0.8; margin: 4px 0 10px 0; line-height: 1.4; white-space: normal;">
                 {{ route.description }}
               </div>
@@ -1186,7 +1770,7 @@ onUnmounted(() => {
               <div :id="`strava-map-${route.id}`" class="activity-map"></div>
               <!-- Action Overlay: Voir sur Strava & Plein écran & Exporter GPX -->
               <div class="map-actions-overlay">
-                <a :href="`https://www.strava.com/routes/${route.id}`" target="_blank" class="btn-map-action btn-strava-link" title="Voir sur Strava (nouvel onglet)">
+                <a v-if="route.source === 'strava'" :href="`https://www.strava.com/routes/${route.id}`" target="_blank" class="btn-map-action btn-strava-link" title="Voir sur Strava (nouvel onglet)">
                   <span class="mdi mdi-open-in-new"></span> Voir sur Strava
                 </a>
                  <button class="btn-map-action btn-analyse" @click.stop="startAnalysisForRoute(route)" title="Analyser cet itinéraire par l'IA">
@@ -1197,6 +1781,12 @@ onUnmounted(() => {
                 </button>
                 <button class="btn-map-action" @click.stop="exportToGPX(route)" title="Exporter le parcours en GPX">
                   <span class="mdi mdi-download"></span> Exporter GPX
+                </button>
+                <button v-if="route.source === 'imported'" class="btn-map-action btn-edit-route" @click.stop="openEditModal(route)" title="Modifier ce parcours">
+                  <span class="mdi mdi-pencil-outline"></span> Modifier
+                </button>
+                <button v-if="route.source === 'imported'" class="btn-map-action btn-delete-route" @click.stop="deleteImportedRoute(route.id)" title="Supprimer ce parcours">
+                  <span class="mdi mdi-trash-can-outline"></span> Supprimer
                 </button>
               </div>
             </div>
@@ -1382,6 +1972,213 @@ onUnmounted(() => {
               </div>
             </section>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal d'Import / Édition GPX -->
+    <div v-if="showImportModal" class="gpx-import-modal">
+      <div class="modal-overlay" @click="closeImportModal"></div>
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>
+            <span class="mdi" :class="isEditing ? 'mdi-pencil-outline' : 'mdi-file-upload-outline'"></span> 
+            {{ isEditing ? 'Modifier le parcours' : 'Importer un fichier GPX' }}
+          </h3>
+          <button @click="closeImportModal" class="modal-close-btn">&times;</button>
+        </div>
+        
+        <div class="modal-body">
+          <div v-if="importError" class="msg-banner error">
+            <span class="mdi mdi-alert-circle"></span> {{ importError }}
+          </div>
+
+          <!-- Étape 1 : Sélection du fichier (masqué en mode édition) -->
+          <div v-if="!isEditing" class="input-group">
+            <label for="gpx-file-input">Fichier GPX :</label>
+            <input 
+              id="gpx-file-input" 
+              type="file" 
+              accept=".gpx" 
+              @change="handleFileChange" 
+              class="file-input"
+            />
+          </div>
+
+          <!-- Étape 2 : Configuration (affichée si fichier valide analysé OU en mode édition) -->
+          <div v-if="importMetrics || isEditing" class="gpx-config-fields">
+            
+            <!-- Aperçu des métriques détectées (masqué en mode édition) -->
+            <div v-if="!isEditing && importMetrics" class="gpx-preview-box">
+              <h4>Aperçu du tracé</h4>
+              <div class="preview-metrics">
+                <div class="preview-metric">
+                  <span class="mdi mdi-map-marker-distance text-primary"></span>
+                  <div>
+                    <span class="value">{{ (importMetrics.distance / 1000).toFixed(2) }} km</span>
+                    <span class="label">Distance</span>
+                  </div>
+                </div>
+                <div class="preview-metric">
+                  <span class="mdi mdi-summit text-primary"></span>
+                  <div>
+                    <span class="value">{{ Math.round(importMetrics.elevation_gain) }} m</span>
+                    <span class="label">Dénivelé +</span>
+                  </div>
+                </div>
+                <div class="preview-metric">
+                  <span class="mdi mdi-map-marker-path text-primary"></span>
+                  <div>
+                    <span class="value">{{ importMetrics.pointsCount }}</span>
+                    <span class="label">Points GPS</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Nom -->
+            <div class="input-group">
+              <label for="import-name">Nom du parcours :</label>
+              <input 
+                id="import-name" 
+                v-model="importName" 
+                type="text" 
+                maxlength="100" 
+                placeholder="Ex: Ma sortie Gravel préférée"
+                required
+              />
+            </div>
+
+            <!-- Description -->
+            <div class="input-group">
+              <label for="import-desc">Description (optionnelle) :</label>
+              <textarea 
+                id="import-desc" 
+                v-model="importDescription" 
+                placeholder="Ajouter des détails sur ce parcours..."
+              ></textarea>
+            </div>
+
+            <!-- Activité associée -->
+            <div class="input-group">
+              <label for="import-activity"><span class="mdi mdi-format-list-checks"></span> Type d'activité associé :</label>
+              <select id="import-activity" v-model="importActivityId" required>
+                <option value="" disabled>Sélectionner une activité...</option>
+                <option v-for="act in userActivities" :key="act._id" :value="act._id">
+                  {{ act.label }}
+                </option>
+              </select>
+              <p v-if="!userActivities || userActivities.length === 0" class="input-note error">
+                Veuillez d'abord créer une activité dans les paramètres de votre compte.
+              </p>
+            </div>
+
+            <!-- Estimation de la durée -->
+            <div class="duration-estimation-section">
+              <h4 style="margin: 0 0 12px 0; font-size: 0.95rem; font-weight: 750; display: flex; align-items: center; gap: 6px;">
+                <span class="mdi mdi-clock-outline" style="color: var(--color-primary);"></span> Durée de l'activité
+              </h4>
+              
+              <!-- Cas 1 : Durée détectée automatiquement -->
+              <div v-if="importHasTimestamps && !isEditing" class="detected-duration-info">
+                <span class="mdi mdi-check-decagram" style="font-size: 1.3rem;"></span>
+                <div>
+                  <div style="font-weight: 750;">Durée détectée : {{ formatDuration(importDuration) }}</div>
+                  <div style="font-size: 0.8rem; opacity: 0.9;">Calculée à partir des horodatages du fichier GPX.</div>
+                </div>
+              </div>
+
+              <!-- Cas 2 : Durée non calculable ou Mode Édition -->
+              <div v-else class="estimation-inputs">
+                <p class="input-note" style="margin: 0 0 12px 0; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.4;">
+                  Estimez la durée en indiquant votre vitesse ou allure moyenne pour ce parcours.
+                </p>
+                
+                <!-- Sélecteur Vitesse vs Allure -->
+                <div class="calc-mode-toggle">
+                  <button 
+                    type="button"
+                    class="toggle-btn"
+                    :class="{ active: durationCalcMode === 'speed' }"
+                    @click="durationCalcMode = 'speed'"
+                  >
+                    <span class="mdi mdi-speedometer"></span> Vitesse (km/h)
+                  </button>
+                  <button 
+                    type="button"
+                    class="toggle-btn"
+                    :class="{ active: durationCalcMode === 'pace' }"
+                    @click="durationCalcMode = 'pace'"
+                  >
+                    <span class="mdi mdi-run-fast"></span> Allure (min/km)
+                  </button>
+                </div>
+
+                <!-- Saisie Vitesse -->
+                <div v-if="durationCalcMode === 'speed'" class="input-group" style="margin-bottom: 12px;">
+                  <label for="import-speed" style="font-size: 0.85rem; margin-bottom: 4px;">Vitesse moyenne :</label>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <input 
+                      id="import-speed"
+                      v-model.number="importSpeed"
+                      type="number"
+                      step="0.5"
+                      min="1"
+                      max="100"
+                      placeholder="Ex: 25"
+                      style="flex: 1;"
+                    />
+                    <span style="font-weight: 700; font-size: 0.9rem; color: var(--text-secondary); width: 50px;">km/h</span>
+                  </div>
+                </div>
+
+                <!-- Saisie Allure -->
+                <div v-if="durationCalcMode === 'pace'" class="input-group" style="margin-bottom: 12px;">
+                  <label style="font-size: 0.85rem; margin-bottom: 4px;">Allure moyenne :</label>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <input 
+                      v-model.number="importPaceMin"
+                      type="number"
+                      min="0"
+                      max="59"
+                      placeholder="Min"
+                      style="flex: 1; text-align: center;"
+                    />
+                    <span style="font-weight: 650; font-size: 0.85rem; color: var(--text-secondary);">min</span>
+                    <input 
+                      v-model.number="importPaceSec"
+                      type="number"
+                      min="0"
+                      max="59"
+                      placeholder="Sec"
+                      style="flex: 1; text-align: center;"
+                    />
+                    <span style="font-weight: 650; font-size: 0.85rem; color: var(--text-secondary);">/ km</span>
+                  </div>
+                </div>
+
+                <!-- Aperçu du résultat -->
+                <div class="calculated-duration-preview">
+                  <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">Durée calculée :</span>
+                  <strong style="font-size: 1.1rem; font-weight: 800;">{{ formatDuration(computedImportDuration) }}</strong>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button @click="closeImportModal" class="secondary-btn" :disabled="isImporting">Annuler</button>
+          <button 
+            @click="isEditing ? submitEdit() : submitImport()" 
+            class="login-btn" 
+            :disabled="isImporting || !importName.trim() || !importActivityId || (!isEditing && !importMetrics)"
+            style="margin-top: 0;"
+          >
+            <span v-if="isImporting" class="mdi mdi-loading mdi-spin"></span>
+            {{ isEditing ? (isImporting ? 'Enregistrement...' : 'Mettre à jour') : (isImporting ? 'Enregistrement...' : 'Enregistrer') }}
+          </button>
         </div>
       </div>
     </div>

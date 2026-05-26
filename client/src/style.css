@@ -2179,3 +2179,410 @@ input:checked + .switch-slider:before {
   background: #1a1d23;
 }
 
+/* --- GPX Import & Source Filtering Styles --- */
+
+/* Page Header */
+.routes-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+  background: var(--bg-surface);
+  padding: 16px 24px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
+}
+.routes-page-header h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.routes-page-header h2 .mdi {
+  color: var(--color-primary);
+}
+.routes-page-header .header-subtitle {
+  margin: 4px 0 0 0;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+
+/* GPX Import Button */
+.btn-import-gpx {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: 0.92rem;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.25);
+}
+.btn-import-gpx:hover {
+  background: var(--color-primary-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.35);
+}
+.btn-import-gpx:active {
+  transform: translateY(0);
+}
+
+/* Strava Promo Banner */
+.strava-promo-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  background: linear-gradient(135deg, rgba(252, 76, 2, 0.08) 0%, rgba(252, 76, 2, 0.03) 100%);
+  border: 1.5px solid rgba(252, 76, 2, 0.25);
+  border-radius: var(--radius-lg);
+  padding: 16px 24px;
+  margin-bottom: 24px;
+  transition: border-color 0.2s ease;
+  width: 100%;
+}
+.strava-promo-banner:hover {
+  border-color: rgba(252, 76, 2, 0.4);
+}
+.promo-content {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.promo-icon {
+  font-size: 2.2rem;
+  color: var(--color-strava);
+  display: inline-flex;
+}
+.promo-text h4 {
+  margin: 0 0 4px 0;
+  font-size: 1.05rem;
+  font-weight: 750;
+  color: var(--text-primary);
+}
+.promo-text p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+.btn-strava-connect-small {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-strava);
+  color: white;
+  border: none;
+  padding: 9px 16px;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: 0.88rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(252, 76, 2, 0.25);
+}
+.btn-strava-connect-small:hover {
+  background: var(--color-strava-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(252, 76, 2, 0.35);
+}
+
+/* Source Badges */
+.badge-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.badge-source.imported {
+  background-color: rgba(76, 175, 80, 0.12);
+  color: var(--color-primary-dark);
+  border: 1px solid rgba(76, 175, 80, 0.25);
+}
+.badge-source.strava {
+  background-color: rgba(252, 76, 2, 0.08);
+  color: var(--color-strava);
+  border: 1px solid rgba(252, 76, 2, 0.2);
+}
+.theme-dark .badge-source.imported {
+  background-color: rgba(129, 199, 132, 0.15);
+  color: var(--color-primary-light);
+  border-color: rgba(129, 199, 132, 0.3);
+}
+.theme-dark .badge-source.strava {
+  background-color: rgba(252, 76, 2, 0.15);
+  color: #ff8a65;
+  border-color: rgba(252, 76, 2, 0.3);
+}
+
+/* Card overrides for GPX */
+.strava-activity-card.is-imported {
+  border-left-color: var(--color-primary);
+}
+.theme-dark .strava-activity-card.is-imported {
+  border-left-color: var(--color-primary-light);
+}
+
+/* Edit and Delete buttons for GPX routes */
+.btn-map-action.btn-edit-route {
+  background-color: #ffffff;
+  color: var(--color-primary-dark);
+  border: 1.5px solid rgba(76, 175, 80, 0.4);
+}
+.theme-dark .btn-map-action.btn-edit-route {
+  background-color: var(--bg-surface);
+  color: var(--color-primary-light);
+  border-color: rgba(129, 199, 132, 0.4);
+}
+.btn-map-action.btn-edit-route:hover {
+  background-color: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary-dark);
+}
+.theme-dark .btn-map-action.btn-edit-route:hover {
+  background-color: var(--color-primary-light);
+  color: black;
+  border-color: var(--color-primary-light);
+}
+
+.btn-map-action.btn-delete-route {
+  background-color: #ffffff;
+  color: var(--color-danger);
+  border: 1.5px solid rgba(244, 67, 54, 0.4);
+}
+.theme-dark .btn-map-action.btn-delete-route {
+  background-color: var(--bg-surface);
+  color: var(--color-danger-light);
+  border-color: rgba(239, 154, 154, 0.4);
+}
+.btn-map-action.btn-delete-route:hover {
+  background-color: var(--color-danger);
+  color: white;
+  border-color: var(--color-danger-dark);
+}
+.theme-dark .btn-map-action.btn-delete-route:hover {
+  background-color: var(--color-danger-light);
+  color: black;
+  border-color: var(--color-danger-light);
+}
+
+/* Modal GPX Import */
+.gpx-import-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.gpx-import-modal .modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+}
+.gpx-import-modal .modal-card {
+  position: relative;
+  z-index: 1001;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 500px;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  overflow: hidden;
+  animation: modal-appear 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes modal-appear {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.gpx-import-modal .modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.gpx-import-modal .modal-header h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 750;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gpx-import-modal .modal-close-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px;
+}
+.gpx-import-modal .modal-close-btn:hover {
+  color: var(--text-primary);
+}
+.gpx-import-modal .modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+.gpx-import-modal .modal-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-surface-2);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.gpx-import-modal .file-input {
+  border: 2px dashed var(--border-input);
+  background: var(--bg-surface-2);
+  padding: 16px;
+  text-align: center;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+}
+.gpx-import-modal .file-input:hover {
+  border-color: var(--color-primary);
+}
+
+/* GPX Preview Box */
+.gpx-preview-box {
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-bottom: 18px;
+}
+.gpx-preview-box h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+}
+.preview-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.preview-metric {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.preview-metric .mdi {
+  font-size: 1.5rem;
+}
+.preview-metric .value {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 750;
+  color: var(--text-primary);
+}
+.preview-metric .label {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.input-note.error {
+  color: var(--color-danger);
+  font-size: 0.8rem;
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+/* Duration Estimation in GPX modal */
+.duration-estimation-section {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--border-color);
+}
+.calc-mode-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.calc-mode-toggle .toggle-btn {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.calc-mode-toggle .toggle-btn:hover {
+  background: var(--border-color);
+  color: var(--text-primary);
+}
+.calc-mode-toggle .toggle-btn.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary-dark);
+}
+html.meteo-theme-dark .calc-mode-toggle .toggle-btn.active {
+  background: var(--color-primary-dark);
+  border-color: var(--color-primary);
+}
+.detected-duration-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(76, 175, 80, 0.08);
+  border: 1px solid rgba(76, 175, 80, 0.2);
+  border-radius: var(--radius-md);
+  color: var(--color-primary-dark);
+}
+html.meteo-theme-dark .detected-duration-info {
+  background: rgba(129, 199, 132, 0.06);
+  border: 1px solid rgba(129, 199, 132, 0.15);
+  color: var(--color-primary-light);
+}
+.calculated-duration-preview {
+  margin-top: 14px;
+  padding: 12px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.calculated-duration-preview strong {
+  color: var(--color-primary);
+}
+html.meteo-theme-dark .calculated-duration-preview strong {
+  color: var(--color-primary-light);
+}
+
+
