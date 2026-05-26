@@ -1402,7 +1402,7 @@ const fetchForecast = async (useCache = true) => {
             <img src="/strava_logo.png" alt="Strava" class="strava-nav-logo" /> Activités
           </button>
           <button @click="openStravaRoutes" :class="{ active: showStravaRoutesPage }">
-            <img src="/strava_logo.png" alt="Strava" class="strava-nav-logo" /> Itinéraires
+            <span class="mdi mdi-map-marker-distance"></span> Itinéraires
           </button>
         </nav>
       </div>
