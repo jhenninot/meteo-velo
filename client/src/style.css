@@ -894,6 +894,14 @@ html.meteo-theme-dark .icon-grid-item:hover, html.meteo-theme-dark .icon-grid-it
   position: relative;
   width: 100%;
 }
+.map-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-surface-2);
+  border-bottom: 1px solid var(--border-color);
+}
 .map-actions-overlay {
   position: absolute;
   top: 10px;

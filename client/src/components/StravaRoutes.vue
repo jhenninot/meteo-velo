@@ -1763,32 +1763,33 @@ onUnmounted(() => {
 
           <!-- Carte Leaflet (collapsible) -->
           <div v-show="expandedId === route.id" class="activity-map-wrap">
+            <!-- Boutons d'action au-dessus de la carte -->
+            <div v-if="route.map?.summary_polyline" class="map-actions-row">
+              <a v-if="route.source === 'strava'" :href="`https://www.strava.com/routes/${route.id}`" target="_blank" class="btn-map-action btn-strava-link" title="Voir sur Strava (nouvel onglet)">
+                <span class="mdi mdi-open-in-new"></span> Voir sur Strava
+              </a>
+               <button class="btn-map-action btn-analyse" @click.stop="startAnalysisForRoute(route)" title="Analyser cet itinéraire par l'IA">
+                <span class="mdi mdi-brain"></span> Analyser
+              </button>
+              <button class="btn-map-action" @click.stop="openFullscreenMap(route)" title="Ouvrir la carte en plein écran">
+                <span class="mdi mdi-fullscreen"></span> Plein écran
+              </button>
+              <button class="btn-map-action" @click.stop="exportToGPX(route)" title="Exporter le parcours en GPX">
+                <span class="mdi mdi-download"></span> Exporter GPX
+              </button>
+              <button v-if="route.source === 'imported'" class="btn-map-action btn-edit-route" @click.stop="openEditModal(route)" title="Modifier ce parcours">
+                <span class="mdi mdi-pencil-outline"></span> Modifier
+              </button>
+              <button v-if="route.source === 'imported'" class="btn-map-action btn-delete-route" @click.stop="deleteImportedRoute(route.id)" title="Supprimer ce parcours">
+                <span class="mdi mdi-trash-can-outline"></span> Supprimer
+              </button>
+            </div>
+
             <div v-if="!route.map?.summary_polyline" class="map-unavailable">
               <span class="mdi mdi-map-marker-off"></span> Trace GPS non disponible pour cet itinéraire.
             </div>
-            <div class="map-container-relative">
+            <div v-else class="map-container-relative">
               <div :id="`strava-map-${route.id}`" class="activity-map"></div>
-              <!-- Action Overlay: Voir sur Strava & Plein écran & Exporter GPX -->
-              <div class="map-actions-overlay">
-                <a v-if="route.source === 'strava'" :href="`https://www.strava.com/routes/${route.id}`" target="_blank" class="btn-map-action btn-strava-link" title="Voir sur Strava (nouvel onglet)">
-                  <span class="mdi mdi-open-in-new"></span> Voir sur Strava
-                </a>
-                 <button class="btn-map-action btn-analyse" @click.stop="startAnalysisForRoute(route)" title="Analyser cet itinéraire par l'IA">
-                  <span class="mdi mdi-brain"></span> Analyser
-                </button>
-                <button class="btn-map-action" @click.stop="openFullscreenMap(route)" title="Ouvrir la carte en plein écran">
-                  <span class="mdi mdi-fullscreen"></span> Plein écran
-                </button>
-                <button class="btn-map-action" @click.stop="exportToGPX(route)" title="Exporter le parcours en GPX">
-                  <span class="mdi mdi-download"></span> Exporter GPX
-                </button>
-                <button v-if="route.source === 'imported'" class="btn-map-action btn-edit-route" @click.stop="openEditModal(route)" title="Modifier ce parcours">
-                  <span class="mdi mdi-pencil-outline"></span> Modifier
-                </button>
-                <button v-if="route.source === 'imported'" class="btn-map-action btn-delete-route" @click.stop="deleteImportedRoute(route.id)" title="Supprimer ce parcours">
-                  <span class="mdi mdi-trash-can-outline"></span> Supprimer
-                </button>
-              </div>
             </div>
           </div>
         </div>
