@@ -1858,9 +1858,9 @@ onUnmounted(() => {
             v-if="selectedRouteForAnalysis?.map?.summary_polyline" 
             class="btn-fullscreen-action btn-toggle-analysis-map" 
             @click="toggleAnalysisMap"
+            :title="showAnalysisMap ? 'Masquer la carte' : 'Afficher la carte'"
           >
             <span class="mdi" :class="showAnalysisMap ? 'mdi-map-minus' : 'mdi-map-legend'"></span>
-            {{ showAnalysisMap ? 'Masquer la carte' : 'Afficher la carte' }}
           </button>
           <button class="btn-fullscreen-close" @click="closeAnalysisFullscreen">
             <span class="mdi mdi-close"></span> Fermer
