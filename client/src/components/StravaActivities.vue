@@ -574,19 +574,6 @@ onUnmounted(() => {
     <!-- Écran connecté -->
     <div v-else>
 
-      <!-- En-tête athlète -->
-      <div class="athlete-header">
-        <img v-if="stravaStatus.athleteProfile" :src="stravaStatus.athleteProfile" class="athlete-avatar" alt="avatar" />
-        <span v-else class="mdi mdi-account-circle athlete-avatar-fallback"></span>
-        <div class="athlete-info">
-          <div class="athlete-name">{{ stravaStatus.athleteName }}</div>
-          <div class="athlete-sub">{{ timeframeLabel }} · Activités Strava</div>
-        </div>
-        <button class="btn-disconnect" @click="disconnectStrava" title="Délier Strava">
-          <span class="mdi mdi-link-off"></span> Délier
-        </button>
-      </div>
-
       <!-- Chargement -->
       <div v-if="loading" class="strava-loading">
         <span class="mdi mdi-loading mdi-spin"></span> Chargement des activités…

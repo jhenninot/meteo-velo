@@ -288,6 +288,41 @@ watch(isDark, (val) => {
 // --- CONFIGURATION ---
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'
 
+// --- LOGIQUE STRAVA HEADER ---
+const stravaStatus = ref({ connected: false, athleteName: null, athleteProfile: null })
+const loadingConnect = ref(false)
+
+const fetchStravaStatus = async () => {
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}/api/strava/status`)
+    stravaStatus.value = data
+  } catch (e) {
+    console.error('Strava status error', e)
+  }
+}
+
+const connectStrava = async () => {
+  loadingConnect.value = true
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}/api/strava/authorize`)
+    window.location.href = data.url
+  } catch (e) {
+    loadingConnect.value = false
+    console.error('Impossible de contacter Strava.', e)
+  }
+}
+
+const disconnectStrava = async () => {
+  if (!confirm('Délier votre compte Strava ?')) return
+  try {
+    await axios.delete(`${API_BASE_URL}/api/strava/disconnect`)
+    stravaStatus.value = { connected: false, athleteName: null, athleteProfile: null }
+    window.location.reload()
+  } catch (e) {
+    console.error('Erreur lors de la déconnexion Strava.', e)
+  }
+}
+
 // --- GESTION DE LA CONNEXION ---
 const setupAxiosToken = (token) => {
   axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
@@ -349,6 +384,7 @@ const handleLogin = async () => {
     await loadUserActivities()
     await loadFavorites()
     await loadSystemSettings()
+    await fetchStravaStatus()
     initializeApp()
   } catch (err) {
     loginError.value = "Identifiant ou mot de passe incorrect."
@@ -371,6 +407,7 @@ const handleLogout = () => {
   showStravaRoutesPage.value = false
   showAccountPanel.value = false
   theme.value = 'auto'
+  stravaStatus.value = { connected: false, athleteName: null, athleteProfile: null }
 }
 
 const openAdmin = () => {
@@ -611,6 +648,7 @@ onMounted(async () => {
       await loadUserActivities()
       await loadFavorites()
       await loadSystemSettings()
+      await fetchStravaStatus()
       initializeApp()
 
       // Retour callback Strava → ouvrir la page Activités
@@ -1270,6 +1308,16 @@ const fetchForecast = async (useCache = true) => {
         </div>
 
         <div v-if="isLoggedIn" class="header-actions">
+          <!-- Avatar Strava (si lié) ou Bouton pour lier (si non lié) -->
+          <div class="header-strava-action">
+            <img v-if="stravaStatus.connected && stravaStatus.athleteProfile" :src="stravaStatus.athleteProfile" class="header-strava-avatar" :alt="stravaStatus.athleteName" :title="`Compte Strava lié : ${stravaStatus.athleteName}`" />
+            <span v-else-if="stravaStatus.connected" class="mdi mdi-account-circle header-strava-avatar-fallback" :title="`Compte Strava lié : ${stravaStatus.athleteName}`"></span>
+            <button v-else class="btn-strava-connect-header" @click="connectStrava" :disabled="loadingConnect" title="Associer mon compte Strava">
+              <span v-if="loadingConnect" class="mdi mdi-loading mdi-spin"></span>
+              <img v-else src="/strava_logo.png" alt="Strava" class="strava-btn-logo-header" />
+            </button>
+          </div>
+
           <!-- Bouton burger -->
           <button
             class="burger-btn"
@@ -1306,6 +1354,15 @@ const fetchForecast = async (useCache = true) => {
                 <span class="burger-menu-icon mdi mdi-account-cog"></span>
                 <span class="burger-menu-label">Compte</span>
               </button>
+
+              <!-- Délier Strava (si connecté) -->
+              <template v-if="stravaStatus.connected">
+                <div class="burger-menu-divider"></div>
+                <button @click="disconnectStrava" class="burger-menu-item burger-menu-btn burger-strava-disconnect">
+                  <span class="burger-menu-icon mdi mdi-link-off"></span>
+                  <span class="burger-menu-label">Délier Strava</span>
+                </button>
+              </template>
 
               <!-- Admin (si admin) -->
               <template v-if="userRole === 'admin'">

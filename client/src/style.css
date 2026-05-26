@@ -2250,6 +2250,25 @@ input:checked + .switch-slider:before {
 .btn-import-gpx:active {
   transform: translateY(0);
 }
+.import-gpx-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 16px 0 8px 0;
+}
+.routes-count-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.routes-count-label .mdi {
+  color: var(--color-strava);
+  font-size: 1.1rem;
+}
+
 
 /* Strava Promo Banner */
 .strava-promo-banner {
@@ -2598,6 +2617,70 @@ html.meteo-theme-dark .detected-duration-info {
 }
 html.meteo-theme-dark .calculated-duration-preview strong {
   color: var(--color-primary-light);
+}
+
+/* --- Header Strava Integration --- */
+.header-strava-action {
+  display: inline-flex;
+  align-items: center;
+}
+.header-strava-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--color-strava);
+  margin-right: 12px;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease-in-out;
+}
+.header-strava-avatar:hover {
+  transform: scale(1.1);
+}
+.header-strava-avatar-fallback {
+  font-size: 2rem;
+  color: var(--color-strava);
+  margin-right: 12px;
+  display: inline-flex;
+  align-items: center;
+}
+.btn-strava-connect-header {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  padding: 0;
+  margin-right: 12px;
+  cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s;
+}
+.btn-strava-connect-header:hover {
+  transform: scale(1.1);
+  opacity: 0.85;
+}
+.btn-strava-connect-header:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.btn-strava-connect-header .mdi {
+  font-size: 1.15rem;
+}
+.strava-btn-logo-header {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  display: block;
+  border-radius: 50%;
+}
+.burger-strava-disconnect:hover {
+  background: #fff1ee;
+}
+html.meteo-theme-dark .burger-strava-disconnect:hover {
+  background: rgba(252, 76, 2, 0.1);
 }
 
 

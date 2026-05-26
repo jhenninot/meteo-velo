@@ -1444,28 +1444,7 @@ onUnmounted(() => {
 <template>
   <div class="strava-page" :class="{ 'theme-dark': theme === 'dark' }">
 
-    <!-- Notification retour OAuth -->
-    <div v-if="stravaNotif === 'success'" class="strava-notif success">
-      <span class="mdi mdi-check-circle"></span> Compte Strava connecté avec succès !
-      <button @click="stravaNotif = null" class="notif-close">×</button>
-    </div>
-    <div v-if="stravaNotif === 'error'" class="strava-notif strava-error">
-      <span class="mdi mdi-alert-circle"></span> Erreur lors de la connexion Strava.
-      <button @click="stravaNotif = null" class="notif-close">×</button>
-    </div>
 
-    <!-- En-tête de la page des parcours -->
-    <div class="routes-page-header">
-      <div class="header-title-section">
-        <h2><span class="mdi mdi-map-legend"></span> Mes Parcours</h2>
-        <p class="header-subtitle font-size-sm">Gérez et analysez vos tracés GPX importés et vos itinéraires Strava</p>
-      </div>
-      <div class="header-actions-section">
-        <button class="btn-import-gpx" @click="openImportModal" title="Importer un fichier GPX depuis votre ordinateur">
-          <span class="mdi mdi-file-upload-outline"></span> Importer GPX
-        </button>
-      </div>
-    </div>
 
     <!-- Bannière d'invitation Strava si non connecté -->
     <div v-if="!stravaStatus.connected && !loading" class="strava-promo-banner">
@@ -1480,19 +1459,6 @@ onUnmounted(() => {
         <span v-if="loadingConnect" class="mdi mdi-loading mdi-spin"></span>
         <span v-else class="mdi mdi-link"></span>
         {{ loadingConnect ? 'Redirection…' : 'Associer mon Strava' }}
-      </button>
-    </div>
-
-    <!-- En-tête athlète si connecté -->
-    <div v-if="stravaStatus.connected" class="athlete-header">
-      <img v-if="stravaStatus.athleteProfile" :src="stravaStatus.athleteProfile" class="athlete-avatar" alt="avatar" />
-      <span v-else class="mdi mdi-account-circle athlete-avatar-fallback"></span>
-      <div class="athlete-info">
-        <div class="athlete-name">{{ stravaStatus.athleteName }}</div>
-        <div class="athlete-sub">Mes parcours planifiés Strava synchronisés</div>
-      </div>
-      <button class="btn-disconnect" @click="disconnectStrava" title="Délier Strava">
-        <span class="mdi mdi-link-off"></span> Délier
       </button>
     </div>
 
@@ -1711,23 +1677,20 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Stats globales des parcours -->
-      <div v-if="!loading && routes.length" class="monthly-stats">
-        <div class="stat-tile">
-          <span class="mdi mdi-map-legend stat-icon"></span>
-          <div class="stat-val">{{ overallStats.count }}</div>
-          <div class="stat-label">Itinéraires</div>
-        </div>
-        <div class="stat-tile">
-          <span class="mdi mdi-map-marker-distance stat-icon"></span>
-          <div class="stat-val">{{ overallStats.totalKm }} <small>km</small></div>
-          <div class="stat-label">Distance cumulée</div>
-        </div>
-        <div class="stat-tile">
-          <span class="mdi mdi-summit stat-icon"></span>
-          <div class="stat-val">{{ overallStats.maxElev.toLocaleString() }} <small>m</small></div>
-          <div class="stat-label">Dénivelé Max</div>
-        </div>
+      <!-- Compteur + bouton Importer GPX -->
+      <div v-if="!loading && routes.length" class="import-gpx-row">
+        <span class="routes-count-label">
+          <span class="mdi mdi-map-legend"></span>
+          {{ overallStats.count }} itinéraire{{ overallStats.count > 1 ? 's' : '' }}
+        </span>
+        <button class="btn-import-gpx" @click="openImportModal" title="Importer un fichier GPX depuis votre ordinateur">
+          <span class="mdi mdi-file-upload-outline"></span> Importer GPX
+        </button>
+      </div>
+      <div v-else-if="!loading" class="import-gpx-row">
+        <button class="btn-import-gpx" @click="openImportModal" title="Importer un fichier GPX depuis votre ordinateur">
+          <span class="mdi mdi-file-upload-outline"></span> Importer GPX
+        </button>
       </div>
 
       <!-- Aucun résultat après filtrage -->
