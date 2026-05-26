@@ -56,10 +56,12 @@ const lon = ref(localStorage.getItem('selected_lon') || null)
 const query = ref('')
 const suggestions = ref([])
 const consignes = ref(localStorage.getItem('user_consignes') || '')
-const forecastData = ref(null)
+const weatherData = ref(null)      // météo brute (Open-Meteo aggrégée), affichée immédiatement
+const forecastData = ref(null)     // météo enrichie par l'IA (après analyse)
 const forecastCollectedAt = ref(null)
 const forecastLoadedFromCache = ref(false)
-const loading = ref(false)
+const loading = ref(false)         // chargement météo brute
+const aiLoading = ref(false)       // chargement analyse IA
 const error = ref(null)
 const fallbackWarning = ref('')
 const geoLoading = ref(false)
@@ -398,6 +400,7 @@ const handleLogout = () => {
   isLoggedIn.value = false
   userRole.value = ''
   currentUser.value = ''
+  weatherData.value = null
   forecastData.value = null
   userActivities.value = []
   favorites.value = []
@@ -578,6 +581,7 @@ const handleActivitySelection = () => {
   } else {
     localStorage.removeItem('selected_activity_id')
   }
+  weatherData.value = null
   forecastData.value = null
 
   if (city.value && lat.value !== null && lon.value !== null) {
@@ -1225,6 +1229,7 @@ const restoreCachedForecast = () => {
   const cached = loadCachedForecast()
   if (!cached) return false
 
+  weatherData.value = cached.weather || cached.forecast
   forecastData.value = cached.forecast
   fallbackWarning.value = cached.fallbackMessage || ''
   forecastCollectedAt.value = cached.collectedAt || new Date(Number(cached.fetchedAt || Date.now())).toISOString()
@@ -1232,7 +1237,7 @@ const restoreCachedForecast = () => {
   return true
 }
 
-const saveForecastToCache = (forecast, fallbackMessage = '') => {
+const saveForecastToCache = (weather, forecast, fallbackMessage = '') => {
   if (!city.value || lat.value === null || lon.value === null || !selectedActivityId.value) {
     return
   }
@@ -1246,6 +1251,7 @@ const saveForecastToCache = (forecast, fallbackMessage = '') => {
     activityId: selectedActivityId.value,
     fetchedAt: Date.now(),
     collectedAt: new Date().toISOString(),
+    weather,
     forecast,
     fallbackMessage
   }
@@ -1262,9 +1268,13 @@ const fetchForecast = async (useCache = true) => {
     return
   }
 
+  // --- ÉTAPE 1 : Récupération météo brute ---
   loading.value = true
+  aiLoading.value = false
   error.value = null
-  suggestions.value = [] 
+  suggestions.value = []
+  weatherData.value = null
+  forecastData.value = null
   forecastLoadedFromCache.value = false
 
   localStorage.setItem('selected_city', city.value)
@@ -1272,23 +1282,42 @@ const fetchForecast = async (useCache = true) => {
   localStorage.setItem('selected_lon', lon.value)
   localStorage.setItem('selected_activity_id', selectedActivityId.value)
 
+  let rawWeather = null
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/forecast`, {
-      city: city.value,
+    const weatherRes = await axios.post(`${API_BASE_URL}/api/weather`, {
       lat: lat.value,
-      lon: lon.value,
-      activityId: selectedActivityId.value
+      lon: lon.value
     })
-    forecastData.value = response.data.forecast
-    fallbackWarning.value = response.data.fallbackMessage || ''
-    forecastCollectedAt.value = new Date().toISOString()
-    saveForecastToCache(response.data.forecast, fallbackWarning.value)
+    rawWeather = weatherRes.data.weather
+    weatherData.value = rawWeather
   } catch (err) {
     if (err.response?.status !== 401) {
-      error.value = "Impossible de récupérer les prévisions"
+      error.value = "Impossible de récupérer la météo"
     }
+    loading.value = false
+    return
   } finally {
     loading.value = false
+  }
+
+  // --- ÉTAPE 2 : Analyse IA (lancée après affichage de la météo) ---
+  aiLoading.value = true
+  try {
+    const analyzeRes = await axios.post(`${API_BASE_URL}/api/analyze`, {
+      city: city.value,
+      activityId: selectedActivityId.value,
+      structuredWeather: rawWeather
+    })
+    forecastData.value = analyzeRes.data.forecast
+    fallbackWarning.value = analyzeRes.data.fallbackMessage || ''
+    forecastCollectedAt.value = new Date().toISOString()
+    saveForecastToCache(rawWeather, analyzeRes.data.forecast, fallbackWarning.value)
+  } catch (err) {
+    if (err.response?.status !== 401) {
+      error.value = "Impossible d'obtenir l'analyse IA"
+    }
+  } finally {
+    aiLoading.value = false
     syncPreferences()
   }
 }
@@ -1704,16 +1733,18 @@ const fetchForecast = async (useCache = true) => {
         </div>
       </section>
 
-      <div v-if="loading" class="status-msg"><span class="mdi mdi-brain"></span> Analyse IA en cours...</div>
+      <div v-if="loading" class="status-msg"><span class="mdi mdi-cloud-download-outline mdi-spin-slow"></span> Récupération de la météo...</div>
+      <div v-if="aiLoading" class="status-msg status-msg-ai"><span class="mdi mdi-brain mdi-pulse"></span> Analyse IA en cours...</div>
       <div v-if="error" class="error-msg"><span class="mdi mdi-alert-circle"></span> {{ error }}</div>
       <div v-if="fallbackWarning" class="fallback-msg">
         <span class="mdi mdi-alert"></span> {{ fallbackWarning }}
         <button class="fallback-close" @click="fallbackWarning = ''" aria-label="Fermer">&times;</button>
       </div>
-      
-      <div v-if="forecastData && !loading" class="daily-summary-container">
+
+      <!-- Résumé journalier : affiche la météo brute dès qu'elle est disponible -->
+      <div v-if="(weatherData || forecastData) && !loading" class="daily-summary-container">
         <div class="daily-summary-scroll">
-          <div v-for="(day, index) in forecastData" :key="'summary-'+index" class="daily-summary-card" @click="scrollToDay(index)">
+          <div v-for="(day, index) in (forecastData || weatherData)" :key="'summary-'+index" class="daily-summary-card" @click="scrollToDay(index)">
             <div class="summary-day">{{ getShortDayName(day.date) }}</div>
             <div class="summary-icon"><span class="mdi" :class="getDailyWeatherIcon(day)"></span></div>
             <div class="summary-temps">
@@ -1737,18 +1768,24 @@ const fetchForecast = async (useCache = true) => {
         </div>
       </div>
 
-      <section v-if="forecastData && !loading" class="results-section">
+      <!-- Grille détaillée : affiche la météo brute (sans IA) si l'IA n'a pas encore répondu -->
+      <section v-if="(weatherData || forecastData) && !loading" class="results-section">
         <div class="forecast-grid">
-          <div v-for="(day, index) in forecastData" :key="index" class="day-card" :id="'day-detail-' + index">
+          <div v-for="(day, index) in (forecastData || weatherData)" :key="index" class="day-card" :id="'day-detail-' + index">
             <h3><span class="mdi mdi-calendar"></span> {{ formatDate(day.date) }}</h3>
             <div class="day-split">
-              <div v-if="day.matin" class="half-day" :class="[day.matin.favorable ? 'favorable' : 'defavorable', { 'is-expanded': expandedPeriods[`${index}-matin`] }]" @click="togglePeriod(index, 'matin')">
-                <span
+              <!-- MATIN -->
+              <div v-if="day.matin" class="half-day" :class="[
+                forecastData ? (day.matin.favorable ? 'favorable' : 'defavorable') : 'weather-only',
+                { 'is-expanded': expandedPeriods[`${index}-matin`] }
+              ]" @click="togglePeriod(index, 'matin')">
+                <!-- Indicateur activité : affiché seulement après l'analyse IA -->
+                <span v-if="forecastData"
                   class="bike-day-indicator"
                   :class="day.matin.favorable ? 'bike-day-favorable' : 'bike-day-defavorable'"
-                  :title="day.matin.favorable ? 'Conditions favorables pour l?activit?' : 'Conditions d?favorables pour l?activit?'"
+                  :title="day.matin.favorable ? 'Conditions favorables pour l\'activité' : 'Conditions défavorables pour l\'activité'"
                   role="img"
-                  :aria-label="day.matin.favorable ? 'Activit? : conditions favorables' : 'Activit? : conditions d?favorables'"
+                  :aria-label="day.matin.favorable ? 'Activité : conditions favorables' : 'Activité : conditions défavorables'"
                 >
                   <span class="mdi bike-day-indicator__icon" :class="selectedActivityIcon" aria-hidden="true"></span>
                 </span>
@@ -1757,26 +1794,35 @@ const fetchForecast = async (useCache = true) => {
                   <span class="half-day-heading-label">Matin</span>
                 </h4>
                 <div class="metrics">
-                  <span :class="critereClass(day.matin, 'temperature')"><span class="mdi mdi-thermometer"></span> {{ day.matin.temp }}°C</span>
-                  <span :class="critereClass(day.matin, 'pluie')"><span class="mdi mdi-water-percent"></span> {{ day.matin.rain }}%</span>
-                  <span :class="critereClass(day.matin, 'precipitations')"><span class="mdi mdi-weather-pouring"></span> {{ day.matin.precip }}mm</span>
-                  <span :class="critereClass(day.matin, 'vent')"><span class="mdi mdi-navigation wind-icon" :style="getWindStyle(day.matin.dir)"></span> {{ day.matin.wind }}km/h</span>
-                  <span :class="critereClass(day.matin, 'rafales')"><span class="mdi mdi-weather-windy" title="Rafales"></span> {{ day.matin.gust }}km/h</span>
-                  <span :class="critereClass(day.matin, 'uv')"><span class="mdi mdi-sun-wireless"></span> UV {{ day.matin.uv }}</span>
+                  <span :class="forecastData ? critereClass(day.matin, 'temperature') : 'metric-critere critere-neutre'"><span class="mdi mdi-thermometer"></span> {{ day.matin.temp }}°C</span>
+                  <span :class="forecastData ? critereClass(day.matin, 'pluie') : 'metric-critere critere-neutre'"><span class="mdi mdi-water-percent"></span> {{ day.matin.rain }}%</span>
+                  <span :class="forecastData ? critereClass(day.matin, 'precipitations') : 'metric-critere critere-neutre'"><span class="mdi mdi-weather-pouring"></span> {{ day.matin.precip }}mm</span>
+                  <span :class="forecastData ? critereClass(day.matin, 'vent') : 'metric-critere critere-neutre'"><span class="mdi mdi-navigation wind-icon" :style="getWindStyle(day.matin.dir)"></span> {{ day.matin.wind }}km/h</span>
+                  <span :class="forecastData ? critereClass(day.matin, 'rafales') : 'metric-critere critere-neutre'"><span class="mdi mdi-weather-windy" title="Rafales"></span> {{ day.matin.gust }}km/h</span>
+                  <span :class="forecastData ? critereClass(day.matin, 'uv') : 'metric-critere critere-neutre'"><span class="mdi mdi-sun-wireless"></span> UV {{ day.matin.uv }}</span>
                 </div>
-                <div class="ia-advice">{{ day.matin.conseil }}</div>
-                
+                <!-- Conseil IA : affiché seulement après l'analyse -->
+                <div v-if="forecastData" class="ia-advice">{{ day.matin.conseil }}</div>
+                <div v-else-if="aiLoading" class="ia-advice ia-advice-pending">
+                  <span class="mdi mdi-brain mdi-spin-slow"></span> Analyse en cours...
+                </div>
+
                 <div v-if="expandedPeriods[`${index}-matin`] && day.matin.hourly">
                   <WeatherChart :hourlyData="day.matin.hourly" :theme="resolvedTheme" />
                 </div>
               </div>
-              <div v-if="day.apres_midi" class="half-day" :class="[day.apres_midi.favorable ? 'favorable' : 'defavorable', { 'is-expanded': expandedPeriods[`${index}-apres_midi`] }]" @click="togglePeriod(index, 'apres_midi')">
-                <span
+
+              <!-- APRÈS-MIDI -->
+              <div v-if="day.apres_midi" class="half-day" :class="[
+                forecastData ? (day.apres_midi.favorable ? 'favorable' : 'defavorable') : 'weather-only',
+                { 'is-expanded': expandedPeriods[`${index}-apres_midi`] }
+              ]" @click="togglePeriod(index, 'apres_midi')">
+                <span v-if="forecastData"
                   class="bike-day-indicator"
                   :class="day.apres_midi.favorable ? 'bike-day-favorable' : 'bike-day-defavorable'"
-                  :title="day.apres_midi.favorable ? 'Conditions favorables pour l?activit?' : 'Conditions d?favorables pour l?activit?'"
+                  :title="day.apres_midi.favorable ? 'Conditions favorables pour l\'activité' : 'Conditions défavorables pour l\'activité'"
                   role="img"
-                  :aria-label="day.apres_midi.favorable ? 'Activit? : conditions favorables' : 'Activit? : conditions d?favorables'"
+                  :aria-label="day.apres_midi.favorable ? 'Activité : conditions favorables' : 'Activité : conditions défavorables'"
                 >
                   <span class="mdi bike-day-indicator__icon" :class="selectedActivityIcon" aria-hidden="true"></span>
                 </span>
@@ -1785,15 +1831,18 @@ const fetchForecast = async (useCache = true) => {
                   <span class="half-day-heading-label">Après-midi</span>
                 </h4>
                 <div class="metrics">
-                  <span :class="critereClass(day.apres_midi, 'temperature')"><span class="mdi mdi-thermometer"></span> {{ day.apres_midi.temp }}°C</span>
-                  <span :class="critereClass(day.apres_midi, 'pluie')"><span class="mdi mdi-water-percent"></span> {{ day.apres_midi.rain }}%</span>
-                  <span :class="critereClass(day.apres_midi, 'precipitations')"><span class="mdi mdi-weather-pouring"></span> {{ day.apres_midi.precip }}mm</span>
-                  <span :class="critereClass(day.apres_midi, 'vent')"><span class="mdi mdi-navigation wind-icon" :style="getWindStyle(day.apres_midi.dir)"></span> {{ day.apres_midi.wind }}km/h</span>
-                  <span :class="critereClass(day.apres_midi, 'rafales')"><span class="mdi mdi-weather-windy" title="Rafales"></span> {{ day.apres_midi.gust }}km/h</span>
-                  <span :class="critereClass(day.apres_midi, 'uv')"><span class="mdi mdi-sun-wireless"></span> UV {{ day.apres_midi.uv }}</span>
+                  <span :class="forecastData ? critereClass(day.apres_midi, 'temperature') : 'metric-critere critere-neutre'"><span class="mdi mdi-thermometer"></span> {{ day.apres_midi.temp }}°C</span>
+                  <span :class="forecastData ? critereClass(day.apres_midi, 'pluie') : 'metric-critere critere-neutre'"><span class="mdi mdi-water-percent"></span> {{ day.apres_midi.rain }}%</span>
+                  <span :class="forecastData ? critereClass(day.apres_midi, 'precipitations') : 'metric-critere critere-neutre'"><span class="mdi mdi-weather-pouring"></span> {{ day.apres_midi.precip }}mm</span>
+                  <span :class="forecastData ? critereClass(day.apres_midi, 'vent') : 'metric-critere critere-neutre'"><span class="mdi mdi-navigation wind-icon" :style="getWindStyle(day.apres_midi.dir)"></span> {{ day.apres_midi.wind }}km/h</span>
+                  <span :class="forecastData ? critereClass(day.apres_midi, 'rafales') : 'metric-critere critere-neutre'"><span class="mdi mdi-weather-windy" title="Rafales"></span> {{ day.apres_midi.gust }}km/h</span>
+                  <span :class="forecastData ? critereClass(day.apres_midi, 'uv') : 'metric-critere critere-neutre'"><span class="mdi mdi-sun-wireless"></span> UV {{ day.apres_midi.uv }}</span>
                 </div>
-                <div class="ia-advice">{{ day.apres_midi.conseil }}</div>
-                
+                <div v-if="forecastData" class="ia-advice">{{ day.apres_midi.conseil }}</div>
+                <div v-else-if="aiLoading" class="ia-advice ia-advice-pending">
+                  <span class="mdi mdi-brain mdi-spin-slow"></span> Analyse en cours...
+                </div>
+
                 <div v-if="expandedPeriods[`${index}-apres_midi`] && day.apres_midi.hourly">
                   <WeatherChart :hourlyData="day.apres_midi.hourly" :theme="resolvedTheme" />
                 </div>

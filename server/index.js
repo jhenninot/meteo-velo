@@ -330,14 +330,107 @@ function enrichPeriod(aggregated, aiSlice) {
   return merged;
 }
 
-app.post('/api/forecast', verifyToken, async (req, res) => {
-  const { lat, lon, city, activityId } = req.body;
+// Helper : agrège les données horaires Open-Meteo en données par demi-journée
+function buildStructuredWeather(hourly, utcOffsetSeconds) {
+  const nowUtcMs = Date.now();
+  const nowLocalMs = nowUtcMs + utcOffsetSeconds * 1000;
+  const nowLocalStr = new Date(nowLocalMs).toISOString().slice(0, 16);
+
+  const daysMap = {};
+  hourly.time.forEach((t, i) => {
+    if (t < nowLocalStr) return;
+    const date = t.split('T')[0];
+    const hour = parseInt(t.split('T')[1].split(':')[0], 10);
+
+    if (!daysMap[date]) {
+      daysMap[date] = {
+        date,
+        matin: { temps: [], rains: [], precips: [], winds: [], gusts: [], dirs: [], hours: [], uvs: [] },
+        apres_midi: { temps: [], rains: [], precips: [], winds: [], gusts: [], dirs: [], hours: [], uvs: [] }
+      };
+    }
+
+    if (hour >= 8 && hour <= 12) {
+      daysMap[date].matin.temps.push(hourly.temperature_2m[i]);
+      daysMap[date].matin.rains.push(hourly.precipitation_probability[i]);
+      daysMap[date].matin.precips.push(hourly.precipitation[i]);
+      daysMap[date].matin.winds.push(hourly.wind_speed_10m[i]);
+      daysMap[date].matin.gusts.push(hourly.wind_gusts_10m[i]);
+      daysMap[date].matin.dirs.push(hourly.wind_direction_10m[i]);
+      daysMap[date].matin.hours.push(hour);
+      daysMap[date].matin.uvs.push(hourly.uv_index[i]);
+    } else if (hour >= 13 && hour <= 18) {
+      daysMap[date].apres_midi.temps.push(hourly.temperature_2m[i]);
+      daysMap[date].apres_midi.rains.push(hourly.precipitation_probability[i]);
+      daysMap[date].apres_midi.precips.push(hourly.precipitation[i]);
+      daysMap[date].apres_midi.winds.push(hourly.wind_speed_10m[i]);
+      daysMap[date].apres_midi.gusts.push(hourly.wind_gusts_10m[i]);
+      daysMap[date].apres_midi.dirs.push(hourly.wind_direction_10m[i]);
+      daysMap[date].apres_midi.hours.push(hour);
+      daysMap[date].apres_midi.uvs.push(hourly.uv_index[i]);
+    }
+  });
+
+  const aggregate = (period) => {
+    if (!period || period.temps.length === 0) return null;
+    const hourlyData = period.hours.map((h, i) => ({
+      hour: h,
+      temp: Math.round(period.temps[i]),
+      rain: period.rains[i],
+      precip: Number(period.precips[i].toFixed(1)),
+      wind: Math.round(period.winds[i]),
+      gust: Math.round(period.gusts[i]),
+      dir: period.dirs[i],
+      uv: Number((period.uvs[i] || 0).toFixed(1))
+    }));
+    return {
+      temp: Math.round(Math.max(...period.temps)),
+      rain: Math.max(...period.rains),
+      precip: Number(period.precips.reduce((sum, current) => sum + current, 0).toFixed(1)),
+      wind: Math.round(Math.max(...period.winds)),
+      gust: Math.round(Math.max(...period.gusts)),
+      dir: period.dirs[Math.floor(period.dirs.length / 2)],
+      uv: Number(Math.max(...(period.uvs.length > 0 ? period.uvs : [0])).toFixed(1)),
+      hourly: hourlyData
+    };
+  };
+
+  return Object.values(daysMap)
+    .map(d => ({ date: d.date, matin: aggregate(d.matin), apres_midi: aggregate(d.apres_midi) }))
+    .filter(d => d.matin !== null || d.apres_midi !== null)
+    .slice(0, 7);
+}
+
+// --- ROUTE MÉTÉO BRUTE (étape 1 : retourne la météo agrégée sans analyse IA) ---
+app.post('/api/weather', verifyToken, async (req, res) => {
+  const { lat, lon } = req.body;
+  if (!lat || !lon) return res.status(400).json({ error: "lat et lon sont obligatoires" });
+
+  try {
+    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index&timezone=auto`;
+    const weatherRes = await axios.get(weatherUrl);
+    const hourly = weatherRes.data.hourly;
+    const utcOffsetSeconds = weatherRes.data.utc_offset_seconds ?? 0;
+
+    const structuredWeather = buildStructuredWeather(hourly, utcOffsetSeconds);
+
+    res.json({ weather: structuredWeather });
+  } catch (error) {
+    console.error("Erreur /api/weather:", error);
+    res.status(500).json({ error: "Impossible de récupérer la météo" });
+  }
+});
+
+// --- ROUTE ANALYSE IA (étape 2 : reçoit la météo brute + activityId, retourne l'analyse enrichie) ---
+app.post('/api/analyze', verifyToken, async (req, res) => {
+  const { city, activityId, structuredWeather } = req.body;
   let activityLabel = '';
   let userRules = '';
 
   try {
     if (!activityId) return res.status(400).json({ error: "L'activité est obligatoire" });
-    
+    if (!structuredWeather || !Array.isArray(structuredWeather)) return res.status(400).json({ error: "Les données météo sont obligatoires" });
+
     if (activityId === 'none') {
       activityLabel = 'plein air';
       userRules = '';
@@ -349,88 +442,120 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
       activityLabel = activity.label;
       userRules = (activity.constraints || '').trim();
     }
+
+    let activeModel = 'gemini-3.1-flash-lite';
+    let fallbackModel = 'gemini-3.5-flash';
+    try {
+      const settings = await SystemSetting.find({ key: { $in: ['gemini_model', 'gemini_fallback_model'] } });
+      settings.forEach(s => {
+        if (s.key === 'gemini_model' && s.value) activeModel = s.value;
+        if (s.key === 'gemini_fallback_model' && s.value) fallbackModel = s.value;
+      });
+    } catch (err) {
+      console.error("Erreur de lecture des modèles Gemini configurés :", err);
+    }
+
+    let prompt = `Tu es un algorithme de filtrage intransigeant pour l'activité suivante : ${activityLabel}. Voici la météo agrégée (Matin / Après-midi) pour ${city} : ${JSON.stringify(structuredWeather)}`;
+
+    if (userRules !== "") {
+      prompt += `
+CONTRAINTES DE L'ACTIVITé :
+"""${userRules}"""
+Tu DOIS mettre "favorable": false si une contrainte est enfreinte.`;
+    }
+
+    prompt += `
+            RÈGLES D'ANALYSE PRÉCISES :
+            - PRÉCIPITATIONS : Si le cumul (precip) est de 0mm, ne parle pas de "pluie continue" ou de "déluge", même si la probabilité est haute. Parle plutôt de "ciel menaçant" ou "risque de bruine".
+            - PLUIE : Si la probabilité de pluie (rain) est inférieure à 15 %, ce critère DOIT obligatoirement être "favorable" et ne DOIT PAS rendre à lui seul l'analyse de la demi-journée défavorable. Dans ton "conseil", NE MENTIONNE JAMAIS un risque de pluie et NE DÉCONSEILLE SURTOUT PAS la sortie pour ce motif si la probabilité est < 15% ou le cumul est de 0mm.
+            - SEUIL DE TOLÉRANCE : Considère que moins de 0.5mm sur une demi-journée est négligeable.
+            - VENT : Sois intransigeant sur les rafales (gust) par rapport aux consignes de l'utilisateur.
+            - INDICE UV : Analyse si l'indice UV (uv) nécessite des conseils spécifiques (ex: crème solaire / protection si UV >= 6).
+            - TON : Reste factuel et encourageant si les conditions sont à la limite.
+            
+            Pour CHAQUE JOUR et CHAQUE demi-journée (matin / apres_midi), détermine "favorable" true ou false en respectant STRICTEMENT les consignes.
+            Tu DOIS aussi remplir "criteres" (voir ci-dessous) : pour chaque critère, indique "favorable" si ce facteur ne milite pas contre la sortie vélo/sport, "defavorable" s'il contribue au refus ou au verdict défavorable.
+            Correspondance avec les chiffres fournis : temperature = temp (°C max), pluie = rain (% max), precipitations = precip (mm cumul), vent = wind (km/h max), rafales = gust (km/h max), uv = uv (indice max).
+            Si la demi-journée est favorable, tous les critères doivent être "favorable" sauf si un critère reste objectivement limite (dans ce cas mets "favorable": false et le ou les critères concernés en "defavorable").
+            Si la demi-journée est défavorable, au moins un critère doit être "defavorable" (tous ceux qui expliquent le verdict).
+            `;
+
+    prompt += `
+Réponds EXCLUSIVEMENT par un tableau JSON (sans markdown), un objet par jour, dans l'ordre des dates. Structure exacte pour chaque jour :
+{"date":"YYYY-MM-DD","matin":{"favorable":true,"conseil":"...","criteres":{"temperature":"favorable","pluie":"favorable","precipitations":"favorable","vent":"favorable","rafales":"favorable","uv":"favorable"}},"apres_midi":{"favorable":true,"conseil":"...","criteres":{"temperature":"favorable","pluie":"favorable","precipitations":"favorable","vent":"favorable","rafales":"favorable","uv":"favorable"}}}
+Les valeurs dans criteres sont uniquement les chaînes "favorable" ou "defavorable" (pas d'autres valeurs).
+`;
+
+    const callGemini = async (modelName) => {
+      const m = genAI.getGenerativeModel({ model: modelName });
+      const result = await m.generateContent(prompt);
+      const responseText = result.response.text();
+      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) throw new Error("JSON IA invalide");
+      return JSON.parse(jsonMatch[0]);
+    };
+
+    let aiData;
+    let fallback = false;
+
+    try {
+      aiData = await callGemini(activeModel);
+    } catch (aiErr) {
+      console.error(`Erreur modèle ${activeModel} :`, aiErr.message);
+      console.warn(`Bascule vers ${fallbackModel}...`);
+      aiData = await callGemini(fallbackModel);
+      fallback = true;
+    }
+
+    const finalData = structuredWeather.map(day => {
+      const ai = aiData.find(a => a.date === day.date) || { matin: {}, apres_midi: {} };
+      return {
+        date: day.date,
+        matin: day.matin ? enrichPeriod(day.matin, ai.matin || {}) : null,
+        apres_midi: day.apres_midi ? enrichPeriod(day.apres_midi, ai.apres_midi || {}) : null
+      };
+    });
+
+    res.json({
+      forecast: finalData,
+      fallback,
+      fallbackMessage: fallback
+        ? `Le modèle ${activeModel} est temporairement indisponible. L'analyse a été réalisée avec ${fallbackModel}.`
+        : null
+    });
+
+  } catch (error) {
+    console.error("Erreur /api/analyze:", error);
+    res.status(500).json({ error: "Erreur analyse IA" });
+  }
+});
+
+// --- ROUTE LEGACY /api/forecast (conservée pour compatibilité cache) ---
+app.post('/api/forecast', verifyToken, async (req, res) => {
+  const { lat, lon, city, activityId } = req.body;
+  let activityLabel = '';
+  let userRules = '';
+
+  try {
+    if (!activityId) return res.status(400).json({ error: "L'activité est obligatoire" });
+
+    if (activityId === 'none') {
+      activityLabel = 'plein air';
+      userRules = '';
+    } else {
+      const user = await User.findById(req.user.id).select('activities');
+      if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
+      const activity = user.activities.id(activityId);
+      if (!activity) return res.status(404).json({ error: "Activité introuvable" });
+      activityLabel = activity.label;
+      userRules = (activity.constraints || '').trim();
+    }
+
     const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index&timezone=auto`;
     const weatherRes = await axios.get(weatherUrl);
     const hourly = weatherRes.data.hourly;
-    // utc_offset_seconds est fourni par Open-Meteo avec timezone=auto
     const utcOffsetSeconds = weatherRes.data.utc_offset_seconds ?? 0;
-
-    // Heure locale actuelle à la destination (en minutes UTC depuis epoch)
-    const nowUtcMs = Date.now();
-    // On fabrique un timestamp local fictif pour comparer avec les strings ISO sans TZ
-    const nowLocalMs = nowUtcMs + utcOffsetSeconds * 1000;
-    const nowLocalStr = new Date(nowLocalMs).toISOString().slice(0, 16); // "YYYY-MM-DDTHH:mm"
-
-    const daysMap = {};
-    hourly.time.forEach((t, i) => {
-      // Open-Meteo retourne les temps en heure locale de la destination
-      // sans suffixe de fuseau (ex: "2026-05-18T14:00").
-      // On compare directement les strings pour éviter toute reinterprétation UTC.
-      if (t < nowLocalStr) return;
-
-      const date = t.split('T')[0];
-      // Extraction de l'heure directement depuis la chaîne (pas via new Date)
-      const hour = parseInt(t.split('T')[1].split(':')[0], 10);
-
-      if (!daysMap[date]) {
-        daysMap[date] = {
-          date,
-          matin: { temps: [], rains: [], precips: [], winds: [], gusts: [], dirs: [], hours: [], uvs: [] },
-          apres_midi: { temps: [], rains: [], precips: [], winds: [], gusts: [], dirs: [], hours: [], uvs: [] }
-        };
-      }
-
-      if (hour >= 8 && hour <= 12) {
-        daysMap[date].matin.temps.push(hourly.temperature_2m[i]);
-        daysMap[date].matin.rains.push(hourly.precipitation_probability[i]);
-        daysMap[date].matin.precips.push(hourly.precipitation[i]);
-        daysMap[date].matin.winds.push(hourly.wind_speed_10m[i]);
-        daysMap[date].matin.gusts.push(hourly.wind_gusts_10m[i]);
-        daysMap[date].matin.dirs.push(hourly.wind_direction_10m[i]);
-        daysMap[date].matin.hours.push(hour);
-        daysMap[date].matin.uvs.push(hourly.uv_index[i]);
-      } else if (hour >= 13 && hour <= 18) {
-        daysMap[date].apres_midi.temps.push(hourly.temperature_2m[i]);
-        daysMap[date].apres_midi.rains.push(hourly.precipitation_probability[i]);
-        daysMap[date].apres_midi.precips.push(hourly.precipitation[i]);
-        daysMap[date].apres_midi.winds.push(hourly.wind_speed_10m[i]);
-        daysMap[date].apres_midi.gusts.push(hourly.wind_gusts_10m[i]);
-        daysMap[date].apres_midi.dirs.push(hourly.wind_direction_10m[i]);
-        daysMap[date].apres_midi.hours.push(hour);
-        daysMap[date].apres_midi.uvs.push(hourly.uv_index[i]);
-      }
-    });
-
-    const aggregate = (period) => {
-      if (!period || period.temps.length === 0) return null;
-
-      const hourlyData = period.hours.map((h, i) => ({
-        hour: h,
-        temp: Math.round(period.temps[i]),
-        rain: period.rains[i],
-        precip: Number(period.precips[i].toFixed(1)),
-        wind: Math.round(period.winds[i]),
-        gust: Math.round(period.gusts[i]),
-        dir: period.dirs[i],
-        uv: Number((period.uvs[i] || 0).toFixed(1))
-      }));
-
-      return {
-        temp: Math.round(Math.max(...period.temps)),
-        rain: Math.max(...period.rains),
-        precip: Number(period.precips.reduce((sum, current) => sum + current, 0).toFixed(1)),
-        wind: Math.round(Math.max(...period.winds)),
-        gust: Math.round(Math.max(...period.gusts)),
-        dir: period.dirs[Math.floor(period.dirs.length / 2)],
-        uv: Number(Math.max(...(period.uvs.length > 0 ? period.uvs : [0])).toFixed(1)),
-        hourly: hourlyData
-      };
-    };
-
-    const structuredWeather = Object.values(daysMap)
-      .map(d => ({ date: d.date, matin: aggregate(d.matin), apres_midi: aggregate(d.apres_midi) }))
-      .filter(d => d.matin !== null || d.apres_midi !== null)
-      .slice(0, 7);
+    const structuredWeather = buildStructuredWeather(hourly, utcOffsetSeconds);
 
     let activeModel = 'gemini-3.1-flash-lite';
     let fallbackModel = 'gemini-3.5-flash';

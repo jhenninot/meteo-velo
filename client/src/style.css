@@ -616,6 +616,55 @@ html.meteo-theme-dark .icon-grid-item:hover, html.meteo-theme-dark .icon-grid-it
 .app-container.theme-dark .metrics .metric-critere.critere-neutre .mdi { color: #9aa0a6; }
 .app-container.theme-dark .facteurs-def { color: #ffab91; }
 .app-container.theme-dark .ia-advice { color: #c5cad3; background: rgba(0,0,0,0.2); }
+
+/* --- État météo seule (avant analyse IA) --- */
+.half-day.weather-only {
+  border-left: 4px solid var(--border-color);
+  background: var(--bg-surface);
+  opacity: 0.97;
+}
+.half-day.weather-only h4 .weather-main-icon { color: var(--text-secondary); }
+
+/* Message de chargement IA (bannière) */
+.status-msg-ai {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(139, 92, 246, 0.12));
+  color: #6366f1;
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  font-weight: 600;
+}
+.app-container.theme-dark .status-msg-ai {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(139, 92, 246, 0.18));
+  color: #a5b4fc;
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+/* Placeholder "Analyse en cours..." dans les cartes */
+.ia-advice.ia-advice-pending {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-style: italic;
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.07);
+  border: 1px dashed rgba(99, 102, 241, 0.3);
+}
+.app-container.theme-dark .ia-advice.ia-advice-pending {
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+/* Animations icônes */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes pulse-icon {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.6; transform: scale(0.9); }
+}
+.mdi-spin-slow { display: inline-block; animation: spin-slow 2s linear infinite; }
+.mdi-pulse     { display: inline-block; animation: pulse-icon 1.4s ease-in-out infinite; }
 .app-container.theme-dark .login-error { background: #4a2328; color: #ffcdd2; }
 .app-container.theme-dark .error-msg { background: #4a2328; color: #ffcdd2; }
 .app-container.theme-dark .status-msg { color: var(--text-secondary); }
