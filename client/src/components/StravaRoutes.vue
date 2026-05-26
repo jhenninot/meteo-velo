@@ -606,6 +606,7 @@ const analysisSelectedActivity = ref(null)
 const analysisStartCityName = ref('')
 const analysisFullscreenOpen = ref(false)
 const expandedPeriods = ref({})
+const showAnalysisMap = ref(false)
 let analysisMapInstance = null
 
 // ---- Weather helpers for AI analysis display ----
@@ -766,6 +767,7 @@ const startAnalysisForRoute = async (route) => {
   analysisError.value = null
   analysisForecastData.value = null
   expandedPeriods.value = {}
+  showAnalysisMap.value = false
 
   if (matchedActivityId === 'none') {
     analysisSelectedActivity.value = { _id: 'none', label: 'Plein air général', icon: 'mdi-compass-outline' }
@@ -781,9 +783,6 @@ const startAnalysisForRoute = async (route) => {
   }
 
   const [lat, lon] = startPoint
-
-  // Initialize map immediately in the fullscreen view
-  await initAnalysisMap(route)
 
   // Fetch city name via reverse geocoding
   analysisStartCityName.value = 'Recherche du lieu...'
@@ -882,7 +881,23 @@ const initAnalysisMap = async (route) => {
   }, 250)
 }
 
+const toggleAnalysisMap = async () => {
+  showAnalysisMap.value = !showAnalysisMap.value
+  if (showAnalysisMap.value) {
+    await nextTick()
+    await initAnalysisMap(selectedRouteForAnalysis.value)
+  } else {
+    if (analysisMapInstance) {
+      try {
+        analysisMapInstance.remove()
+      } catch {}
+      analysisMapInstance = null
+    }
+  }
+}
+
 const closeAnalysisFullscreen = () => {
+  showAnalysisMap.value = false
   if (analysisMapInstance) {
     try {
       analysisMapInstance.remove()
@@ -1839,6 +1854,14 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="fullscreen-actions">
+          <button 
+            v-if="selectedRouteForAnalysis?.map?.summary_polyline" 
+            class="btn-fullscreen-action btn-toggle-analysis-map" 
+            @click="toggleAnalysisMap"
+          >
+            <span class="mdi" :class="showAnalysisMap ? 'mdi-map-minus' : 'mdi-map-legend'"></span>
+            {{ showAnalysisMap ? 'Masquer la carte' : 'Afficher la carte' }}
+          </button>
           <button class="btn-fullscreen-close" @click="closeAnalysisFullscreen">
             <span class="mdi mdi-close"></span> Fermer
           </button>
@@ -1846,8 +1869,8 @@ onUnmounted(() => {
       </div>
       
       <div class="analysis-content">
-        <!-- Carte en haut -->
-        <div class="analysis-map-pane">
+        <!-- Carte en haut (affichée uniquement si demandé) -->
+        <div v-if="showAnalysisMap" class="analysis-map-pane">
           <div id="analysis-fullscreen-map" style="height: 100%; width: 100%;"></div>
         </div>
         
