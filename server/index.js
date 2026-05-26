@@ -401,20 +401,177 @@ function buildStructuredWeather(hourly, utcOffsetSeconds) {
     .slice(0, 7);
 }
 
+// Helper : adapte les données horaires met.no (GeoJSON timeseries) au même format que buildStructuredWeather()
+function buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds) {
+  const nowUtcMs = Date.now();
+  const nowLocalMs = nowUtcMs + utcOffsetSeconds * 1000;
+  const nowLocalStr = new Date(nowLocalMs).toISOString().slice(0, 16);
+
+  const daysMap = {};
+  for (const entry of timeseries) {
+    // Convertir l'heure UTC en heure locale
+    const utcMs = new Date(entry.time).getTime();
+    const localMs = utcMs + utcOffsetSeconds * 1000;
+    const localIso = new Date(localMs).toISOString();
+    const localStr = localIso.slice(0, 16); // YYYY-MM-DDTHH:MM
+
+    if (localStr < nowLocalStr) continue;
+
+    const date = localStr.split('T')[0];
+    const hour = parseInt(localStr.split('T')[1].split(':')[0], 10);
+
+    const instant = entry.data?.instant?.details || {};
+    const next1h = entry.data?.next_1_hours?.details || {};
+
+    // Conversions : m/s → km/h (×3.6)
+    const windKmh = instant.wind_speed != null ? instant.wind_speed * 3.6 : 0;
+    const gustKmh = instant.wind_speed_of_gust != null ? instant.wind_speed_of_gust * 3.6 : windKmh;
+    const temp = instant.air_temperature ?? 0;
+    const dir = instant.wind_from_direction ?? 0;
+    const uv = instant.ultraviolet_index_clear_sky ?? 0;
+    const precip = next1h.precipitation_amount ?? 0;
+    // probability_of_precipitation est souvent absent — on l'estime si besoin
+    let rain = next1h.probability_of_precipitation ?? null;
+    if (rain === null) {
+      rain = precip === 0 ? 0 : (precip < 0.3 ? 20 : precip < 1 ? 50 : 80);
+    }
+
+    if (!daysMap[date]) {
+      daysMap[date] = {
+        date,
+        matin: { temps: [], rains: [], precips: [], winds: [], gusts: [], dirs: [], hours: [], uvs: [] },
+        apres_midi: { temps: [], rains: [], precips: [], winds: [], gusts: [], dirs: [], hours: [], uvs: [] }
+      };
+    }
+
+    if (hour >= 8 && hour <= 12) {
+      daysMap[date].matin.temps.push(temp);
+      daysMap[date].matin.rains.push(rain);
+      daysMap[date].matin.precips.push(precip);
+      daysMap[date].matin.winds.push(windKmh);
+      daysMap[date].matin.gusts.push(gustKmh);
+      daysMap[date].matin.dirs.push(dir);
+      daysMap[date].matin.hours.push(hour);
+      daysMap[date].matin.uvs.push(uv);
+    } else if (hour >= 13 && hour <= 18) {
+      daysMap[date].apres_midi.temps.push(temp);
+      daysMap[date].apres_midi.rains.push(rain);
+      daysMap[date].apres_midi.precips.push(precip);
+      daysMap[date].apres_midi.winds.push(windKmh);
+      daysMap[date].apres_midi.gusts.push(gustKmh);
+      daysMap[date].apres_midi.dirs.push(dir);
+      daysMap[date].apres_midi.hours.push(hour);
+      daysMap[date].apres_midi.uvs.push(uv);
+    }
+  }
+
+  const aggregate = (period) => {
+    if (!period || period.temps.length === 0) return null;
+    const hourlyData = period.hours.map((h, i) => ({
+      hour: h,
+      temp: Math.round(period.temps[i]),
+      rain: period.rains[i],
+      precip: Number(period.precips[i].toFixed(1)),
+      wind: Math.round(period.winds[i]),
+      gust: Math.round(period.gusts[i]),
+      dir: period.dirs[i],
+      uv: Number((period.uvs[i] || 0).toFixed(1))
+    }));
+    return {
+      temp: Math.round(Math.max(...period.temps)),
+      rain: Math.max(...period.rains),
+      precip: Number(period.precips.reduce((sum, current) => sum + current, 0).toFixed(1)),
+      wind: Math.round(Math.max(...period.winds)),
+      gust: Math.round(Math.max(...period.gusts)),
+      dir: period.dirs[Math.floor(period.dirs.length / 2)],
+      uv: Number(Math.max(...(period.uvs.length > 0 ? period.uvs : [0])).toFixed(1)),
+      hourly: hourlyData
+    };
+  };
+
+  return Object.values(daysMap)
+    .map(d => ({ date: d.date, matin: aggregate(d.matin), apres_midi: aggregate(d.apres_midi) }))
+    .filter(d => d.matin !== null || d.apres_midi !== null)
+    .slice(0, 7);
+}
+
 // --- ROUTE MÉTÉO BRUTE (étape 1 : retourne la météo agrégée sans analyse IA) ---
 app.post('/api/weather', verifyToken, async (req, res) => {
   const { lat, lon } = req.body;
   if (!lat || !lon) return res.status(400).json({ error: "lat et lon sont obligatoires" });
 
   try {
-    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index&timezone=auto`;
-    const weatherRes = await axios.get(weatherUrl);
-    const hourly = weatherRes.data.hourly;
-    const utcOffsetSeconds = weatherRes.data.utc_offset_seconds ?? 0;
+    // Lire le fournisseur météo configuré par l'admin
+    let weatherProvider = 'open-meteo';
+    try {
+      const providerSetting = await SystemSetting.findOne({ key: 'weather_provider' });
+      if (providerSetting?.value) weatherProvider = providerSetting.value;
+    } catch (err) {
+      console.error("Erreur lecture weather_provider:", err);
+    }
 
-    const structuredWeather = buildStructuredWeather(hourly, utcOffsetSeconds);
+    let structuredWeather;
 
-    res.json({ weather: structuredWeather });
+    const fetchFromMetNo = async () => {
+      // 1. Récupérer l'offset UTC via Open-Meteo (requête minimale) avec fallback robuste
+      let utcOffsetSeconds = Math.round(Number(lon) / 15) * 3600;
+      try {
+        const tzUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m&forecast_days=1&timezone=auto`;
+        const tzRes = await axios.get(tzUrl);
+        if (tzRes.data && tzRes.data.utc_offset_seconds !== undefined) {
+          utcOffsetSeconds = tzRes.data.utc_offset_seconds;
+        }
+      } catch (tzErr) {
+        console.warn("Impossible de récupérer l'offset UTC depuis Open-Meteo pour met.no, estimation basée sur la longitude :", tzErr.message);
+      }
+
+      // 2. Récupérer les données météo depuis met.no (complete pour avoir l'indice UV et les rafales)
+      const formattedLat = Number(lat).toFixed(4);
+      const formattedLon = Number(lon).toFixed(4);
+      const metNoUrl = `https://api.met.no/weatherapi/locationforecast/2.0/complete?lat=${formattedLat}&lon=${formattedLon}`;
+      const metNoRes = await axios.get(metNoUrl, {
+        headers: {
+          'User-Agent': 'meteo-velo/1.0 github.com/jhenninot/meteo-velo'
+        }
+      });
+      const timeseries = metNoRes.data?.properties?.timeseries;
+      if (!timeseries || !Array.isArray(timeseries)) {
+        throw new Error("Données met.no invalides");
+      }
+      return buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds);
+    };
+
+    const fetchFromOpenMeteo = async () => {
+      const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index&timezone=auto`;
+      const weatherRes = await axios.get(weatherUrl);
+      const hourly = weatherRes.data.hourly;
+      const utcOffsetSeconds = weatherRes.data.utc_offset_seconds ?? 0;
+      return buildStructuredWeather(hourly, utcOffsetSeconds);
+    };
+
+    let actualProviderUsed = weatherProvider;
+
+    if (weatherProvider === 'met.no') {
+      try {
+        structuredWeather = await fetchFromMetNo();
+        actualProviderUsed = 'met.no';
+      } catch (err) {
+        console.warn("Erreur de récupération depuis met.no, bascule automatique sur Open-Meteo :", err.message);
+        structuredWeather = await fetchFromOpenMeteo();
+        actualProviderUsed = 'open-meteo';
+      }
+    } else {
+      try {
+        structuredWeather = await fetchFromOpenMeteo();
+        actualProviderUsed = 'open-meteo';
+      } catch (err) {
+        console.warn("Erreur de récupération depuis Open-Meteo, bascule automatique sur met.no :", err.message);
+        structuredWeather = await fetchFromMetNo();
+        actualProviderUsed = 'met.no';
+      }
+    }
+
+    res.json({ weather: structuredWeather, provider: actualProviderUsed });
   } catch (error) {
     console.error("Erreur /api/weather:", error);
     res.status(500).json({ error: "Impossible de récupérer la météo" });
@@ -551,11 +708,75 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
       userRules = (activity.constraints || '').trim();
     }
 
-    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index&timezone=auto`;
-    const weatherRes = await axios.get(weatherUrl);
-    const hourly = weatherRes.data.hourly;
-    const utcOffsetSeconds = weatherRes.data.utc_offset_seconds ?? 0;
-    const structuredWeather = buildStructuredWeather(hourly, utcOffsetSeconds);
+    // Lire le fournisseur météo configuré par l'admin
+    let weatherProvider = 'open-meteo';
+    try {
+      const providerSetting = await SystemSetting.findOne({ key: 'weather_provider' });
+      if (providerSetting?.value) weatherProvider = providerSetting.value;
+    } catch (err) {
+      console.error("Erreur lecture weather_provider:", err);
+    }
+
+    let structuredWeather;
+
+    const fetchFromMetNo = async () => {
+      // 1. Récupérer l'offset UTC via Open-Meteo (requête minimale) avec fallback robuste
+      let utcOffsetSeconds = Math.round(Number(lon) / 15) * 3600;
+      try {
+        const tzUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m&forecast_days=1&timezone=auto`;
+        const tzRes = await axios.get(tzUrl);
+        if (tzRes.data && tzRes.data.utc_offset_seconds !== undefined) {
+          utcOffsetSeconds = tzRes.data.utc_offset_seconds;
+        }
+      } catch (tzErr) {
+        console.warn("Impossible de récupérer l'offset UTC depuis Open-Meteo pour met.no, estimation basée sur la longitude :", tzErr.message);
+      }
+
+      // 2. Récupérer les données météo depuis met.no (complete pour avoir l'indice UV et les rafales)
+      const formattedLat = Number(lat).toFixed(4);
+      const formattedLon = Number(lon).toFixed(4);
+      const metNoUrl = `https://api.met.no/weatherapi/locationforecast/2.0/complete?lat=${formattedLat}&lon=${formattedLon}`;
+      const metNoRes = await axios.get(metNoUrl, {
+        headers: {
+          'User-Agent': 'meteo-velo/1.0 github.com/jhenninot/meteo-velo'
+        }
+      });
+      const timeseries = metNoRes.data?.properties?.timeseries;
+      if (!timeseries || !Array.isArray(timeseries)) {
+        throw new Error("Données met.no invalides");
+      }
+      return buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds);
+    };
+
+    const fetchFromOpenMeteo = async () => {
+      const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index&timezone=auto`;
+      const weatherRes = await axios.get(weatherUrl);
+      const hourly = weatherRes.data.hourly;
+      const utcOffsetSeconds = weatherRes.data.utc_offset_seconds ?? 0;
+      return buildStructuredWeather(hourly, utcOffsetSeconds);
+    };
+
+    let actualProviderUsed = weatherProvider;
+
+    if (weatherProvider === 'met.no') {
+      try {
+        structuredWeather = await fetchFromMetNo();
+        actualProviderUsed = 'met.no';
+      } catch (err) {
+        console.warn("Erreur de récupération depuis met.no, bascule automatique sur Open-Meteo :", err.message);
+        structuredWeather = await fetchFromOpenMeteo();
+        actualProviderUsed = 'open-meteo';
+      }
+    } else {
+      try {
+        structuredWeather = await fetchFromOpenMeteo();
+        actualProviderUsed = 'open-meteo';
+      } catch (err) {
+        console.warn("Erreur de récupération depuis Open-Meteo, bascule automatique sur met.no :", err.message);
+        structuredWeather = await fetchFromMetNo();
+        actualProviderUsed = 'met.no';
+      }
+    }
 
     let activeModel = 'gemini-3.1-flash-lite';
     let fallbackModel = 'gemini-3.5-flash';
@@ -635,7 +856,8 @@ Les valeurs dans criteres sont uniquement les chaînes "favorable" ou "defavorab
       fallback,
       fallbackMessage: fallback
         ? `Le modèle ${activeModel} est temporairement indisponible. L'analyse a été réalisée avec ${fallbackModel}.`
-        : null
+        : null,
+      provider: actualProviderUsed
     });
 
   } catch (error) {
@@ -857,16 +1079,18 @@ app.get('/api/admin/models', verifyToken, async (req, res) => {
 app.get('/api/admin/settings', verifyToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: "Accès refusé (Admin requis)" });
   try {
-    const settings = await SystemSetting.find({ key: { $in: ['gemini_model', 'gemini_fallback_model', 'cache_max_age'] } });
+    const settings = await SystemSetting.find({ key: { $in: ['gemini_model', 'gemini_fallback_model', 'cache_max_age', 'weather_provider'] } });
     const result = {
       gemini_model: 'gemini-3.1-flash-lite',
       gemini_fallback_model: 'gemini-3.5-flash',
-      cache_max_age: '60'
+      cache_max_age: '60',
+      weather_provider: 'open-meteo'
     };
     settings.forEach(s => {
       if (s.key === 'gemini_model') result.gemini_model = s.value;
       if (s.key === 'gemini_fallback_model') result.gemini_fallback_model = s.value;
       if (s.key === 'cache_max_age') result.cache_max_age = s.value;
+      if (s.key === 'weather_provider') result.weather_provider = s.value;
     });
     res.json(result);
   } catch (err) {
@@ -877,7 +1101,7 @@ app.get('/api/admin/settings', verifyToken, async (req, res) => {
 // Modifier les paramètres d'administration (Admin uniquement)
 app.post('/api/admin/settings', verifyToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: "Accès refusé (Admin requis)" });
-  const { gemini_model, gemini_fallback_model, cache_max_age } = req.body;
+  const { gemini_model, gemini_fallback_model, cache_max_age, weather_provider } = req.body;
   try {
     if (gemini_model) {
       if (typeof gemini_model !== 'string' || gemini_model.trim().length === 0) {
@@ -909,6 +1133,18 @@ app.post('/api/admin/settings', verifyToken, async (req, res) => {
       await SystemSetting.findOneAndUpdate(
         { key: 'cache_max_age' },
         { value: String(minutes) },
+        { upsert: true }
+      );
+    }
+
+    if (weather_provider !== undefined) {
+      const validProviders = ['open-meteo', 'met.no'];
+      if (!validProviders.includes(weather_provider)) {
+        return res.status(400).json({ error: "Fournisseur météo invalide. Valeurs acceptées : open-meteo, met.no" });
+      }
+      await SystemSetting.findOneAndUpdate(
+        { key: 'weather_provider' },
+        { value: weather_provider },
         { upsert: true }
       );
     }

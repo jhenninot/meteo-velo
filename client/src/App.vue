@@ -64,6 +64,7 @@ const loading = ref(false)         // chargement météo brute
 const aiLoading = ref(false)       // chargement analyse IA
 const error = ref(null)
 const fallbackWarning = ref('')
+const actualWeatherProvider = ref(null)
 const geoLoading = ref(false)
 const expandedPeriods = ref({})
 const favorites = ref([])
@@ -1232,12 +1233,13 @@ const restoreCachedForecast = () => {
   weatherData.value = cached.weather || cached.forecast
   forecastData.value = cached.forecast
   fallbackWarning.value = cached.fallbackMessage || ''
+  actualWeatherProvider.value = cached.provider || 'open-meteo'
   forecastCollectedAt.value = cached.collectedAt || new Date(Number(cached.fetchedAt || Date.now())).toISOString()
   forecastLoadedFromCache.value = true
   return true
 }
 
-const saveForecastToCache = (weather, forecast, fallbackMessage = '') => {
+const saveForecastToCache = (weather, forecast, fallbackMessage = '', provider = '') => {
   if (!city.value || lat.value === null || lon.value === null || !selectedActivityId.value) {
     return
   }
@@ -1253,7 +1255,8 @@ const saveForecastToCache = (weather, forecast, fallbackMessage = '') => {
     collectedAt: new Date().toISOString(),
     weather,
     forecast,
-    fallbackMessage
+    fallbackMessage,
+    provider
   }
   saveForecastCache(cache)
 }
@@ -1283,6 +1286,7 @@ const fetchForecast = async (useCache = true) => {
   localStorage.setItem('selected_activity_id', selectedActivityId.value)
 
   let rawWeather = null
+  let detectedProvider = 'open-meteo'
   try {
     const weatherRes = await axios.post(`${API_BASE_URL}/api/weather`, {
       lat: lat.value,
@@ -1290,6 +1294,8 @@ const fetchForecast = async (useCache = true) => {
     })
     rawWeather = weatherRes.data.weather
     weatherData.value = rawWeather
+    detectedProvider = weatherRes.data.provider || 'open-meteo'
+    actualWeatherProvider.value = detectedProvider
   } catch (err) {
     if (err.response?.status !== 401) {
       error.value = "Impossible de récupérer la météo"
@@ -1311,7 +1317,7 @@ const fetchForecast = async (useCache = true) => {
     forecastData.value = analyzeRes.data.forecast
     fallbackWarning.value = analyzeRes.data.fallbackMessage || ''
     forecastCollectedAt.value = new Date().toISOString()
-    saveForecastToCache(rawWeather, analyzeRes.data.forecast, fallbackWarning.value)
+    saveForecastToCache(rawWeather, analyzeRes.data.forecast, fallbackWarning.value, detectedProvider)
   } catch (err) {
     if (err.response?.status !== 401) {
       error.value = "Impossible d'obtenir l'analyse IA"
@@ -1729,6 +1735,12 @@ const fetchForecast = async (useCache = true) => {
                 {{ fav.city }}
               </option>
             </select>
+          </div>
+
+          <!-- Fournisseur météo utilisé -->
+          <div v-if="actualWeatherProvider && (weatherData || forecastData) && !loading" class="weather-provider-badge">
+            <span class="mdi mdi-database-outline"></span> Source de données météo : 
+            <strong>{{ actualWeatherProvider === 'met.no' ? 'met.no (Norvège)' : 'Open-Meteo' }}</strong>
           </div>
         </div>
       </section>
