@@ -653,8 +653,16 @@ app.delete('/api/user/activities/:activityId', verifyToken, async (req, res) => 
 // Lister tous les utilisateurs
 app.get('/api/admin/users', verifyToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: "Interdit" });
-  const users = await User.find({}, '-password'); // On récupère tout SAUF les mots de passe
-  res.json(users);
+  try {
+    const users = await User.find({}, '-password').lean();
+    const processedUsers = users.map(user => ({
+      ...user,
+      isDeletable: user.username && user.username.toLowerCase() !== 'jhenninot' && String(user._id) !== String(req.user.id)
+    }));
+    res.json(processedUsers);
+  } catch (err) {
+    res.status(500).json({ error: "Impossible de récupérer la liste des utilisateurs" });
+  }
 });
 
 // Modifier le mot de passe d'un utilisateur
@@ -672,8 +680,20 @@ app.delete('/api/admin/users/:id', verifyToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: "Interdit" });
   // On empêche de se supprimer soi-même
   if (req.params.id === req.user.id) return res.status(400).json({ error: "Impossible de supprimer votre propre compte" });
-  await User.findByIdAndDelete(req.params.id);
-  res.json({ message: "Utilisateur supprimé" });
+  
+  try {
+    const userToDelete = await User.findById(req.params.id);
+    if (!userToDelete) {
+      return res.status(404).json({ error: "Utilisateur introuvable" });
+    }
+    if (userToDelete.username && userToDelete.username.toLowerCase() === 'jhenninot') {
+      return res.status(400).json({ error: "Impossible de supprimer l'utilisateur administrateur principal jhenninot" });
+    }
+    await User.findByIdAndDelete(req.params.id);
+    res.json({ message: "Utilisateur supprimé" });
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors de la suppression de l'utilisateur" });
+  }
 });
 
 // Obtenir la liste des modèles Gemini disponibles (Admin uniquement)

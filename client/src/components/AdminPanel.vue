@@ -229,7 +229,7 @@ fetchAvailableModels()
                 <button @click="changePassword(u._id)" title="Changer MDP">
                   <span class="mdi mdi-key-variant"></span>
                 </button>
-                <button @click="deleteUser(u._id)" class="del-btn" title="Supprimer">
+                <button v-if="u.isDeletable" @click="deleteUser(u._id)" class="del-btn" title="Supprimer">
                   <span class="mdi mdi-trash-can-outline"></span>
                 </button>
               </td>
