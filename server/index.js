@@ -346,9 +346,19 @@ function buildStructuredWeather(hourly, utcOffsetSeconds) {
       daysMap[date] = {
         date,
         matin: { temps: [], rains: [], precips: [], winds: [], gusts: [], dirs: [], hours: [], uvs: [] },
-        apres_midi: { temps: [], rains: [], precips: [], winds: [], gusts: [], dirs: [], hours: [], uvs: [] }
+        apres_midi: { temps: [], rains: [], precips: [], winds: [], gusts: [], dirs: [], hours: [], uvs: [] },
+        full_day: { temps: [], rains: [], precips: [], winds: [], gusts: [], dirs: [], hours: [], uvs: [] }
       };
     }
+
+    daysMap[date].full_day.temps.push(hourly.temperature_2m[i]);
+    daysMap[date].full_day.rains.push(hourly.precipitation_probability[i]);
+    daysMap[date].full_day.precips.push(hourly.precipitation[i]);
+    daysMap[date].full_day.winds.push(hourly.wind_speed_10m[i]);
+    daysMap[date].full_day.gusts.push(hourly.wind_gusts_10m[i]);
+    daysMap[date].full_day.dirs.push(hourly.wind_direction_10m[i]);
+    daysMap[date].full_day.hours.push(hour);
+    daysMap[date].full_day.uvs.push(hourly.uv_index[i]);
 
     if (hour >= 8 && hour <= 12) {
       daysMap[date].matin.temps.push(hourly.temperature_2m[i]);
@@ -385,6 +395,7 @@ function buildStructuredWeather(hourly, utcOffsetSeconds) {
     }));
     return {
       temp: Math.round(Math.max(...period.temps)),
+      minTemp: Math.round(Math.min(...period.temps)),
       rain: Math.max(...period.rains),
       precip: Number(period.precips.reduce((sum, current) => sum + current, 0).toFixed(1)),
       wind: Math.round(Math.max(...period.winds)),
@@ -396,7 +407,12 @@ function buildStructuredWeather(hourly, utcOffsetSeconds) {
   };
 
   return Object.values(daysMap)
-    .map(d => ({ date: d.date, matin: aggregate(d.matin), apres_midi: aggregate(d.apres_midi) }))
+    .map(d => ({
+      date: d.date,
+      matin: aggregate(d.matin),
+      apres_midi: aggregate(d.apres_midi),
+      full_day: aggregate(d.full_day)
+    }))
     .filter(d => d.matin !== null || d.apres_midi !== null)
     .slice(0, 7);
 }
@@ -440,9 +456,19 @@ function buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds) {
       daysMap[date] = {
         date,
         matin: { temps: [], rains: [], precips: [], winds: [], gusts: [], dirs: [], hours: [], uvs: [] },
-        apres_midi: { temps: [], rains: [], precips: [], winds: [], gusts: [], dirs: [], hours: [], uvs: [] }
+        apres_midi: { temps: [], rains: [], precips: [], winds: [], gusts: [], dirs: [], hours: [], uvs: [] },
+        full_day: { temps: [], rains: [], precips: [], winds: [], gusts: [], dirs: [], hours: [], uvs: [] }
       };
     }
+
+    daysMap[date].full_day.temps.push(temp);
+    daysMap[date].full_day.rains.push(rain);
+    daysMap[date].full_day.precips.push(precip);
+    daysMap[date].full_day.winds.push(windKmh);
+    daysMap[date].full_day.gusts.push(gustKmh);
+    daysMap[date].full_day.dirs.push(dir);
+    daysMap[date].full_day.hours.push(hour);
+    daysMap[date].full_day.uvs.push(uv);
 
     if (hour >= 8 && hour <= 12) {
       daysMap[date].matin.temps.push(temp);
@@ -479,6 +505,7 @@ function buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds) {
     }));
     return {
       temp: Math.round(Math.max(...period.temps)),
+      minTemp: Math.round(Math.min(...period.temps)),
       rain: Math.max(...period.rains),
       precip: Number(period.precips.reduce((sum, current) => sum + current, 0).toFixed(1)),
       wind: Math.round(Math.max(...period.winds)),
@@ -490,7 +517,12 @@ function buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds) {
   };
 
   return Object.values(daysMap)
-    .map(d => ({ date: d.date, matin: aggregate(d.matin), apres_midi: aggregate(d.apres_midi) }))
+    .map(d => ({
+      date: d.date,
+      matin: aggregate(d.matin),
+      apres_midi: aggregate(d.apres_midi),
+      full_day: aggregate(d.full_day)
+    }))
     .filter(d => d.matin !== null || d.apres_midi !== null)
     .slice(0, 7);
 }
@@ -612,7 +644,21 @@ app.post('/api/analyze', verifyToken, async (req, res) => {
       console.error("Erreur de lecture des modèles Gemini configurés :", err);
     }
 
-    let prompt = `Tu es un algorithme de filtrage intransigeant pour l'activité suivante : ${activityLabel}. Voici la météo agrégée (Matin / Après-midi) pour ${city} : ${JSON.stringify(structuredWeather)}`;
+    // Nettoyer structuredWeather pour n'envoyer que matin et apres_midi (et sans hourly pour réduire les tokens)
+    const weatherForAi = structuredWeather.map(day => {
+      const cleanPeriod = (period) => {
+        if (!period) return null;
+        const { hourly, ...rest } = period;
+        return rest;
+      };
+      return {
+        date: day.date,
+        matin: cleanPeriod(day.matin),
+        apres_midi: cleanPeriod(day.apres_midi)
+      };
+    });
+
+    let prompt = `Tu es un algorithme de filtrage intransigeant pour l'activité suivante : ${activityLabel}. Voici la météo agrégée (Matin / Après-midi) pour ${city} : ${JSON.stringify(weatherForAi)}`;
 
     if (userRules !== "") {
       prompt += `
@@ -669,7 +715,8 @@ Les valeurs dans criteres sont uniquement les chaînes "favorable" ou "defavorab
       return {
         date: day.date,
         matin: day.matin ? enrichPeriod(day.matin, ai.matin || {}) : null,
-        apres_midi: day.apres_midi ? enrichPeriod(day.apres_midi, ai.apres_midi || {}) : null
+        apres_midi: day.apres_midi ? enrichPeriod(day.apres_midi, ai.apres_midi || {}) : null,
+        full_day: day.full_day
       };
     });
 
@@ -790,7 +837,21 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
       console.error("Erreur de lecture des modèles Gemini configurés :", err);
     }
 
-    let prompt = `Tu es un algorithme de filtrage intransigeant pour l'activité suivante : ${activityLabel}. Voici la météo agrégée (Matin / Après-midi) pour ${city} : ${JSON.stringify(structuredWeather)}`;
+    // Nettoyer structuredWeather pour n'envoyer que matin et apres_midi (et sans hourly pour réduire les tokens)
+    const weatherForAi = structuredWeather.map(day => {
+      const cleanPeriod = (period) => {
+        if (!period) return null;
+        const { hourly, ...rest } = period;
+        return rest;
+      };
+      return {
+        date: day.date,
+        matin: cleanPeriod(day.matin),
+        apres_midi: cleanPeriod(day.apres_midi)
+      };
+    });
+
+    let prompt = `Tu es un algorithme de filtrage intransigeant pour l'activité suivante : ${activityLabel}. Voici la météo agrégée (Matin / Après-midi) pour ${city} : ${JSON.stringify(weatherForAi)}`;
 
     if (userRules !== "") {
       prompt += `
@@ -847,7 +908,8 @@ Les valeurs dans criteres sont uniquement les chaînes "favorable" ou "defavorab
       return {
         date: day.date,
         matin: day.matin ? enrichPeriod(day.matin, ai.matin || {}) : null,
-        apres_midi: day.apres_midi ? enrichPeriod(day.apres_midi, ai.apres_midi || {}) : null
+        apres_midi: day.apres_midi ? enrichPeriod(day.apres_midi, ai.apres_midi || {}) : null,
+        full_day: day.full_day
       };
     });
 

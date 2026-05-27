@@ -2010,6 +2010,202 @@ input:checked + .switch-slider:before {
   color: var(--text-muted);
 }
 
+.daily-summary-card.is-selected {
+  border-color: var(--color-primary);
+  background-color: rgba(76, 175, 80, 0.06);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+}
+
+.theme-dark .daily-summary-card.is-selected {
+  border-color: var(--color-primary-light);
+  background-color: rgba(76, 175, 80, 0.12);
+}
+
+/* --- Hourly Details under Weekly Summary --- */
+.selected-day-hourly-details {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 25px;
+  box-shadow: var(--shadow-md);
+  position: relative;
+  animation: slideDown 0.25s ease-out;
+}
+
+.hourly-details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 10px;
+}
+
+.hourly-details-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 750;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hourly-details-header h3 .mdi {
+  color: var(--color-primary);
+}
+
+.btn-close-hourly {
+  background: none;
+  border: none;
+  font-size: 1.3rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s, color 0.2s;
+  width: 32px;
+  height: 32px;
+}
+
+.btn-close-hourly:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-primary);
+}
+
+.theme-dark .btn-close-hourly:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.hourly-scroll-wrapper {
+  overflow: hidden;
+  width: 100%;
+}
+
+.hourly-scroll-container {
+  display: flex;
+  overflow-x: auto;
+  gap: 10px;
+  padding-bottom: 12px;
+  scrollbar-width: thin;
+}
+
+.hourly-scroll-container::-webkit-scrollbar {
+  height: 6px;
+}
+
+.hourly-scroll-container::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.03);
+  border-radius: 3px;
+}
+
+.hourly-scroll-container::-webkit-scrollbar-thumb {
+  background: var(--color-primary);
+  border-radius: 3px;
+}
+
+.hourly-card {
+  flex: 0 0 auto;
+  min-width: 90px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  box-shadow: var(--shadow-sm);
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.hourly-card:hover {
+  background-color: var(--bg-surface-2);
+}
+
+.hourly-card.is-night {
+  background-color: #f1f3f5;
+  border-color: #e2e8f0;
+}
+
+.hourly-card.is-night:hover {
+  background-color: #e2e8f0;
+}
+
+.theme-dark .hourly-card.is-night,
+html.meteo-theme-dark .hourly-card.is-night {
+  background-color: #1a1d23;
+  border-color: #1f242d;
+}
+
+.theme-dark .hourly-card.is-night:hover,
+html.meteo-theme-dark .hourly-card.is-night:hover {
+  background-color: #15181e;
+}
+
+.hour-time {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 0.88rem;
+}
+
+.hour-icon .mdi {
+  font-size: 1.8rem;
+  color: var(--color-primary);
+}
+
+.theme-dark .hour-icon .mdi {
+  color: var(--color-primary-light);
+}
+
+.hour-temp {
+  font-weight: 750;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.hour-wind, .hour-gust, .hour-precip, .hour-rain {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.hour-precip, .hour-rain {
+  color: #1565c0;
+}
+
+.theme-dark .hour-precip, .theme-dark .hour-rain {
+  color: #90caf9;
+}
+
+.hourly-card .wind-icon {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* Animations and Transitions */
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
 /* --- Analyser Button (Strava Routes) --- */
 .btn-analyse {
   background: #f3e8ff !important;

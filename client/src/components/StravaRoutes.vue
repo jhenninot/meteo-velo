@@ -610,13 +610,15 @@ const showAnalysisMap = ref(false)
 let analysisMapInstance = null
 
 // ---- Weather helpers for AI analysis display ----
-const getWeatherIcon = (periodData) => {
+const getWeatherIcon = (periodData, isNight = false) => {
   if (!periodData) return 'mdi-help-circle-outline';
   if (periodData.precip >= 2) return 'mdi-weather-pouring';
   if (periodData.precip > 0 || periodData.rain >= 50) return 'mdi-weather-rainy';
   if (periodData.wind > 35) return 'mdi-weather-windy';
-  if (periodData.rain > 20) return 'mdi-weather-partly-cloudy';
-  return 'mdi-weather-sunny';
+  if (periodData.rain > 20) {
+    return isNight ? 'mdi-weather-night-partly-cloudy' : 'mdi-weather-partly-cloudy';
+  }
+  return isNight ? 'mdi-weather-night' : 'mdi-weather-sunny';
 }
 
 const getShortDayName = (dateString) => {
@@ -628,6 +630,7 @@ const getShortDayName = (dateString) => {
 }
 
 const getDailyMinTemp = (day) => {
+  if (day.full_day?.minTemp !== undefined) return day.full_day.minTemp;
   const temps = [];
   if (day.matin?.temp !== undefined) temps.push(day.matin.temp);
   if (day.apres_midi?.temp !== undefined) temps.push(day.apres_midi.temp);
@@ -636,6 +639,7 @@ const getDailyMinTemp = (day) => {
 }
 
 const getDailyMaxTemp = (day) => {
+  if (day.full_day?.temp !== undefined) return day.full_day.temp;
   const temps = [];
   if (day.matin?.temp !== undefined) temps.push(day.matin.temp);
   if (day.apres_midi?.temp !== undefined) temps.push(day.apres_midi.temp);
@@ -644,6 +648,7 @@ const getDailyMaxTemp = (day) => {
 }
 
 const getDailyWind = (day) => {
+  if (day.full_day?.wind !== undefined) return day.full_day.wind;
   const winds = [];
   if (day.matin?.wind !== undefined) winds.push(day.matin.wind);
   if (day.apres_midi?.wind !== undefined) winds.push(day.apres_midi.wind);
@@ -652,6 +657,7 @@ const getDailyWind = (day) => {
 }
 
 const getDailyGust = (day) => {
+  if (day.full_day?.gust !== undefined) return day.full_day.gust;
   const gusts = [];
   if (day.matin?.gust !== undefined) gusts.push(day.matin.gust);
   if (day.apres_midi?.gust !== undefined) gusts.push(day.apres_midi.gust);
@@ -660,12 +666,14 @@ const getDailyGust = (day) => {
 }
 
 const getDailyWindDir = (day) => {
+  if (day.full_day?.dir !== undefined) return day.full_day.dir;
   if (day.apres_midi?.dir !== undefined) return day.apres_midi.dir;
   if (day.matin?.dir !== undefined) return day.matin.dir;
   return 0;
 }
 
 const getDailyPrecip = (day) => {
+  if (day.full_day?.precip !== undefined) return day.full_day.precip;
   let precip = 0;
   if (day.matin?.precip) precip += day.matin.precip;
   if (day.apres_midi?.precip) precip += day.apres_midi.precip;
@@ -673,6 +681,7 @@ const getDailyPrecip = (day) => {
 }
 
 const getDailyRain = (day) => {
+  if (day.full_day?.rain !== undefined) return day.full_day.rain;
   const rains = [];
   if (day.matin?.rain !== undefined) rains.push(day.matin.rain);
   if (day.apres_midi?.rain !== undefined) rains.push(day.apres_midi.rain);
@@ -681,6 +690,7 @@ const getDailyRain = (day) => {
 }
 
 const getDailyWeatherIcon = (day) => {
+  if (day.full_day) return getWeatherIcon(day.full_day);
   const mainPeriod = day.apres_midi || day.matin;
   return getWeatherIcon(mainPeriod);
 }

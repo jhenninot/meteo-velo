@@ -68,6 +68,11 @@ const actualWeatherProvider = ref(null)
 const geoLoading = ref(false)
 const expandedPeriods = ref({})
 const favorites = ref([])
+const selectedDayIndex = ref(null)
+
+watch([weatherData, forecastData], () => {
+  selectedDayIndex.value = null
+})
 
 // --- ÉTATS DE LA CARTE DE LOCALISATION ---
 const showMap = ref(false)
@@ -738,13 +743,15 @@ const defavorableCritereLabels = (period) => {
     .map(([k]) => critereLabels[k] || k)
 }
 
-const getWeatherIcon = (periodData) => {
+const getWeatherIcon = (periodData, isNight = false) => {
   if (!periodData) return 'mdi-help-circle-outline';
   if (periodData.precip >= 2) return 'mdi-weather-pouring';
   if (periodData.precip > 0 || periodData.rain >= 50) return 'mdi-weather-rainy';
   if (periodData.wind > 35) return 'mdi-weather-windy';
-  if (periodData.rain > 20) return 'mdi-weather-partly-cloudy';
-  return 'mdi-weather-sunny';
+  if (periodData.rain > 20) {
+    return isNight ? 'mdi-weather-night-partly-cloudy' : 'mdi-weather-partly-cloudy';
+  }
+  return isNight ? 'mdi-weather-night' : 'mdi-weather-sunny';
 }
 
 const getStravaTypeLabel = (type) => {
@@ -770,6 +777,7 @@ const getShortDayName = (dateString) => {
 }
 
 const getDailyMinTemp = (day) => {
+  if (day.full_day?.minTemp !== undefined) return day.full_day.minTemp;
   const temps = [];
   if (day.matin?.temp !== undefined) temps.push(day.matin.temp);
   if (day.apres_midi?.temp !== undefined) temps.push(day.apres_midi.temp);
@@ -778,6 +786,7 @@ const getDailyMinTemp = (day) => {
 }
 
 const getDailyMaxTemp = (day) => {
+  if (day.full_day?.temp !== undefined) return day.full_day.temp;
   const temps = [];
   if (day.matin?.temp !== undefined) temps.push(day.matin.temp);
   if (day.apres_midi?.temp !== undefined) temps.push(day.apres_midi.temp);
@@ -786,6 +795,7 @@ const getDailyMaxTemp = (day) => {
 }
 
 const getDailyWind = (day) => {
+  if (day.full_day?.wind !== undefined) return day.full_day.wind;
   const winds = [];
   if (day.matin?.wind !== undefined) winds.push(day.matin.wind);
   if (day.apres_midi?.wind !== undefined) winds.push(day.apres_midi.wind);
@@ -794,6 +804,7 @@ const getDailyWind = (day) => {
 }
 
 const getDailyGust = (day) => {
+  if (day.full_day?.gust !== undefined) return day.full_day.gust;
   const gusts = [];
   if (day.matin?.gust !== undefined) gusts.push(day.matin.gust);
   if (day.apres_midi?.gust !== undefined) gusts.push(day.apres_midi.gust);
@@ -802,12 +813,14 @@ const getDailyGust = (day) => {
 }
 
 const getDailyWindDir = (day) => {
+  if (day.full_day?.dir !== undefined) return day.full_day.dir;
   if (day.apres_midi?.dir !== undefined) return day.apres_midi.dir;
   if (day.matin?.dir !== undefined) return day.matin.dir;
   return 0;
 }
 
 const getDailyPrecip = (day) => {
+  if (day.full_day?.precip !== undefined) return day.full_day.precip;
   let precip = 0;
   if (day.matin?.precip) precip += day.matin.precip;
   if (day.apres_midi?.precip) precip += day.apres_midi.precip;
@@ -815,6 +828,7 @@ const getDailyPrecip = (day) => {
 }
 
 const getDailyRain = (day) => {
+  if (day.full_day?.rain !== undefined) return day.full_day.rain;
   const rains = [];
   if (day.matin?.rain !== undefined) rains.push(day.matin.rain);
   if (day.apres_midi?.rain !== undefined) rains.push(day.apres_midi.rain);
@@ -823,15 +837,49 @@ const getDailyRain = (day) => {
 }
 
 const getDailyWeatherIcon = (day) => {
+  if (day.full_day) return getWeatherIcon(day.full_day);
   const mainPeriod = day.apres_midi || day.matin;
   return getWeatherIcon(mainPeriod);
 }
 
-const scrollToDay = (index) => {
-  const el = document.getElementById('day-detail-' + index);
-  if (el) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+const toggleDayHourly = (index) => {
+  if (selectedDayIndex.value === index) {
+    selectedDayIndex.value = null;
+  } else {
+    selectedDayIndex.value = index;
   }
+}
+
+const selectedDayForHourly = computed(() => {
+  const list = forecastData.value || weatherData.value;
+  if (list && selectedDayIndex.value !== null && selectedDayIndex.value >= 0 && selectedDayIndex.value < list.length) {
+    return list[selectedDayIndex.value];
+  }
+  return null;
+});
+
+const isNightHour = (dateString, hour) => {
+  if (!dateString) return hour < 6 || hour >= 22;
+  const month = new Date(dateString).getMonth(); // 0 = Jan, 11 = Dec
+  
+  let sunrise = 7;
+  let sunset = 19;
+  
+  if (month >= 4 && month <= 7) { // Mai, Juin, Juillet, Août
+    sunrise = 6;
+    sunset = 22;
+  } else if (month === 3 || month === 8) { // Avril, Septembre
+    sunrise = 7;
+    sunset = 21;
+  } else if (month === 2 || month === 9) { // Mars, Octobre
+    sunrise = 7;
+    sunset = 20;
+  } else { // Nov, Déc, Jan, Fév
+    sunrise = 8;
+    sunset = 18;
+  }
+  
+  return hour < sunrise || hour >= sunset;
 }
 
 const searchCities = async () => {
@@ -1756,7 +1804,7 @@ const fetchForecast = async (useCache = true) => {
       <!-- Résumé journalier : affiche la météo brute dès qu'elle est disponible -->
       <div v-if="(weatherData || forecastData) && !loading" class="daily-summary-container">
         <div class="daily-summary-scroll">
-          <div v-for="(day, index) in (forecastData || weatherData)" :key="'summary-'+index" class="daily-summary-card" @click="scrollToDay(index)">
+          <div v-for="(day, index) in (forecastData || weatherData)" :key="'summary-'+index" class="daily-summary-card" :class="{ 'is-selected': selectedDayIndex === index }" @click="toggleDayHourly(index)">
             <div class="summary-day">{{ getShortDayName(day.date) }}</div>
             <div class="summary-icon"><span class="mdi" :class="getDailyWeatherIcon(day)"></span></div>
             <div class="summary-temps">
@@ -1779,6 +1827,44 @@ const fetchForecast = async (useCache = true) => {
           </div>
         </div>
       </div>
+
+      <!-- Détail heure par heure du jour sélectionné -->
+      <Transition name="fade">
+        <div v-if="selectedDayForHourly" class="selected-day-hourly-details">
+          <div class="hourly-details-header">
+            <h3>
+              <span class="mdi mdi-clock-outline"></span> 
+              Détails horaires : {{ formatDate(selectedDayForHourly.date) }}
+            </h3>
+            <button class="btn-close-hourly" @click="selectedDayIndex = null" title="Fermer le détail horaire">
+              <span class="mdi mdi-close"></span>
+            </button>
+          </div>
+
+          <div class="hourly-scroll-wrapper">
+            <div class="hourly-scroll-container">
+              <div v-for="hour in selectedDayForHourly.full_day?.hourly" :key="hour.hour" class="hourly-card" :class="{ 'is-night': isNightHour(selectedDayForHourly.date, hour.hour) }">
+                <div class="hour-time">{{ String(hour.hour).padStart(2, '0') }}h00</div>
+                <div class="hour-icon"><span class="mdi" :class="getWeatherIcon(hour, isNightHour(selectedDayForHourly.date, hour.hour))"></span></div>
+                <div class="hour-temp">{{ hour.temp }}°C</div>
+                <div class="hour-wind">
+                  <span class="mdi mdi-navigation wind-icon" :style="getWindStyle(hour.dir)"></span>
+                  {{ hour.wind }} km/h
+                </div>
+                <div class="hour-gust" title="Rafales">
+                  <span class="mdi mdi-weather-windy"></span> {{ hour.gust }} km/h
+                </div>
+                <div class="hour-precip" title="Précipitations">
+                  <span class="mdi mdi-weather-pouring"></span> {{ hour.precip }} mm
+                </div>
+                <div class="hour-rain" title="Probabilité de pluie">
+                  <span class="mdi mdi-water-percent"></span> {{ hour.rain }}%
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
 
       <!-- Grille détaillée : affiche la météo brute (sans IA) si l'IA n'a pas encore répondu -->
       <section v-if="(weatherData || forecastData) && !loading" class="results-section">
