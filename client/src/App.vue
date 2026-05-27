@@ -69,9 +69,17 @@ const geoLoading = ref(false)
 const expandedPeriods = ref({})
 const favorites = ref([])
 const selectedDayIndex = ref(null)
+const loadedDayIndexes = ref([])
 
 watch([weatherData, forecastData], () => {
   selectedDayIndex.value = null
+  loadedDayIndexes.value = []
+})
+
+watch(selectedDayIndex, (newVal) => {
+  if (newVal === null) {
+    loadedDayIndexes.value = []
+  }
 })
 
 // --- ÉTATS DE LA CARTE DE LOCALISATION ---
@@ -845,9 +853,35 @@ const getDailyWeatherIcon = (day) => {
 const toggleDayHourly = (index) => {
   if (selectedDayIndex.value === index) {
     selectedDayIndex.value = null;
+    loadedDayIndexes.value = [];
   } else {
     selectedDayIndex.value = index;
+    loadedDayIndexes.value = [index];
+    nextTick(() => {
+      const container = document.querySelector('.hourly-scroll-container');
+      if (container) {
+        container.scrollLeft = 0;
+      }
+    });
   }
+}
+
+const handleHourlyScroll = (event) => {
+  const container = event.target;
+  const isNearEnd = container.scrollWidth - container.scrollLeft - container.clientWidth < 80;
+  if (isNearEnd) {
+    const list = forecastData.value || weatherData.value;
+    if (!list) return;
+    const maxIndex = Math.max(...loadedDayIndexes.value);
+    if (maxIndex + 1 < list.length) {
+      loadedDayIndexes.value.push(maxIndex + 1);
+    }
+  }
+}
+
+const getDayByIndex = (index) => {
+  const list = forecastData.value || weatherData.value;
+  return list ? list[index] : null;
 }
 
 const selectedDayForHourly = computed(() => {
@@ -1831,34 +1865,31 @@ const fetchForecast = async (useCache = true) => {
       <!-- Détail heure par heure du jour sélectionné -->
       <Transition name="fade">
         <div v-if="selectedDayForHourly" class="selected-day-hourly-details">
-          <div class="hourly-details-header">
-            <h3>
-              <span class="mdi mdi-clock-outline"></span> 
-              Détails horaires : {{ formatDate(selectedDayForHourly.date) }}
-            </h3>
-            <button class="btn-close-hourly" @click="selectedDayIndex = null" title="Fermer le détail horaire">
-              <span class="mdi mdi-close"></span>
-            </button>
-          </div>
-
           <div class="hourly-scroll-wrapper">
-            <div class="hourly-scroll-container">
-              <div v-for="hour in selectedDayForHourly.full_day?.hourly" :key="hour.hour" class="hourly-card" :class="{ 'is-night': isNightHour(selectedDayForHourly.date, hour.hour) }">
-                <div class="hour-time">{{ String(hour.hour).padStart(2, '0') }}h00</div>
-                <div class="hour-icon"><span class="mdi" :class="getWeatherIcon(hour, isNightHour(selectedDayForHourly.date, hour.hour))"></span></div>
-                <div class="hour-temp">{{ hour.temp }}°C</div>
-                <div class="hour-wind">
-                  <span class="mdi mdi-navigation wind-icon" :style="getWindStyle(hour.dir)"></span>
-                  {{ hour.wind }} km/h
+            <div class="hourly-scroll-container" @scroll="handleHourlyScroll">
+              <div v-for="dayIndex in loadedDayIndexes" :key="dayIndex" class="hourly-day-group">
+                <div class="hourly-day-header">
+                  <span class="mdi mdi-calendar"></span> {{ formatDate(getDayByIndex(dayIndex)?.date) }}
                 </div>
-                <div class="hour-gust" title="Rafales">
-                  <span class="mdi mdi-weather-windy"></span> {{ hour.gust }} km/h
-                </div>
-                <div class="hour-precip" title="Précipitations">
-                  <span class="mdi mdi-weather-pouring"></span> {{ hour.precip }} mm
-                </div>
-                <div class="hour-rain" title="Probabilité de pluie">
-                  <span class="mdi mdi-water-percent"></span> {{ hour.rain }}%
+                <div class="hourly-day-cards">
+                  <div v-for="hour in getDayByIndex(dayIndex)?.full_day?.hourly" :key="dayIndex + '-' + hour.hour" class="hourly-card" :class="{ 'is-night': isNightHour(getDayByIndex(dayIndex)?.date, hour.hour) }">
+                    <div class="hour-time">{{ String(hour.hour).padStart(2, '0') }}h00</div>
+                    <div class="hour-icon"><span class="mdi" :class="getWeatherIcon(hour, isNightHour(getDayByIndex(dayIndex)?.date, hour.hour))"></span></div>
+                    <div class="hour-temp">{{ hour.temp }}°C</div>
+                    <div class="hour-wind">
+                      <span class="mdi mdi-navigation wind-icon" :style="getWindStyle(hour.dir)"></span>
+                      {{ hour.wind }} km/h
+                    </div>
+                    <div class="hour-gust" title="Rafales">
+                      <span class="mdi mdi-weather-windy"></span> {{ hour.gust }} km/h
+                    </div>
+                    <div class="hour-precip" title="Précipitations">
+                      <span class="mdi mdi-weather-pouring"></span> {{ hour.precip }} mm
+                    </div>
+                    <div class="hour-rain" title="Probabilité de pluie">
+                      <span class="mdi mdi-water-percent"></span> {{ hour.rain }}%
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
