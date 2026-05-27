@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
 import axios from 'axios'
 import { jwtDecode } from 'jwt-decode'
 import WeatherChart from './components/WeatherChart.vue'
+import WeatherIcon from './components/WeatherIcon.vue'
 import StravaActivities from './components/StravaActivities.vue'
 import StravaRoutes from './components/StravaRoutes.vue'
 import AdminPanel from './components/AdminPanel.vue'
@@ -1840,7 +1841,7 @@ const fetchForecast = async (useCache = true) => {
         <div class="daily-summary-scroll">
           <div v-for="(day, index) in (forecastData || weatherData)" :key="'summary-'+index" class="daily-summary-card" :class="{ 'is-selected': selectedDayIndex === index }" @click="toggleDayHourly(index)">
             <div class="summary-day">{{ getShortDayName(day.date) }}</div>
-            <div class="summary-icon"><span class="mdi" :class="getDailyWeatherIcon(day)"></span></div>
+            <div class="summary-icon"><WeatherIcon :icon="getDailyWeatherIcon(day)" /></div>
             <div class="summary-temps">
               <span class="temp-min">{{ getDailyMinTemp(day) }}°</span> /
               <span class="temp-max">{{ getDailyMaxTemp(day) }}°</span>
@@ -1874,7 +1875,7 @@ const fetchForecast = async (useCache = true) => {
                 <div class="hourly-day-cards">
                   <div v-for="hour in getDayByIndex(dayIndex)?.full_day?.hourly" :key="dayIndex + '-' + hour.hour" class="hourly-card" :class="{ 'is-night': isNightHour(getDayByIndex(dayIndex)?.date, hour.hour) }">
                     <div class="hour-time">{{ String(hour.hour).padStart(2, '0') }}h00</div>
-                    <div class="hour-icon"><span class="mdi" :class="getWeatherIcon(hour, isNightHour(getDayByIndex(dayIndex)?.date, hour.hour))"></span></div>
+                    <div class="hour-icon"><WeatherIcon :icon="getWeatherIcon(hour, isNightHour(getDayByIndex(dayIndex)?.date, hour.hour))" /></div>
                     <div class="hour-temp">{{ hour.temp }}°C</div>
                     <div class="hour-wind">
                       <span class="mdi mdi-navigation wind-icon" :style="getWindStyle(hour.dir)"></span>
@@ -1919,7 +1920,7 @@ const fetchForecast = async (useCache = true) => {
                   <span class="mdi bike-day-indicator__icon" :class="selectedActivityIcon" aria-hidden="true"></span>
                 </span>
                 <h4 class="half-day-heading">
-                  <span class="mdi weather-main-icon" :class="getWeatherIcon(day.matin)"></span>
+                  <WeatherIcon class="weather-main-icon" :icon="getWeatherIcon(day.matin)" />
                   <span class="half-day-heading-label">Matin</span>
                 </h4>
                 <div class="metrics">
@@ -1956,7 +1957,7 @@ const fetchForecast = async (useCache = true) => {
                   <span class="mdi bike-day-indicator__icon" :class="selectedActivityIcon" aria-hidden="true"></span>
                 </span>
                 <h4 class="half-day-heading">
-                  <span class="mdi weather-main-icon" :class="getWeatherIcon(day.apres_midi)"></span>
+                  <WeatherIcon class="weather-main-icon" :icon="getWeatherIcon(day.apres_midi)" />
                   <span class="half-day-heading-label">Après-midi</span>
                 </h4>
                 <div class="metrics">

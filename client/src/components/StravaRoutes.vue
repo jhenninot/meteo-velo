@@ -5,6 +5,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
 import WeatherChart from './WeatherChart.vue'
+import WeatherIcon from './WeatherIcon.vue'
 
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
@@ -1881,7 +1882,7 @@ onUnmounted(() => {
               <div class="daily-summary-scroll">
                 <div v-for="(day, idx) in analysisForecastData" :key="'analysis-sum-'+idx" class="daily-summary-card" @click="scrollToDay(idx)">
                   <div class="summary-day">{{ getShortDayName(day.date) }}</div>
-                  <div class="summary-icon"><span class="mdi" :class="getDailyWeatherIcon(day)"></span></div>
+                  <div class="summary-icon"><WeatherIcon :icon="getDailyWeatherIcon(day)" /></div>
                   <div class="summary-temps">
                     <span class="temp-min">{{ getDailyMinTemp(day) }}°</span> /
                     <span class="temp-max">{{ getDailyMaxTemp(day) }}°</span>
@@ -1919,7 +1920,7 @@ onUnmounted(() => {
                         <span class="mdi bike-day-indicator__icon" :class="analysisSelectedActivity?.icon || 'mdi-compass-outline'"></span>
                       </span>
                       <h4 class="half-day-heading">
-                        <span class="mdi weather-main-icon" :class="getWeatherIcon(day.matin)"></span>
+                        <WeatherIcon class="weather-main-icon" :icon="getWeatherIcon(day.matin)" />
                         <span class="half-day-heading-label">Matin</span>
                       </h4>
                       <div class="metrics">
@@ -1947,7 +1948,7 @@ onUnmounted(() => {
                         <span class="mdi bike-day-indicator__icon" :class="analysisSelectedActivity?.icon || 'mdi-compass-outline'"></span>
                       </span>
                       <h4 class="half-day-heading">
-                        <span class="mdi weather-main-icon" :class="getWeatherIcon(day.apres_midi)"></span>
+                        <WeatherIcon class="weather-main-icon" :icon="getWeatherIcon(day.apres_midi)" />
                         <span class="half-day-heading-label">Après-midi</span>
                       </h4>
                       <div class="metrics">
