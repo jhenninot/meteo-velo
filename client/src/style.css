@@ -4874,3 +4874,165 @@ html.meteo-theme-dark .timeline-wind-cell.is-night {
 html.meteo-theme-dark .timeline-svg .night-rect {
   fill: #1a1d23;
 }
+
+/* --- WEATHER LIMITS STYLES --- */
+.weather-limits-section {
+  margin: 20px 0;
+  padding: 16px;
+  background: var(--bg-surface-2);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.weather-limits-title {
+  margin: 0 0 14px 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.weather-limits-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.weather-limit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.limit-label-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 160px;
+}
+
+.limit-icon {
+  font-size: 1.15rem;
+  color: var(--color-primary);
+  width: 20px;
+  text-align: center;
+}
+
+.limit-label-text {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.limit-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  max-width: 240px;
+  min-width: 180px;
+}
+
+.limit-input {
+  width: 100%;
+  padding: 8px 10px !important;
+  font-size: 0.85rem !important;
+  border: 1px solid var(--border-input) !important;
+  border-radius: var(--radius-sm) !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  height: 34px;
+}
+
+.limit-input:focus {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15) !important;
+  outline: none;
+}
+
+.slot-name-input {
+  padding: 8px 10px !important;
+  font-size: 0.85rem !important;
+  border: 1px solid var(--border-input) !important;
+  border-radius: var(--radius-sm) !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  height: 34px;
+  max-width: 140px;
+  width: 100%;
+}
+
+.slot-name-input:focus {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15) !important;
+  outline: none;
+}
+
+.limit-separator {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Badges on activity cards in settings */
+.activity-numerical-constraints-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.activity-limit-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.activity-limit-badge .mdi {
+  font-size: 0.85rem;
+  color: var(--color-primary);
+}
+
+/* Static wind icon style */
+.wind-icon-static {
+  display: inline-block;
+  transform: rotate(45deg);
+}
+
+.activity-limit-badge.slot-badge {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.2);
+  color: var(--color-primary);
+}
+
+.activity-limit-badge.slot-badge .mdi {
+  color: var(--color-primary);
+}
+
+/* Responsive adjustment */
+@media (max-width: 480px) {
+  .weather-limit-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .limit-inputs {
+    max-width: 100%;
+    width: 100%;
+  }
+}

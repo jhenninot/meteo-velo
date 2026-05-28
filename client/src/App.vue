@@ -39,7 +39,29 @@ const passwordLoading = ref(false)
 const showLoginPassword = ref(false)
 const visiblePasswordFields = ref({})
 const userActivities = ref([])
-const activityForm = ref({ id: null, label: '', icon: 'mdi-bike', constraints: '', stravaSportType: '' })
+const activityForm = ref({
+  id: null,
+  label: '',
+  icon: 'mdi-bike',
+  constraints: '',
+  stravaSportType: '',
+  windMin: null,
+  windMax: null,
+  gustMin: null,
+  gustMax: null,
+  tempMin: null,
+  tempMax: null,
+  precipMin: null,
+  precipMax: null,
+  uvMin: null,
+  uvMax: null,
+  slot1Name: 'Matin',
+  slot1Start: 8,
+  slot1End: 12,
+  slot2Name: 'Après-midi',
+  slot2Start: 14,
+  slot2End: 19
+})
 const activityMsg = ref({ text: '', type: '' })
 const activityLoading = ref(false)
 const selectedActivityId = ref(localStorage.getItem('selected_activity_id') || 'none')
@@ -200,7 +222,13 @@ const selectedActivity = computed(() => {
       _id: 'none',
       label: 'Aucune',
       icon: '',
-      constraints: 'Aucune contrainte d\'activité.'
+      constraints: 'Aucune contrainte d\'activité.',
+      slot1Name: 'Matin',
+      slot1Start: 8,
+      slot1End: 12,
+      slot2Name: 'Après-midi',
+      slot2Start: 14,
+      slot2End: 19
     }
   }
   return userActivities.value.find(activity => activity._id === selectedActivityId.value) || null
@@ -523,7 +551,29 @@ const togglePasswordVisibility = (field) => {
 }
 
 const resetActivityForm = () => {
-  activityForm.value = { id: null, label: '', icon: 'mdi-bike', constraints: '', stravaSportType: '' }
+  activityForm.value = {
+    id: null,
+    label: '',
+    icon: 'mdi-bike',
+    constraints: '',
+    stravaSportType: '',
+    windMin: null,
+    windMax: null,
+    gustMin: null,
+    gustMax: null,
+    tempMin: null,
+    tempMax: null,
+    precipMin: null,
+    precipMax: null,
+    uvMin: null,
+    uvMax: null,
+    slot1Name: 'Matin',
+    slot1Start: 8,
+    slot1End: 12,
+    slot2Name: 'Après-midi',
+    slot2Start: 14,
+    slot2End: 19
+  }
 }
 
 const loadUserActivities = async () => {
@@ -551,11 +601,33 @@ const saveActivity = async () => {
   activityMsg.value = { text: '', type: '' }
   activityLoading.value = true
   try {
+    const sanitizeNum = (val) => {
+      if (val === undefined || val === null || val === '') return null;
+      const num = Number(val);
+      return isNaN(num) ? null : num;
+    };
+
     const payload = {
       label: activityForm.value.label,
       icon: activityForm.value.icon,
       constraints: activityForm.value.constraints,
-      stravaSportType: activityForm.value.stravaSportType
+      stravaSportType: activityForm.value.stravaSportType,
+      windMin: sanitizeNum(activityForm.value.windMin),
+      windMax: sanitizeNum(activityForm.value.windMax),
+      gustMin: sanitizeNum(activityForm.value.gustMin),
+      gustMax: sanitizeNum(activityForm.value.gustMax),
+      tempMin: sanitizeNum(activityForm.value.tempMin),
+      tempMax: sanitizeNum(activityForm.value.tempMax),
+      precipMin: sanitizeNum(activityForm.value.precipMin),
+      precipMax: sanitizeNum(activityForm.value.precipMax),
+      uvMin: sanitizeNum(activityForm.value.uvMin),
+      uvMax: sanitizeNum(activityForm.value.uvMax),
+      slot1Name: typeof activityForm.value.slot1Name === 'string' && activityForm.value.slot1Name.trim() !== '' ? activityForm.value.slot1Name.trim() : 'Matin',
+      slot1Start: activityForm.value.slot1Start !== null && activityForm.value.slot1Start !== '' ? Number(activityForm.value.slot1Start) : 8,
+      slot1End: activityForm.value.slot1End !== null && activityForm.value.slot1End !== '' ? Number(activityForm.value.slot1End) : 12,
+      slot2Name: typeof activityForm.value.slot2Name === 'string' && activityForm.value.slot2Name.trim() !== '' ? activityForm.value.slot2Name.trim() : 'Après-midi',
+      slot2Start: activityForm.value.slot2Start !== null && activityForm.value.slot2Start !== '' ? Number(activityForm.value.slot2Start) : 14,
+      slot2End: activityForm.value.slot2End !== null && activityForm.value.slot2End !== '' ? Number(activityForm.value.slot2End) : 19
     }
 
     if (activityForm.value.id) {
@@ -581,7 +653,23 @@ const editActivity = (activity) => {
     label: activity.label || '',
     icon: activity.icon || 'mdi-bike',
     constraints: activity.constraints || '',
-    stravaSportType: activity.stravaSportType || ''
+    stravaSportType: activity.stravaSportType || '',
+    windMin: activity.windMin ?? null,
+    windMax: activity.windMax ?? null,
+    gustMin: activity.gustMin ?? null,
+    gustMax: activity.gustMax ?? null,
+    tempMin: activity.tempMin ?? null,
+    tempMax: activity.tempMax ?? null,
+    precipMin: activity.precipMin ?? null,
+    precipMax: activity.precipMax ?? null,
+    uvMin: activity.uvMin ?? null,
+    uvMax: activity.uvMax ?? null,
+    slot1Name: activity.slot1Name || 'Matin',
+    slot1Start: activity.slot1Start !== undefined && activity.slot1Start !== null ? activity.slot1Start : 8,
+    slot1End: activity.slot1End !== undefined && activity.slot1End !== null ? activity.slot1End : 12,
+    slot2Name: activity.slot2Name || 'Après-midi',
+    slot2Start: activity.slot2Start !== undefined && activity.slot2Start !== null ? activity.slot2Start : 14,
+    slot2End: activity.slot2End !== undefined && activity.slot2End !== null ? activity.slot2End : 19
   }
 }
 
@@ -794,6 +882,31 @@ const getStravaTypeLabel = (type) => {
     Hike: 'Randonnée'
   }
   return labels[type] || type
+}
+
+const hasNumericalConstraints = (activity) => {
+  return activity && (
+         activity.tempMin !== null && activity.tempMin !== undefined ||
+         activity.tempMax !== null && activity.tempMax !== undefined ||
+         activity.windMin !== null && activity.windMin !== undefined ||
+         activity.windMax !== null && activity.windMax !== undefined ||
+         activity.gustMin !== null && activity.gustMin !== undefined ||
+         activity.gustMax !== null && activity.gustMax !== undefined ||
+         activity.precipMin !== null && activity.precipMin !== undefined ||
+         activity.precipMax !== null && activity.precipMax !== undefined ||
+         activity.uvMin !== null && activity.uvMin !== undefined ||
+         activity.uvMax !== null && activity.uvMax !== undefined
+  );
+}
+
+const formatLimit = (min, max, unit = '') => {
+  const u = unit ? ' ' + unit : '';
+  const hasMin = min !== null && min !== undefined && min !== '';
+  const hasMax = max !== null && max !== undefined && max !== '';
+  if (hasMin && hasMax) return `${min} à ${max}${u}`;
+  if (hasMin) return `≥ ${min}${u}`;
+  if (hasMax) return `≤ ${max}${u}`;
+  return '';
 }
 
 const getShortDayName = (dateString) => {
@@ -1397,7 +1510,8 @@ const fetchForecast = async (useCache = true) => {
   try {
     const weatherRes = await axios.post(`${API_BASE_URL}/api/weather`, {
       lat: lat.value,
-      lon: lon.value
+      lon: lon.value,
+      activityId: selectedActivityId.value
     })
     rawWeather = weatherRes.data.weather
     weatherData.value = rawWeather
@@ -1697,6 +1811,109 @@ const fetchForecast = async (useCache = true) => {
               <label>Contraintes :</label>
               <textarea v-model="activityForm.constraints" maxlength="4000" placeholder="Ex: Pas de vent supérieur à 20 km/h, pas de pluie, température minimale..."></textarea>
             </div>
+
+            <!-- Limites météo numériques strictes -->
+            <div class="weather-limits-section">
+              <h5 class="weather-limits-title">Limites météo strictes (facultatif)</h5>
+              <div class="weather-limits-grid">
+                
+                <div class="weather-limit-row">
+                  <div class="limit-label-group">
+                    <span class="mdi mdi-thermometer limit-icon"></span>
+                    <span class="limit-label-text">Température (°C)</span>
+                  </div>
+                  <div class="limit-inputs">
+                    <input type="number" step="any" v-model.number="activityForm.tempMin" placeholder="Min" class="limit-input" />
+                    <span class="limit-separator">à</span>
+                    <input type="number" step="any" v-model.number="activityForm.tempMax" placeholder="Max" class="limit-input" />
+                  </div>
+                </div>
+
+                <div class="weather-limit-row">
+                  <div class="limit-label-group">
+                    <span class="mdi mdi-navigation wind-icon-static limit-icon"></span>
+                    <span class="limit-label-text">Vent (km/h)</span>
+                  </div>
+                  <div class="limit-inputs">
+                    <input type="number" step="any" v-model.number="activityForm.windMin" placeholder="Min" class="limit-input" />
+                    <span class="limit-separator">à</span>
+                    <input type="number" step="any" v-model.number="activityForm.windMax" placeholder="Max" class="limit-input" />
+                  </div>
+                </div>
+
+                <div class="weather-limit-row">
+                  <div class="limit-label-group">
+                    <span class="mdi mdi-weather-windy limit-icon"></span>
+                    <span class="limit-label-text">Rafales (km/h)</span>
+                  </div>
+                  <div class="limit-inputs">
+                    <input type="number" step="any" v-model.number="activityForm.gustMin" placeholder="Min" class="limit-input" />
+                    <span class="limit-separator">à</span>
+                    <input type="number" step="any" v-model.number="activityForm.gustMax" placeholder="Max" class="limit-input" />
+                  </div>
+                </div>
+
+                <div class="weather-limit-row">
+                  <div class="limit-label-group">
+                    <span class="mdi mdi-weather-pouring limit-icon"></span>
+                    <span class="limit-label-text">Précipitations (mm)</span>
+                  </div>
+                  <div class="limit-inputs">
+                    <input type="number" step="any" v-model.number="activityForm.precipMin" placeholder="Min" class="limit-input" />
+                    <span class="limit-separator">à</span>
+                    <input type="number" step="any" v-model.number="activityForm.precipMax" placeholder="Max" class="limit-input" />
+                  </div>
+                </div>
+
+                <div class="weather-limit-row">
+                  <div class="limit-label-group">
+                    <span class="mdi mdi-sun-wireless limit-icon"></span>
+                    <span class="limit-label-text">Indice UV</span>
+                  </div>
+                  <div class="limit-inputs">
+                    <input type="number" step="any" v-model.number="activityForm.uvMin" placeholder="Min" class="limit-input" />
+                    <span class="limit-separator">à</span>
+                    <input type="number" step="any" v-model.number="activityForm.uvMax" placeholder="Max" class="limit-input" />
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Personnalisation des plages horaires -->
+            <div class="weather-limits-section" style="margin-top: 20px;">
+              <h5 class="weather-limits-title">Créneaux horaires d'analyse</h5>
+              <div class="weather-limits-grid">
+                
+                <div class="weather-limit-row">
+                  <div class="limit-label-group">
+                    <span class="mdi mdi-clock-outline limit-icon"></span>
+                    <input type="text" v-model="activityForm.slot1Name" placeholder="Nom créneau 1" class="slot-name-input" required maxlength="30" />
+                  </div>
+                  <div class="limit-inputs">
+                    <input type="number" min="0" max="23" v-model.number="activityForm.slot1Start" placeholder="Début" class="limit-input" required />
+                    <span class="limit-separator">h à</span>
+                    <input type="number" min="0" max="23" v-model.number="activityForm.slot1End" placeholder="Fin" class="limit-input" required />
+                    <span class="limit-separator">h</span>
+                  </div>
+                </div>
+
+                <div class="weather-limit-row">
+                  <div class="limit-label-group">
+                    <span class="mdi mdi-clock-outline limit-icon"></span>
+                    <input type="text" v-model="activityForm.slot2Name" placeholder="Nom créneau 2" class="slot-name-input" required maxlength="30" />
+                  </div>
+                  <div class="limit-inputs">
+                    <input type="number" min="0" max="23" v-model.number="activityForm.slot2Start" placeholder="Début" class="limit-input" required />
+                    <span class="limit-separator">h à</span>
+                    <input type="number" min="0" max="23" v-model.number="activityForm.slot2End" placeholder="Fin" class="limit-input" required />
+                    <span class="limit-separator">h</span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
             <div class="activity-form-actions">
               <button type="submit" class="login-btn" :disabled="activityLoading">
                 {{ activityLoading ? 'Enregistrement...' : (activityForm.id ? 'Modifier l’activité' : 'Ajouter l’activité') }}
@@ -1715,6 +1932,26 @@ const fetchForecast = async (useCache = true) => {
                 <h4><span class="mdi" :class="activity.icon || 'mdi-bike'"></span> {{ activity.label }}</h4>
                 <div v-if="activity.stravaSportType" style="font-size: 0.78rem; font-weight: 600; color: var(--color-strava); margin-top: 4px; display: flex; align-items: center; gap: 4px;">
                   <span class="mdi mdi-strava"></span> Strava : {{ getStravaTypeLabel(activity.stravaSportType) }}
+                </div>
+                <p v-if="activity.constraints" class="activity-constraints-text">
+                  {{ activity.constraints }}
+                </p>
+                <div v-if="hasNumericalConstraints(activity)" class="activity-numerical-constraints-list">
+                  <span v-if="activity.tempMin !== null || activity.tempMax !== null" class="activity-limit-badge">
+                    <span class="mdi mdi-thermometer"></span> {{ formatLimit(activity.tempMin, activity.tempMax, '°C') }}
+                  </span>
+                  <span v-if="activity.windMin !== null || activity.windMax !== null" class="activity-limit-badge">
+                    <span class="mdi mdi-navigation wind-icon-static"></span> {{ formatLimit(activity.windMin, activity.windMax, 'km/h') }}
+                  </span>
+                  <span v-if="activity.gustMin !== null || activity.gustMax !== null" class="activity-limit-badge">
+                    <span class="mdi mdi-weather-windy"></span> {{ formatLimit(activity.gustMin, activity.gustMax, 'km/h') }}
+                  </span>
+                  <span v-if="activity.precipMin !== null || activity.precipMax !== null" class="activity-limit-badge">
+                    <span class="mdi mdi-weather-pouring"></span> {{ formatLimit(activity.precipMin, activity.precipMax, 'mm') }}
+                  </span>
+                  <span v-if="activity.uvMin !== null || activity.uvMax !== null" class="activity-limit-badge">
+                    <span class="mdi mdi-sun-wireless"></span> UV {{ formatLimit(activity.uvMin, activity.uvMax) }}
+                  </span>
                 </div>
               </div>
               <div class="activity-actions">
@@ -1788,6 +2025,42 @@ const fetchForecast = async (useCache = true) => {
                   <span class="option-label">{{ activity.label }}</span>
                 </li>
               </ul>
+            </div>
+            <!-- Affichage des critères et plages horaires de l'activité sélectionnée -->
+            <div v-if="selectedActivity" class="selected-activity-details" style="margin-top: 8px;">
+              <p v-if="selectedActivity.constraints && selectedActivityId !== 'none'" class="activity-constraints-text" style="margin: 6px 0; font-size: 0.82rem; color: var(--text-secondary);">
+                {{ selectedActivity.constraints }}
+              </p>
+              <div class="activity-numerical-constraints-list" style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 6px;">
+                <!-- Plages horaires -->
+                <span class="activity-limit-badge slot-badge">
+                  <span class="mdi mdi-clock-outline"></span> 
+                  <strong>{{ selectedActivity.slot1Name || 'Matin' }}</strong> : {{ selectedActivity.slot1Start }}h - {{ selectedActivity.slot1End }}h
+                </span>
+                <span class="activity-limit-badge slot-badge">
+                  <span class="mdi mdi-clock-outline"></span> 
+                  <strong>{{ selectedActivity.slot2Name || 'Après-midi' }}</strong> : {{ selectedActivity.slot2Start }}h - {{ selectedActivity.slot2End }}h
+                </span>
+                
+                <!-- Limites météo numériques (seulement si ce n'est pas 'none' et qu'il y a des limites) -->
+                <template v-if="selectedActivityId !== 'none' && hasNumericalConstraints(selectedActivity)">
+                  <span v-if="selectedActivity.tempMin !== null || selectedActivity.tempMax !== null" class="activity-limit-badge">
+                    <span class="mdi mdi-thermometer"></span> {{ formatLimit(selectedActivity.tempMin, selectedActivity.tempMax, '°C') }}
+                  </span>
+                  <span v-if="selectedActivity.windMin !== null || selectedActivity.windMax !== null" class="activity-limit-badge">
+                    <span class="mdi mdi-navigation wind-icon-static"></span> {{ formatLimit(selectedActivity.windMin, selectedActivity.windMax, 'km/h') }}
+                  </span>
+                  <span v-if="selectedActivity.gustMin !== null || selectedActivity.gustMax !== null" class="activity-limit-badge">
+                    <span class="mdi mdi-weather-windy"></span> {{ formatLimit(selectedActivity.gustMin, selectedActivity.gustMax, 'km/h') }}
+                  </span>
+                  <span v-if="selectedActivity.precipMin !== null || selectedActivity.precipMax !== null" class="activity-limit-badge">
+                    <span class="mdi mdi-weather-pouring"></span> {{ formatLimit(selectedActivity.precipMin, selectedActivity.precipMax, 'mm') }}
+                  </span>
+                  <span v-if="selectedActivity.uvMin !== null || selectedActivity.uvMax !== null" class="activity-limit-badge">
+                    <span class="mdi mdi-sun-wireless"></span> UV {{ formatLimit(selectedActivity.uvMin, selectedActivity.uvMax) }}
+                  </span>
+                </template>
+              </div>
             </div>
           </div>
 
@@ -1921,10 +2194,10 @@ const fetchForecast = async (useCache = true) => {
                 </span>
                 <h4 class="half-day-heading">
                   <WeatherIcon class="weather-main-icon" :icon="getWeatherIcon(day.matin)" />
-                  <span class="half-day-heading-label">Matin</span>
+                  <span class="half-day-heading-label">{{ day.matin.label || 'Matin' }}</span>
                 </h4>
                 <div class="metrics">
-                  <span :class="forecastData ? critereClass(day.matin, 'temperature') : 'metric-critere critere-neutre'"><span class="mdi mdi-thermometer"></span> {{ day.matin.temp }}°C</span>
+                  <span :class="forecastData ? critereClass(day.matin, 'temperature') : 'metric-critere critere-neutre'"><span class="mdi mdi-thermometer"></span> {{ day.matin.minTemp !== undefined ? day.matin.minTemp + ' / ' + day.matin.temp : day.matin.temp }}°C</span>
                   <span :class="forecastData ? critereClass(day.matin, 'pluie') : 'metric-critere critere-neutre'"><span class="mdi mdi-water-percent"></span> {{ day.matin.rain }}%</span>
                   <span :class="forecastData ? critereClass(day.matin, 'precipitations') : 'metric-critere critere-neutre'"><span class="mdi mdi-weather-pouring"></span> {{ day.matin.precip }}mm</span>
                   <span :class="forecastData ? critereClass(day.matin, 'vent') : 'metric-critere critere-neutre'"><span class="mdi mdi-navigation wind-icon" :style="getWindStyle(day.matin.dir)"></span> {{ day.matin.wind }}km/h</span>
@@ -1958,10 +2231,10 @@ const fetchForecast = async (useCache = true) => {
                 </span>
                 <h4 class="half-day-heading">
                   <WeatherIcon class="weather-main-icon" :icon="getWeatherIcon(day.apres_midi)" />
-                  <span class="half-day-heading-label">Après-midi</span>
+                  <span class="half-day-heading-label">{{ day.apres_midi.label || 'Après-midi' }}</span>
                 </h4>
                 <div class="metrics">
-                  <span :class="forecastData ? critereClass(day.apres_midi, 'temperature') : 'metric-critere critere-neutre'"><span class="mdi mdi-thermometer"></span> {{ day.apres_midi.temp }}°C</span>
+                  <span :class="forecastData ? critereClass(day.apres_midi, 'temperature') : 'metric-critere critere-neutre'"><span class="mdi mdi-thermometer"></span> {{ day.apres_midi.minTemp !== undefined ? day.apres_midi.minTemp + ' / ' + day.apres_midi.temp : day.apres_midi.temp }}°C</span>
                   <span :class="forecastData ? critereClass(day.apres_midi, 'pluie') : 'metric-critere critere-neutre'"><span class="mdi mdi-water-percent"></span> {{ day.apres_midi.rain }}%</span>
                   <span :class="forecastData ? critereClass(day.apres_midi, 'precipitations') : 'metric-critere critere-neutre'"><span class="mdi mdi-weather-pouring"></span> {{ day.apres_midi.precip }}mm</span>
                   <span :class="forecastData ? critereClass(day.apres_midi, 'vent') : 'metric-critere critere-neutre'"><span class="mdi mdi-navigation wind-icon" :style="getWindStyle(day.apres_midi.dir)"></span> {{ day.apres_midi.wind }}km/h</span>

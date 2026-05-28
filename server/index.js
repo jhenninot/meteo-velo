@@ -95,7 +95,23 @@ const userSchema = new mongoose.Schema({
     label: { type: String, required: true, trim: true, maxlength: 80 },
     icon: { type: String, default: 'mdi-bike', trim: true, maxlength: 60 },
     constraints: { type: String, default: '', trim: true, maxlength: 4000 },
-    stravaSportType: { type: String, default: '', trim: true }
+    stravaSportType: { type: String, default: '', trim: true },
+    windMin: { type: Number, default: null },
+    windMax: { type: Number, default: null },
+    gustMin: { type: Number, default: null },
+    gustMax: { type: Number, default: null },
+    tempMin: { type: Number, default: null },
+    tempMax: { type: Number, default: null },
+    precipMin: { type: Number, default: null },
+    precipMax: { type: Number, default: null },
+    uvMin: { type: Number, default: null },
+    uvMax: { type: Number, default: null },
+    slot1Name: { type: String, default: 'Matin' },
+    slot1Start: { type: Number, default: 8 },
+    slot1End: { type: Number, default: 12 },
+    slot2Name: { type: String, default: 'Après-midi' },
+    slot2Start: { type: Number, default: 14 },
+    slot2End: { type: Number, default: 19 }
   }],
   favorites: [{
     city: { type: String, required: true, trim: true },
@@ -304,7 +320,7 @@ function normalizeCriteres(aiSlice, globalFavorable) {
   return out;
 }
 
-function enrichPeriod(aggregated, aiSlice) {
+function enrichPeriod(aggregated, aiSlice, activity = null) {
   const merged = { ...aggregated, ...aiSlice };
   let fav = merged.favorable === true;
   merged.criteres = normalizeCriteres(aiSlice, fav);
@@ -313,17 +329,45 @@ function enrichPeriod(aggregated, aiSlice) {
   if (merged.rain < 15) {
     if (merged.criteres.pluie === 'defavorable') {
       merged.criteres.pluie = 'favorable';
-      // Si la pluie était le seul facteur défavorable, on rend la période favorable
-      const hasOtherDefavorable = Object.values(merged.criteres).some(v => v === 'defavorable');
-      if (!hasOtherDefavorable && !fav) {
-        merged.favorable = true;
-      }
     }
-    // Nettoyage du conseil si l'IA parle de pluie alors qu'elle ne devrait pas
-    if (merged.conseil && merged.conseil.toLowerCase().includes('pluie')) {
-      if (merged.favorable) {
-         merged.conseil = "Conditions correctes, pas de risque significatif de pluie.";
+  }
+
+  // VALIDATION STRICTE DES SEUILS NUMÉRIQUES CONFIGURÉS
+  if (activity) {
+    const checkLimit = (val, min, max, key) => {
+      if (val === undefined || val === null) return;
+      if (min !== null && val < min) {
+        merged.criteres[key] = 'defavorable';
+        fav = false;
+        merged.favorable = false;
       }
+      if (max !== null && val > max) {
+        merged.criteres[key] = 'defavorable';
+        fav = false;
+        merged.favorable = false;
+      }
+    };
+
+    checkLimit(merged.temp, activity.tempMin, activity.tempMax, 'temperature');
+    checkLimit(merged.wind, activity.windMin, activity.windMax, 'vent');
+    checkLimit(merged.gust, activity.gustMin, activity.gustMax, 'rafales');
+    checkLimit(merged.precip, activity.precipMin, activity.precipMax, 'precipitations');
+    checkLimit(merged.uv, activity.uvMin, activity.uvMax, 'uv');
+  }
+
+  // Si d'autres critères sont défavorables, on s'assure que favorable reste false
+  const hasOtherDefavorable = Object.values(merged.criteres).some(v => v === 'defavorable');
+  if (hasOtherDefavorable) {
+    merged.favorable = false;
+  } else if (merged.rain < 15 && !fav) {
+    // Si la pluie était le seul facteur défavorable et < 15%, on rend favorable
+    merged.favorable = true;
+  }
+
+  // Nettoyage du conseil si l'IA parle de pluie alors qu'elle ne devrait pas
+  if (merged.rain < 15 && merged.conseil && merged.conseil.toLowerCase().includes('pluie')) {
+    if (merged.favorable) {
+       merged.conseil = "Conditions correctes, pas de risque significatif de pluie.";
     }
   }
 
@@ -331,10 +375,17 @@ function enrichPeriod(aggregated, aiSlice) {
 }
 
 // Helper : agrège les données horaires Open-Meteo en données par demi-journée
-function buildStructuredWeather(hourly, utcOffsetSeconds) {
+function buildStructuredWeather(hourly, utcOffsetSeconds, activity = null) {
   const nowUtcMs = Date.now();
   const nowLocalMs = nowUtcMs + utcOffsetSeconds * 1000;
   const nowLocalStr = new Date(nowLocalMs).toISOString().slice(0, 16);
+
+  const slot1Name = activity?.slot1Name || 'Matin';
+  const slot1Start = activity?.slot1Start !== undefined ? activity.slot1Start : 8;
+  const slot1End = activity?.slot1End !== undefined ? activity.slot1End : 12;
+  const slot2Name = activity?.slot2Name || 'Après-midi';
+  const slot2Start = activity?.slot2Start !== undefined ? activity.slot2Start : 14;
+  const slot2End = activity?.slot2End !== undefined ? activity.slot2End : 19;
 
   const daysMap = {};
   hourly.time.forEach((t, i) => {
@@ -360,7 +411,7 @@ function buildStructuredWeather(hourly, utcOffsetSeconds) {
     daysMap[date].full_day.hours.push(hour);
     daysMap[date].full_day.uvs.push(hourly.uv_index[i]);
 
-    if (hour >= 8 && hour <= 12) {
+    if (hour >= slot1Start && hour <= slot1End) {
       daysMap[date].matin.temps.push(hourly.temperature_2m[i]);
       daysMap[date].matin.rains.push(hourly.precipitation_probability[i]);
       daysMap[date].matin.precips.push(hourly.precipitation[i]);
@@ -369,7 +420,7 @@ function buildStructuredWeather(hourly, utcOffsetSeconds) {
       daysMap[date].matin.dirs.push(hourly.wind_direction_10m[i]);
       daysMap[date].matin.hours.push(hour);
       daysMap[date].matin.uvs.push(hourly.uv_index[i]);
-    } else if (hour >= 13 && hour <= 18) {
+    } else if (hour >= slot2Start && hour <= slot2End) {
       daysMap[date].apres_midi.temps.push(hourly.temperature_2m[i]);
       daysMap[date].apres_midi.rains.push(hourly.precipitation_probability[i]);
       daysMap[date].apres_midi.precips.push(hourly.precipitation[i]);
@@ -381,7 +432,7 @@ function buildStructuredWeather(hourly, utcOffsetSeconds) {
     }
   });
 
-  const aggregate = (period) => {
+  const aggregate = (period, label) => {
     if (!period || period.temps.length === 0) return null;
     const hourlyData = period.hours.map((h, i) => ({
       hour: h,
@@ -394,6 +445,7 @@ function buildStructuredWeather(hourly, utcOffsetSeconds) {
       uv: Number((period.uvs[i] || 0).toFixed(1))
     }));
     return {
+      label,
       temp: Math.round(Math.max(...period.temps)),
       minTemp: Math.round(Math.min(...period.temps)),
       rain: Math.max(...period.rains),
@@ -409,19 +461,26 @@ function buildStructuredWeather(hourly, utcOffsetSeconds) {
   return Object.values(daysMap)
     .map(d => ({
       date: d.date,
-      matin: aggregate(d.matin),
-      apres_midi: aggregate(d.apres_midi),
-      full_day: aggregate(d.full_day)
+      matin: aggregate(d.matin, slot1Name),
+      apres_midi: aggregate(d.apres_midi, slot2Name),
+      full_day: aggregate(d.full_day, 'Journée')
     }))
     .filter(d => d.matin !== null || d.apres_midi !== null)
     .slice(0, 7);
 }
 
 // Helper : adapte les données horaires met.no (GeoJSON timeseries) au même format que buildStructuredWeather()
-function buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds) {
+function buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds, activity = null) {
   const nowUtcMs = Date.now();
   const nowLocalMs = nowUtcMs + utcOffsetSeconds * 1000;
   const nowLocalStr = new Date(nowLocalMs).toISOString().slice(0, 16);
+
+  const slot1Name = activity?.slot1Name || 'Matin';
+  const slot1Start = activity?.slot1Start !== undefined ? activity.slot1Start : 8;
+  const slot1End = activity?.slot1End !== undefined ? activity.slot1End : 12;
+  const slot2Name = activity?.slot2Name || 'Après-midi';
+  const slot2Start = activity?.slot2Start !== undefined ? activity.slot2Start : 14;
+  const slot2End = activity?.slot2End !== undefined ? activity.slot2End : 19;
 
   const daysMap = {};
   for (const entry of timeseries) {
@@ -470,7 +529,7 @@ function buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds) {
     daysMap[date].full_day.hours.push(hour);
     daysMap[date].full_day.uvs.push(uv);
 
-    if (hour >= 8 && hour <= 12) {
+    if (hour >= slot1Start && hour <= slot1End) {
       daysMap[date].matin.temps.push(temp);
       daysMap[date].matin.rains.push(rain);
       daysMap[date].matin.precips.push(precip);
@@ -479,7 +538,7 @@ function buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds) {
       daysMap[date].matin.dirs.push(dir);
       daysMap[date].matin.hours.push(hour);
       daysMap[date].matin.uvs.push(uv);
-    } else if (hour >= 13 && hour <= 18) {
+    } else if (hour >= slot2Start && hour <= slot2End) {
       daysMap[date].apres_midi.temps.push(temp);
       daysMap[date].apres_midi.rains.push(rain);
       daysMap[date].apres_midi.precips.push(precip);
@@ -491,7 +550,7 @@ function buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds) {
     }
   }
 
-  const aggregate = (period) => {
+  const aggregate = (period, label) => {
     if (!period || period.temps.length === 0) return null;
     const hourlyData = period.hours.map((h, i) => ({
       hour: h,
@@ -504,6 +563,7 @@ function buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds) {
       uv: Number((period.uvs[i] || 0).toFixed(1))
     }));
     return {
+      label,
       temp: Math.round(Math.max(...period.temps)),
       minTemp: Math.round(Math.min(...period.temps)),
       rain: Math.max(...period.rains),
@@ -519,9 +579,9 @@ function buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds) {
   return Object.values(daysMap)
     .map(d => ({
       date: d.date,
-      matin: aggregate(d.matin),
-      apres_midi: aggregate(d.apres_midi),
-      full_day: aggregate(d.full_day)
+      matin: aggregate(d.matin, slot1Name),
+      apres_midi: aggregate(d.apres_midi, slot2Name),
+      full_day: aggregate(d.full_day, 'Journée')
     }))
     .filter(d => d.matin !== null || d.apres_midi !== null)
     .slice(0, 7);
@@ -529,10 +589,22 @@ function buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds) {
 
 // --- ROUTE MÉTÉO BRUTE (étape 1 : retourne la météo agrégée sans analyse IA) ---
 app.post('/api/weather', verifyToken, async (req, res) => {
-  const { lat, lon } = req.body;
+  const { lat, lon, activityId } = req.body;
   if (!lat || !lon) return res.status(400).json({ error: "lat et lon sont obligatoires" });
 
   try {
+    let activity = null;
+    if (activityId && activityId !== 'none') {
+      try {
+        const user = await User.findById(req.user.id).select('activities');
+        if (user) {
+          activity = user.activities.id(activityId);
+        }
+      } catch (err) {
+        console.error("Erreur récupération activité pour structuring:", err);
+      }
+    }
+
     // Lire le fournisseur météo configuré par l'admin
     let weatherProvider = 'open-meteo';
     try {
@@ -570,7 +642,7 @@ app.post('/api/weather', verifyToken, async (req, res) => {
       if (!timeseries || !Array.isArray(timeseries)) {
         throw new Error("Données met.no invalides");
       }
-      return buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds);
+      return buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds, activity);
     };
 
     const fetchFromOpenMeteo = async () => {
@@ -578,7 +650,7 @@ app.post('/api/weather', verifyToken, async (req, res) => {
       const weatherRes = await axios.get(weatherUrl);
       const hourly = weatherRes.data.hourly;
       const utcOffsetSeconds = weatherRes.data.utc_offset_seconds ?? 0;
-      return buildStructuredWeather(hourly, utcOffsetSeconds);
+      return buildStructuredWeather(hourly, utcOffsetSeconds, activity);
     };
 
     let actualProviderUsed = weatherProvider;
@@ -615,6 +687,7 @@ app.post('/api/analyze', verifyToken, async (req, res) => {
   const { city, activityId, structuredWeather } = req.body;
   let activityLabel = '';
   let userRules = '';
+  let activity = null;
 
   try {
     if (!activityId) return res.status(400).json({ error: "L'activité est obligatoire" });
@@ -626,7 +699,7 @@ app.post('/api/analyze', verifyToken, async (req, res) => {
     } else {
       const user = await User.findById(req.user.id).select('activities');
       if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
-      const activity = user.activities.id(activityId);
+      activity = user.activities.id(activityId);
       if (!activity) return res.status(404).json({ error: "Activité introuvable" });
       activityLabel = activity.label;
       userRules = (activity.constraints || '').trim();
@@ -658,7 +731,41 @@ app.post('/api/analyze', verifyToken, async (req, res) => {
       };
     });
 
+    const slot1Name = activity?.slot1Name || 'Matin';
+    const slot1Start = activity?.slot1Start !== undefined ? activity.slot1Start : 8;
+    const slot1End = activity?.slot1End !== undefined ? activity.slot1End : 12;
+    const slot2Name = activity?.slot2Name || 'Après-midi';
+    const slot2Start = activity?.slot2Start !== undefined ? activity.slot2Start : 14;
+    const slot2End = activity?.slot2End !== undefined ? activity.slot2End : 19;
+
     let prompt = `Tu es un algorithme de filtrage intransigeant pour l'activité suivante : ${activityLabel}. Voici la météo agrégée (Matin / Après-midi) pour ${city} : ${JSON.stringify(weatherForAi)}`;
+    prompt += `\nNote : La période "matin" correspond au créneau "${slot1Name}" (de ${slot1Start}h à ${slot1End}h). La période "apres_midi" correspond au créneau "${slot2Name}" (de ${slot2Start}h à ${slot2End}h). Dans tes commentaires/conseils, réfère-toi à ces créneaux en utilisant leurs noms personnalisés ("${slot1Name}" et "${slot2Name}") plutôt que "matin" et "après-midi" si possible, et base ton jugement strictement sur les heures spécifiées. Ne mentionne pas de valeurs numériques spécifiques dans le conseil pour les limites strictes de vent/température/précipitations/uv.\n`;
+
+    if (activity) {
+      const numericRules = [];
+      if (activity.tempMin !== null || activity.tempMax !== null) {
+        numericRules.push(`- Température : min ${activity.tempMin !== null ? activity.tempMin + '°C' : 'non défini'} / max ${activity.tempMax !== null ? activity.tempMax + '°C' : 'non défini'}`);
+      }
+      if (activity.windMin !== null || activity.windMax !== null) {
+        numericRules.push(`- Vent : min ${activity.windMin !== null ? activity.windMin + ' km/h' : 'non défini'} / max ${activity.windMax !== null ? activity.windMax + ' km/h' : 'non défini'}`);
+      }
+      if (activity.gustMin !== null || activity.gustMax !== null) {
+        numericRules.push(`- Rafales de vent : min ${activity.gustMin !== null ? activity.gustMin + ' km/h' : 'non défini'} / max ${activity.gustMax !== null ? activity.gustMax + ' km/h' : 'non défini'}`);
+      }
+      if (activity.precipMin !== null || activity.precipMax !== null) {
+        numericRules.push(`- Cumul de précipitations : min ${activity.precipMin !== null ? activity.precipMin + ' mm' : 'non défini'} / max ${activity.precipMax !== null ? activity.precipMax + ' mm' : 'non défini'}`);
+      }
+      if (activity.uvMin !== null || activity.uvMax !== null) {
+        numericRules.push(`- Indice UV : min ${activity.uvMin !== null ? activity.uvMin : 'non défini'} / max ${activity.uvMax !== null ? activity.uvMax : 'non défini'}`);
+      }
+
+      if (numericRules.length > 0) {
+        prompt += `
+LIMITES MÉTÉO NUMÉRIQUES DE L'ACTIVITÉ (CRITÈRES STRICTES) :
+${numericRules.join('\n')}
+Tu DOIS impérativement mettre "favorable": false pour la demi-journée et positionner le critère correspondant sur "defavorable" si les conditions dépassent ou sont en dessous de ces limites strictes.`;
+      }
+    }
 
     if (userRules !== "") {
       prompt += `
@@ -714,8 +821,8 @@ Les valeurs dans criteres sont uniquement les chaînes "favorable" ou "defavorab
       const ai = aiData.find(a => a.date === day.date) || { matin: {}, apres_midi: {} };
       return {
         date: day.date,
-        matin: day.matin ? enrichPeriod(day.matin, ai.matin || {}) : null,
-        apres_midi: day.apres_midi ? enrichPeriod(day.apres_midi, ai.apres_midi || {}) : null,
+        matin: day.matin ? enrichPeriod(day.matin, ai.matin || {}, activity) : null,
+        apres_midi: day.apres_midi ? enrichPeriod(day.apres_midi, ai.apres_midi || {}, activity) : null,
         full_day: day.full_day
       };
     });
@@ -739,6 +846,7 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
   const { lat, lon, city, activityId } = req.body;
   let activityLabel = '';
   let userRules = '';
+  let activity = null;
 
   try {
     if (!activityId) return res.status(400).json({ error: "L'activité est obligatoire" });
@@ -749,7 +857,7 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
     } else {
       const user = await User.findById(req.user.id).select('activities');
       if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
-      const activity = user.activities.id(activityId);
+      activity = user.activities.id(activityId);
       if (!activity) return res.status(404).json({ error: "Activité introuvable" });
       activityLabel = activity.label;
       userRules = (activity.constraints || '').trim();
@@ -792,7 +900,7 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
       if (!timeseries || !Array.isArray(timeseries)) {
         throw new Error("Données met.no invalides");
       }
-      return buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds);
+      return buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds, activity);
     };
 
     const fetchFromOpenMeteo = async () => {
@@ -800,7 +908,7 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
       const weatherRes = await axios.get(weatherUrl);
       const hourly = weatherRes.data.hourly;
       const utcOffsetSeconds = weatherRes.data.utc_offset_seconds ?? 0;
-      return buildStructuredWeather(hourly, utcOffsetSeconds);
+      return buildStructuredWeather(hourly, utcOffsetSeconds, activity);
     };
 
     let actualProviderUsed = weatherProvider;
@@ -851,7 +959,41 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
       };
     });
 
+    const slot1Name = activity?.slot1Name || 'Matin';
+    const slot1Start = activity?.slot1Start !== undefined ? activity.slot1Start : 8;
+    const slot1End = activity?.slot1End !== undefined ? activity.slot1End : 12;
+    const slot2Name = activity?.slot2Name || 'Après-midi';
+    const slot2Start = activity?.slot2Start !== undefined ? activity.slot2Start : 14;
+    const slot2End = activity?.slot2End !== undefined ? activity.slot2End : 19;
+
     let prompt = `Tu es un algorithme de filtrage intransigeant pour l'activité suivante : ${activityLabel}. Voici la météo agrégée (Matin / Après-midi) pour ${city} : ${JSON.stringify(weatherForAi)}`;
+    prompt += `\nNote : La période "matin" correspond au créneau "${slot1Name}" (de ${slot1Start}h à ${slot1End}h). La période "apres_midi" correspond au créneau "${slot2Name}" (de ${slot2Start}h à ${slot2End}h). Dans tes commentaires/conseils, réfère-toi à ces créneaux en utilisant leurs noms personnalisés ("${slot1Name}" et "${slot2Name}") plutôt que "matin" et "après-midi" si possible, et base ton jugement strictement sur les heures spécifiées. Ne mentionne pas de valeurs numériques spécifiques dans le conseil pour les limites strictes de vent/température/précipitations/uv.\n`;
+
+    if (activity) {
+      const numericRules = [];
+      if (activity.tempMin !== null || activity.tempMax !== null) {
+        numericRules.push(`- Température : min ${activity.tempMin !== null ? activity.tempMin + '°C' : 'non défini'} / max ${activity.tempMax !== null ? activity.tempMax + '°C' : 'non défini'}`);
+      }
+      if (activity.windMin !== null || activity.windMax !== null) {
+        numericRules.push(`- Vent : min ${activity.windMin !== null ? activity.windMin + ' km/h' : 'non défini'} / max ${activity.windMax !== null ? activity.windMax + ' km/h' : 'non défini'}`);
+      }
+      if (activity.gustMin !== null || activity.gustMax !== null) {
+        numericRules.push(`- Rafales de vent : min ${activity.gustMin !== null ? activity.gustMin + ' km/h' : 'non défini'} / max ${activity.gustMax !== null ? activity.gustMax + ' km/h' : 'non défini'}`);
+      }
+      if (activity.precipMin !== null || activity.precipMax !== null) {
+        numericRules.push(`- Cumul de précipitations : min ${activity.precipMin !== null ? activity.precipMin + ' mm' : 'non défini'} / max ${activity.precipMax !== null ? activity.precipMax + ' mm' : 'non défini'}`);
+      }
+      if (activity.uvMin !== null || activity.uvMax !== null) {
+        numericRules.push(`- Indice UV : min ${activity.uvMin !== null ? activity.uvMin : 'non défini'} / max ${activity.uvMax !== null ? activity.uvMax : 'non défini'}`);
+      }
+
+      if (numericRules.length > 0) {
+        prompt += `
+LIMITES MÉTÉO NUMÉRIQUES DE L'ACTIVITÉ (CRITÈRES STRICTES) :
+${numericRules.join('\n')}
+Tu DOIS impérativement mettre "favorable": false pour la demi-journée et positionner le critère correspondant sur "defavorable" si les conditions dépassent ou sont en dessous de ces limites strictes.`;
+      }
+    }
 
     if (userRules !== "") {
       prompt += `
@@ -907,8 +1049,8 @@ Les valeurs dans criteres sont uniquement les chaînes "favorable" ou "defavorab
       const ai = aiData.find(a => a.date === day.date) || { matin: {}, apres_midi: {} };
       return {
         date: day.date,
-        matin: day.matin ? enrichPeriod(day.matin, ai.matin || {}) : null,
-        apres_midi: day.apres_midi ? enrichPeriod(day.apres_midi, ai.apres_midi || {}) : null,
+        matin: day.matin ? enrichPeriod(day.matin, ai.matin || {}, activity) : null,
+        apres_midi: day.apres_midi ? enrichPeriod(day.apres_midi, ai.apres_midi || {}, activity) : null,
         full_day: day.full_day
       };
     });
@@ -1004,14 +1146,52 @@ app.post('/api/user/activities', verifyToken, async (req, res) => {
   const constraints = typeof req.body.constraints === 'string' ? req.body.constraints.trim() : '';
   const stravaSportType = typeof req.body.stravaSportType === 'string' ? req.body.stravaSportType.trim() : '';
 
+  const parseNum = (val) => {
+    if (val === undefined || val === null || val === '') return null;
+    const num = Number(val);
+    return isNaN(num) ? null : num;
+  };
+
+  const windMin = parseNum(req.body.windMin);
+  const windMax = parseNum(req.body.windMax);
+  const gustMin = parseNum(req.body.gustMin);
+  const gustMax = parseNum(req.body.gustMax);
+  const tempMin = parseNum(req.body.tempMin);
+  const tempMax = parseNum(req.body.tempMax);
+  const precipMin = parseNum(req.body.precipMin);
+  const precipMax = parseNum(req.body.precipMax);
+  const uvMin = parseNum(req.body.uvMin);
+  const uvMax = parseNum(req.body.uvMax);
+
+  const slot1Name = typeof req.body.slot1Name === 'string' && req.body.slot1Name.trim() !== '' ? req.body.slot1Name.trim().substring(0, 30) : 'Matin';
+  const slot1Start = req.body.slot1Start !== undefined && req.body.slot1Start !== null && req.body.slot1Start !== '' ? Math.max(0, Math.min(23, Number(req.body.slot1Start))) : 8;
+  const slot1End = req.body.slot1End !== undefined && req.body.slot1End !== null && req.body.slot1End !== '' ? Math.max(0, Math.min(23, Number(req.body.slot1End))) : 12;
+
+  const slot2Name = typeof req.body.slot2Name === 'string' && req.body.slot2Name.trim() !== '' ? req.body.slot2Name.trim().substring(0, 30) : 'Après-midi';
+  const slot2Start = req.body.slot2Start !== undefined && req.body.slot2Start !== null && req.body.slot2Start !== '' ? Math.max(0, Math.min(23, Number(req.body.slot2Start))) : 14;
+  const slot2End = req.body.slot2End !== undefined && req.body.slot2End !== null && req.body.slot2End !== '' ? Math.max(0, Math.min(23, Number(req.body.slot2End))) : 19;
+
   if (!label) return res.status(400).json({ error: "Le libellé est obligatoire" });
   if (label.length > 80) return res.status(400).json({ error: "Le libellé doit contenir 80 caractères maximum" });
   if (constraints.length > 4000) return res.status(400).json({ error: "Les contraintes doivent contenir 4000 caractères maximum" });
 
+  if (windMin !== null && windMax !== null && windMin > windMax) return res.status(400).json({ error: "Le vent minimum ne peut pas être supérieur au vent maximum" });
+  if (gustMin !== null && gustMax !== null && gustMin > gustMax) return res.status(400).json({ error: "Les rafales minimum ne peuvent pas être supérieures aux rafales maximum" });
+  if (tempMin !== null && tempMax !== null && tempMin > tempMax) return res.status(400).json({ error: "La température minimum ne peut pas être supérieure à la température maximum" });
+  if (precipMin !== null && precipMax !== null && precipMin > precipMax) return res.status(400).json({ error: "Les précipitations minimum ne peuvent pas être supérieures aux précipitations maximum" });
+  if (uvMin !== null && uvMax !== null && uvMin > uvMax) return res.status(400).json({ error: "L'indice UV minimum ne peut pas être supérieur à l'indice UV maximum" });
+
+  if (slot1Start > slot1End) return res.status(400).json({ error: "L'heure de début du premier créneau doit être inférieure ou égale à l'heure de fin." });
+  if (slot2Start > slot2End) return res.status(400).json({ error: "L'heure de début du second créneau doit être inférieure ou égale à l'heure de fin." });
+
   try {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
-    user.activities.push({ label, icon, constraints, stravaSportType });
+    user.activities.push({
+      label, icon, constraints, stravaSportType,
+      windMin, windMax, gustMin, gustMax, tempMin, tempMax, precipMin, precipMax, uvMin, uvMax,
+      slot1Name, slot1Start, slot1End, slot2Name, slot2Start, slot2End
+    });
     await user.save();
     res.status(201).json(user.activities[user.activities.length - 1]);
   } catch (err) {
@@ -1025,9 +1205,43 @@ app.put('/api/user/activities/:activityId', verifyToken, async (req, res) => {
   const constraints = typeof req.body.constraints === 'string' ? req.body.constraints.trim() : '';
   const stravaSportType = typeof req.body.stravaSportType === 'string' ? req.body.stravaSportType.trim() : '';
 
+  const parseNum = (val) => {
+    if (val === undefined || val === null || val === '') return null;
+    const num = Number(val);
+    return isNaN(num) ? null : num;
+  };
+
+  const windMin = parseNum(req.body.windMin);
+  const windMax = parseNum(req.body.windMax);
+  const gustMin = parseNum(req.body.gustMin);
+  const gustMax = parseNum(req.body.gustMax);
+  const tempMin = parseNum(req.body.tempMin);
+  const tempMax = parseNum(req.body.tempMax);
+  const precipMin = parseNum(req.body.precipMin);
+  const precipMax = parseNum(req.body.precipMax);
+  const uvMin = parseNum(req.body.uvMin);
+  const uvMax = parseNum(req.body.uvMax);
+
+  const slot1Name = typeof req.body.slot1Name === 'string' && req.body.slot1Name.trim() !== '' ? req.body.slot1Name.trim().substring(0, 30) : 'Matin';
+  const slot1Start = req.body.slot1Start !== undefined && req.body.slot1Start !== null && req.body.slot1Start !== '' ? Math.max(0, Math.min(23, Number(req.body.slot1Start))) : 8;
+  const slot1End = req.body.slot1End !== undefined && req.body.slot1End !== null && req.body.slot1End !== '' ? Math.max(0, Math.min(23, Number(req.body.slot1End))) : 12;
+
+  const slot2Name = typeof req.body.slot2Name === 'string' && req.body.slot2Name.trim() !== '' ? req.body.slot2Name.trim().substring(0, 30) : 'Après-midi';
+  const slot2Start = req.body.slot2Start !== undefined && req.body.slot2Start !== null && req.body.slot2Start !== '' ? Math.max(0, Math.min(23, Number(req.body.slot2Start))) : 14;
+  const slot2End = req.body.slot2End !== undefined && req.body.slot2End !== null && req.body.slot2End !== '' ? Math.max(0, Math.min(23, Number(req.body.slot2End))) : 19;
+
   if (!label) return res.status(400).json({ error: "Le libellé est obligatoire" });
   if (label.length > 80) return res.status(400).json({ error: "Le libellé doit contenir 80 caractères maximum" });
   if (constraints.length > 4000) return res.status(400).json({ error: "Les contraintes doivent contenir 4000 caractères maximum" });
+
+  if (windMin !== null && windMax !== null && windMin > windMax) return res.status(400).json({ error: "Le vent minimum ne peut pas être supérieur au vent maximum" });
+  if (gustMin !== null && gustMax !== null && gustMin > gustMax) return res.status(400).json({ error: "Les rafales minimum ne peuvent pas être supérieures aux rafales maximum" });
+  if (tempMin !== null && tempMax !== null && tempMin > tempMax) return res.status(400).json({ error: "La température minimum ne peut pas être supérieure à la température maximum" });
+  if (precipMin !== null && precipMax !== null && precipMin > precipMax) return res.status(400).json({ error: "Les précipitations minimum ne peuvent pas être supérieures aux précipitations maximum" });
+  if (uvMin !== null && uvMax !== null && uvMin > uvMax) return res.status(400).json({ error: "L'indice UV minimum ne peut pas être supérieur à l'indice UV maximum" });
+
+  if (slot1Start > slot1End) return res.status(400).json({ error: "L'heure de début du premier créneau doit être inférieure ou égale à l'heure de fin." });
+  if (slot2Start > slot2End) return res.status(400).json({ error: "L'heure de début du second créneau doit être inférieure ou égale à l'heure de fin." });
 
   try {
     const user = await User.findById(req.user.id);
@@ -1038,6 +1252,25 @@ app.put('/api/user/activities/:activityId', verifyToken, async (req, res) => {
     activity.icon = icon;
     activity.constraints = constraints;
     activity.stravaSportType = stravaSportType;
+    
+    activity.windMin = windMin;
+    activity.windMax = windMax;
+    activity.gustMin = gustMin;
+    activity.gustMax = gustMax;
+    activity.tempMin = tempMin;
+    activity.tempMax = tempMax;
+    activity.precipMin = precipMin;
+    activity.precipMax = precipMax;
+    activity.uvMin = uvMin;
+    activity.uvMax = uvMax;
+
+    activity.slot1Name = slot1Name;
+    activity.slot1Start = slot1Start;
+    activity.slot1End = slot1End;
+    activity.slot2Name = slot2Name;
+    activity.slot2Start = slot2Start;
+    activity.slot2End = slot2End;
+
     await user.save();
     res.json(activity);
   } catch (err) {

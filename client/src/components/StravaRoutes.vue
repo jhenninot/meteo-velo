@@ -1929,10 +1929,10 @@ onUnmounted(() => {
                       </span>
                       <h4 class="half-day-heading">
                         <WeatherIcon class="weather-main-icon" :icon="getWeatherIcon(day.matin)" />
-                        <span class="half-day-heading-label">Matin</span>
+                        <span class="half-day-heading-label">{{ day.matin.label || 'Matin' }}</span>
                       </h4>
                       <div class="metrics">
-                        <span :class="critereClass(day.matin, 'temperature')"><span class="mdi mdi-thermometer"></span> {{ day.matin.temp }}°C</span>
+                        <span :class="critereClass(day.matin, 'temperature')"><span class="mdi mdi-thermometer"></span> {{ day.matin.minTemp !== undefined ? day.matin.minTemp + ' / ' + day.matin.temp : day.matin.temp }}°C</span>
                         <span :class="critereClass(day.matin, 'pluie')"><span class="mdi mdi-water-percent"></span> {{ day.matin.rain }}%</span>
                         <span :class="critereClass(day.matin, 'precipitations')"><span class="mdi mdi-weather-pouring"></span> {{ day.matin.precip }}mm</span>
                         <span :class="critereClass(day.matin, 'vent')"><span class="mdi mdi-navigation wind-icon" :style="getWindStyle(day.matin.dir)"></span> {{ day.matin.wind }}km/h</span>
@@ -1957,10 +1957,10 @@ onUnmounted(() => {
                       </span>
                       <h4 class="half-day-heading">
                         <WeatherIcon class="weather-main-icon" :icon="getWeatherIcon(day.apres_midi)" />
-                        <span class="half-day-heading-label">Après-midi</span>
+                        <span class="half-day-heading-label">{{ day.apres_midi.label || 'Après-midi' }}</span>
                       </h4>
                       <div class="metrics">
-                        <span :class="critereClass(day.apres_midi, 'temperature')"><span class="mdi mdi-thermometer"></span> {{ day.apres_midi.temp }}°C</span>
+                        <span :class="critereClass(day.apres_midi, 'temperature')"><span class="mdi mdi-thermometer"></span> {{ day.apres_midi.minTemp !== undefined ? day.apres_midi.minTemp + ' / ' + day.apres_midi.temp : day.apres_midi.temp }}°C</span>
                         <span :class="critereClass(day.apres_midi, 'pluie')"><span class="mdi mdi-water-percent"></span> {{ day.apres_midi.rain }}%</span>
                         <span :class="critereClass(day.apres_midi, 'precipitations')"><span class="mdi mdi-weather-pouring"></span> {{ day.apres_midi.precip }}mm</span>
                         <span :class="critereClass(day.apres_midi, 'vent')"><span class="mdi mdi-navigation wind-icon" :style="getWindStyle(day.apres_midi.dir)"></span> {{ day.apres_midi.wind }}km/h</span>
