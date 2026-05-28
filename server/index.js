@@ -355,19 +355,28 @@ function enrichPeriod(aggregated, aiSlice, activity = null) {
     checkLimit(merged.uv, activity.uvMin, activity.uvMax, 'uv');
   }
 
+  // Si le cumul de précipitations est de 0mm, les critères de pluie et de précipitations doivent être favorables
+  if (merged.precip === 0) {
+    merged.criteres.pluie = 'favorable';
+    merged.criteres.precipitations = 'favorable';
+  }
+
   // Si d'autres critères sont défavorables, on s'assure que favorable reste false
   const hasOtherDefavorable = Object.values(merged.criteres).some(v => v === 'defavorable');
   if (hasOtherDefavorable) {
     merged.favorable = false;
-  } else if (merged.rain < 15 && !fav) {
-    // Si la pluie était le seul facteur défavorable et < 15%, on rend favorable
+  } else {
+    // Si tous les critères sont favorables, on rend favorable
     merged.favorable = true;
   }
 
-  // Nettoyage du conseil si l'IA parle de pluie alors qu'elle ne devrait pas
-  if (merged.rain < 15 && merged.conseil && merged.conseil.toLowerCase().includes('pluie')) {
-    if (merged.favorable) {
-       merged.conseil = "Conditions correctes, pas de risque significatif de pluie.";
+  // Nettoyage du conseil si l'IA parle de pluie alors qu'elle ne devrait pas (précipitations à 0 ou probabilité < 15%)
+  if ((merged.rain < 15 || merged.precip === 0) && merged.conseil) {
+    const LowerConseil = merged.conseil.toLowerCase();
+    if (LowerConseil.includes('pluie') || LowerConseil.includes('précipitation') || LowerConseil.includes('averse') || LowerConseil.includes('intempérie') || LowerConseil.includes('mauvais temps')) {
+      if (merged.favorable) {
+         merged.conseil = "Conditions correctes, pas de pluie prévue.";
+      }
     }
   }
 
@@ -776,8 +785,7 @@ Tu DOIS mettre "favorable": false si une contrainte est enfreinte.`;
 
     prompt += `
             RÈGLES D'ANALYSE PRÉCISES :
-            - PRÉCIPITATIONS : Si le cumul (precip) est de 0mm, ne parle pas de "pluie continue" ou de "déluge", même si la probabilité est haute. Parle plutôt de "ciel menaçant" ou "risque de bruine".
-            - PLUIE : Si la probabilité de pluie (rain) est inférieure à 15 %, ce critère DOIT obligatoirement être "favorable" et ne DOIT PAS rendre à lui seul l'analyse de la demi-journée défavorable. Dans ton "conseil", NE MENTIONNE JAMAIS un risque de pluie et NE DÉCONSEILLE SURTOUT PAS la sortie pour ce motif si la probabilité est < 15% ou le cumul est de 0mm.
+            - PRÉCIPITATIONS / PLUIE : Si le cumul de précipitations (precip) est de 0mm, ces deux critères (pluie et precipitations) DOIVENT obligatoirement être marqués comme "favorable" et ne doivent pas rendre l'analyse de la demi-journée défavorable. Dans ton "conseil", ne mentionne pas de risque de pluie ou d'intempéries liées à la pluie, et ne déconseille surtout pas la sortie pour ce motif si le cumul de précipitations est de 0mm (même si la probabilité de pluie/rain est non nulle).
             - SEUIL DE TOLÉRANCE : Considère que moins de 0.5mm sur une demi-journée est négligeable.
             - VENT : Sois intransigeant sur les rafales (gust) par rapport aux consignes de l'utilisateur.
             - INDICE UV : Analyse si l'indice UV (uv) nécessite des conseils spécifiques (ex: crème solaire / protection si UV >= 6).
@@ -1004,8 +1012,7 @@ Tu DOIS mettre "favorable": false si une contrainte est enfreinte.`;
 
     prompt += `
             RÈGLES D'ANALYSE PRÉCISES :
-            - PRÉCIPITATIONS : Si le cumul (precip) est de 0mm, ne parle pas de "pluie continue" ou de "déluge", même si la probabilité est haute. Parle plutôt de "ciel menaçant" ou "risque de bruine".
-            - PLUIE : Si la probabilité de pluie (rain) est inférieure à 15 %, ce critère DOIT obligatoirement être "favorable" et ne DOIT PAS rendre à lui seul l'analyse de la demi-journée défavorable. Dans ton "conseil", NE MENTIONNE JAMAIS un risque de pluie et NE DÉCONSEILLE SURTOUT PAS la sortie pour ce motif si la probabilité est < 15% ou le cumul est de 0mm.
+            - PRÉCIPITATIONS / PLUIE : Si le cumul de précipitations (precip) est de 0mm, ces deux critères (pluie et precipitations) DOIVENT obligatoirement être marqués comme "favorable" et ne doivent pas rendre l'analyse de la demi-journée défavorable. Dans ton "conseil", ne mentionne pas de risque de pluie ou d'intempéries liées à la pluie, et ne déconseille surtout pas la sortie pour ce motif si le cumul de précipitations est de 0mm (même si la probabilité de pluie/rain est non nulle).
             - SEUIL DE TOLÉRANCE : Considère que moins de 0.5mm sur une demi-journée est négligeable.
             - VENT : Sois intransigeant sur les rafales (gust) par rapport aux consignes de l'utilisateur.
             - INDICE UV : Analyse si l'indice UV (uv) nécessite des conseils spécifiques (ex: crème solaire / protection si UV >= 6).
