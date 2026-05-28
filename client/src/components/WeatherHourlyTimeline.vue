@@ -114,7 +114,11 @@
     <!-- Row 4: Wind Speed & Direction -->
     <div class="timeline-winds">
       <div v-for="(h, i) in hourlyData" :key="'wind-'+i" class="timeline-wind-cell" :class="{ 'is-night': isNightHour(date, h.hour) }" :style="{ width: columnWidth + 'px' }">
-        <span class="wind-arrow">{{ getWindArrow(h.dir) }}</span>
+        <span class="wind-arrow-wrapper" :style="{ transform: `rotate(${h.dir || 0}deg)` }">
+          <svg viewBox="0 0 24 24" class="wind-arrow-svg">
+            <path d="M12 2L19 21L12 17L5 21Z" fill="currentColor" />
+          </svg>
+        </span>
         <span class="wind-speed">{{ h.wind }} <span class="wind-unit">km/h</span></span>
       </div>
     </div>
@@ -247,13 +251,7 @@ const getBarHeight = (precip) => {
   return (precip / maxScale) * 45 // max height 45px
 }
 
-// Wind arrow unicode mapping
-const getWindArrow = (deg) => {
-  if (deg === undefined || deg === null) return '↑'
-  const index = Math.round((deg % 360) / 45) % 8
-  const arrows = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖']
-  return arrows[index]
-}
+
 
 // Night check helper
 const isNightHour = (dateString, hour) => {
