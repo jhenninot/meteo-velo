@@ -571,6 +571,70 @@ const selectCity = (selectedFeature) => {
   })
 }
 
+const geoLoading = ref(false)
+
+const useDeviceLocation = () => {
+  if (!navigator.geolocation) {
+    error.value = "La géolocalisation n'est pas supportée par votre navigateur."
+    return
+  }
+  
+  geoLoading.value = true
+  error.value = null
+  suggestions.value = []
+  
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      const { latitude, longitude } = position.coords
+      try {
+        const response = await axios.get(`${props.apiBaseUrl}/api/reverse?lat=${latitude}&lon=${longitude}`)
+        const features = response.data
+        
+        let resolvedCity = 'Ma position'
+        if (features && features.length > 0) {
+          const properties = features[0].properties
+          resolvedCity = properties.city || properties.town || properties.village || properties.name || 'Ma position'
+        }
+        
+        query.value = resolvedCity
+        emit('update:location', {
+          city: resolvedCity,
+          lat: latitude,
+          lon: longitude
+        })
+      } catch (err) {
+        console.error("Reverse geocoding error:", err)
+        query.value = 'Ma position'
+        emit('update:location', {
+          city: 'Ma position',
+          lat: latitude,
+          lon: longitude
+        })
+      } finally {
+        geoLoading.value = false
+      }
+    },
+    (err) => {
+      console.error("Geolocation error:", err)
+      geoLoading.value = false
+      if (err.code === 1) {
+        error.value = "Accès à la géolocalisation refusé. Veuillez autoriser l'accès ou saisir une ville."
+      } else if (err.code === 2) {
+        error.value = "Position géographique indisponible."
+      } else if (err.code === 3) {
+        error.value = "Délai d'attente de la géolocalisation dépassé."
+      } else {
+        error.value = "Impossible de récupérer votre position actuelle."
+      }
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0
+    }
+  )
+}
+
 const isSuggestionFavorite = (s) => {
   if (!s || !s.properties || !props.favorites) return false
   const name = s.properties.name
@@ -1507,6 +1571,17 @@ onUnmounted(() => {
                 @keyup.enter="suggestions = []"
                 style="width: 100%;"
               />
+              <button 
+                type="button" 
+                @click="useDeviceLocation" 
+                :disabled="geoLoading" 
+                class="geo-btn" 
+                title="Utiliser ma position actuelle"
+                style="padding: 10px 14px;"
+              >
+                <span v-if="!geoLoading" class="mdi mdi-crosshairs-gps"></span>
+                <span v-else class="mdi mdi-loading mdi-spin"></span>
+              </button>
               <button 
                 type="button" 
                 v-if="query"
