@@ -3115,9 +3115,11 @@ html.meteo-theme-dark .weather-hourly-timeline {
   --text-muted: #999;
 }
 
+/* Row 1: hours */
 .timeline-hours {
   display: flex;
-  margin-bottom: 8px;
+  margin-bottom: 0;
+  padding: 0;
 }
 
 .timeline-hour-cell {
@@ -3127,12 +3129,14 @@ html.meteo-theme-dark .weather-hourly-timeline {
   font-size: 0.8rem;
   font-weight: 700;
   color: var(--text-secondary);
+  padding: 6px 0 2px 0;
 }
 
+/* Row 2: chart wrapper */
 .timeline-chart-wrapper {
   position: relative;
   overflow: visible;
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 
 .timeline-svg {
@@ -3187,9 +3191,10 @@ html.meteo-theme-dark .weather-hourly-timeline {
   text-anchor: middle;
 }
 
+/* Row 3: icons */
 .timeline-icons {
   display: flex;
-  padding: 8px 0;
+  padding: 0;
 }
 
 .timeline-icon-cell {
@@ -3198,6 +3203,7 @@ html.meteo-theme-dark .weather-hourly-timeline {
   display: flex;
   justify-content: center;
   align-items: center;
+  padding: 6px 0;
 }
 
 .timeline-weather-icon {
@@ -3210,9 +3216,10 @@ html.meteo-theme-dark .timeline-weather-icon {
   color: var(--color-primary-light);
 }
 
+/* Row 4: wind info */
 .timeline-winds {
   display: flex;
-  padding-top: 4px;
+  padding: 0;
 }
 
 .timeline-wind-cell {
@@ -3223,6 +3230,7 @@ html.meteo-theme-dark .timeline-weather-icon {
   justify-content: center;
   gap: 3px;
   font-size: 0.76rem;
+  padding: 2px 0 6px 0;
   font-weight: 700;
   color: var(--text-secondary);
 }
@@ -3247,6 +3255,42 @@ html.meteo-theme-dark .timeline-weather-icon {
   .weather-hourly-timeline {
     padding: 12px 6px;
   }
+  
+  .timeline-hour-cell {
+    font-size: 0.7rem;
+  }
+  
+  .temp-label {
+    font-size: 0.65rem;
+  }
+  
+  .precip-badge text {
+    font-size: 0.6rem;
+  }
+  
+  .timeline-weather-icon {
+    font-size: 1.6rem;
+  }
+  
+  .timeline-wind-cell {
+    font-size: 0.65rem;
+    flex-direction: column;
+    gap: 1px;
+    padding: 4px 0;
+  }
+  
+  .wind-arrow {
+    font-size: 0.75rem;
+  }
+  
+  .wind-speed {
+    font-size: 0.65rem;
+  }
+  
+  .wind-unit {
+    font-size: 0.55rem;
+    margin-left: 0;
+  }
 }
 
 .timeline-scroll-container {
@@ -3270,6 +3314,31 @@ html.meteo-theme-dark .timeline-weather-icon {
 .timeline-scroll-container::-webkit-scrollbar-thumb {
   background: var(--color-primary);
   border-radius: 3px;
+}
+
+/* Night hours in timeline */
+.timeline-hour-cell.is-night,
+.timeline-icon-cell.is-night,
+.timeline-wind-cell.is-night {
+  background-color: #f1f3f5;
+}
+
+.timeline-svg .night-rect {
+  fill: #f1f3f5;
+}
+
+.theme-dark .timeline-hour-cell.is-night,
+.theme-dark .timeline-icon-cell.is-night,
+.theme-dark .timeline-wind-cell.is-night,
+html.meteo-theme-dark .timeline-hour-cell.is-night,
+html.meteo-theme-dark .timeline-icon-cell.is-night,
+html.meteo-theme-dark .timeline-wind-cell.is-night {
+  background-color: #1a1d23;
+}
+
+.theme-dark .timeline-svg .night-rect,
+html.meteo-theme-dark .timeline-svg .night-rect {
+  fill: #1a1d23;
 }
 
 

@@ -2,7 +2,7 @@
   <div class="weather-hourly-timeline" :class="{ 'theme-dark': theme === 'dark' }">
     <!-- Row 1: Time labels -->
     <div class="timeline-hours">
-      <div v-for="(h, i) in hourlyData" :key="'hour-'+i" class="timeline-hour-cell">
+      <div v-for="(h, i) in hourlyData" :key="'hour-'+i" class="timeline-hour-cell" :class="{ 'is-night': isNightHour(date, h.hour) }" :style="{ width: columnWidth + 'px' }">
         {{ formatHour(h.hour) }}
       </div>
     </div>
@@ -10,6 +10,18 @@
     <!-- Row 2: Chart Area (SVG) -->
     <div class="timeline-chart-wrapper">
       <svg :width="totalWidth" :height="chartHeight" class="timeline-svg">
+        <!-- Night backgrounds -->
+        <g v-for="(h, i) in hourlyData" :key="'night-bg-'+i">
+          <rect
+            v-if="isNightHour(date, h.hour)"
+            :x="i * columnWidth"
+            y="0"
+            :width="columnWidth"
+            :height="chartHeight"
+            class="night-rect"
+          />
+        </g>
+
         <!-- Vertical Grid Lines separating hours -->
         <line
           v-for="i in (hourlyData.length + 1)"
@@ -67,9 +79,9 @@
         <g v-for="(h, i) in hourlyData" :key="'badge-'+i">
           <g v-if="h.precip > 0" class="precip-badge">
             <rect
-              :x="getColumnCenterX(i) - 23"
+              :x="getColumnCenterX(i) - badgeWidth / 2"
               :y="chartHeight - getBarHeight(h.precip) - 28"
-              width="46"
+              :width="badgeWidth"
               height="24"
               rx="3"
             />
@@ -94,14 +106,14 @@
 
     <!-- Row 3: Weather Icons -->
     <div class="timeline-icons">
-      <div v-for="(h, i) in hourlyData" :key="'icon-'+i" class="timeline-icon-cell">
+      <div v-for="(h, i) in hourlyData" :key="'icon-'+i" class="timeline-icon-cell" :class="{ 'is-night': isNightHour(date, h.hour) }" :style="{ width: columnWidth + 'px' }">
         <WeatherIcon :icon="getWeatherIcon(h, isNightHour(date, h.hour))" class="timeline-weather-icon" />
       </div>
     </div>
 
     <!-- Row 4: Wind Speed & Direction -->
     <div class="timeline-winds">
-      <div v-for="(h, i) in hourlyData" :key="'wind-'+i" class="timeline-wind-cell">
+      <div v-for="(h, i) in hourlyData" :key="'wind-'+i" class="timeline-wind-cell" :class="{ 'is-night': isNightHour(date, h.hour) }" :style="{ width: columnWidth + 'px' }">
         <span class="wind-arrow">{{ getWindArrow(h.dir) }}</span>
         <span class="wind-speed">{{ h.wind }} <span class="wind-unit">km/h</span></span>
       </div>
@@ -110,7 +122,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import WeatherIcon from './WeatherIcon.vue'
 
 const props = defineProps({
@@ -128,14 +140,45 @@ const props = defineProps({
   }
 })
 
+// Responsive state
+const isMobile = ref(false)
+let mediaQuery = null
+
+const handleMediaQueryChange = (e) => {
+  isMobile.value = e.matches
+}
+
+onMounted(() => {
+  if (typeof window !== 'undefined') {
+    mediaQuery = window.matchMedia('(max-width: 768px)')
+    isMobile.value = mediaQuery.matches
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleMediaQueryChange)
+    } else {
+      mediaQuery.addListener(handleMediaQueryChange)
+    }
+  }
+})
+
+onUnmounted(() => {
+  if (mediaQuery) {
+    if (mediaQuery.removeEventListener) {
+      mediaQuery.removeEventListener('change', handleMediaQueryChange)
+    } else {
+      mediaQuery.removeListener(handleMediaQueryChange)
+    }
+  }
+})
+
 // Dimensions
-const columnWidth = 70
+const columnWidth = computed(() => isMobile.value ? 52 : 70)
 const chartHeight = 150
-const barWidth = 34
+const barWidth = computed(() => isMobile.value ? 24 : 34)
+const badgeWidth = computed(() => isMobile.value ? 38 : 46)
 
-const totalWidth = computed(() => props.hourlyData.length * columnWidth)
+const totalWidth = computed(() => props.hourlyData.length * columnWidth.value)
 
-const getColumnCenterX = (index) => (index + 0.5) * columnWidth
+const getColumnCenterX = (index) => (index + 0.5) * columnWidth.value
 
 // Hour formatting
 const formatHour = (h) => `${String(h).padStart(2, '0')}:00`
