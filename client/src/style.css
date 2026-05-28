@@ -2124,6 +2124,9 @@ input:checked + .switch-slider:before {
   align-items: center;
   gap: 6px;
   border: 1px solid var(--border-color);
+  position: sticky;
+  left: 0;
+  z-index: 10;
 }
 
 .hourly-day-cards {
