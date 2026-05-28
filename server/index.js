@@ -322,8 +322,8 @@ function normalizeCriteres(aiSlice, globalFavorable) {
 
 function enrichPeriod(aggregated, aiSlice, activity = null) {
   const merged = { ...aggregated, ...aiSlice };
-  let fav = merged.favorable === true;
-  merged.criteres = normalizeCriteres(aiSlice, fav);
+  let originallyFavorable = (merged.favorable === true);
+  merged.criteres = normalizeCriteres(aiSlice, originallyFavorable);
 
   // POST-PROCESSING : Forcer la probabilité de pluie à favorable si < 15%
   if (merged.rain < 15) {
@@ -334,25 +334,30 @@ function enrichPeriod(aggregated, aiSlice, activity = null) {
 
   // VALIDATION STRICTE DES SEUILS NUMÉRIQUES CONFIGURÉS
   if (activity) {
-    const checkLimit = (val, min, max, key) => {
+    const enforceLimit = (val, min, max, key) => {
       if (val === undefined || val === null) return;
+      
+      // Si dépassé, défavorable obligatoire
       if (min !== null && val < min) {
         merged.criteres[key] = 'defavorable';
-        fav = false;
-        merged.favorable = false;
+        return;
       }
       if (max !== null && val > max) {
         merged.criteres[key] = 'defavorable';
-        fav = false;
-        merged.favorable = false;
+        return;
+      }
+
+      // Si dans les limites spécifiées, forcer à favorable (l'IA ne peut pas l'outrepasser)
+      if (min !== null || max !== null) {
+        merged.criteres[key] = 'favorable';
       }
     };
 
-    checkLimit(merged.temp, activity.tempMin, activity.tempMax, 'temperature');
-    checkLimit(merged.wind, activity.windMin, activity.windMax, 'vent');
-    checkLimit(merged.gust, activity.gustMin, activity.gustMax, 'rafales');
-    checkLimit(merged.precip, activity.precipMin, activity.precipMax, 'precipitations');
-    checkLimit(merged.uv, activity.uvMin, activity.uvMax, 'uv');
+    enforceLimit(merged.temp, activity.tempMin, activity.tempMax, 'temperature');
+    enforceLimit(merged.wind, activity.windMin, activity.windMax, 'vent');
+    enforceLimit(merged.gust, activity.gustMin, activity.gustMax, 'rafales');
+    enforceLimit(merged.precip, activity.precipMin, activity.precipMax, 'precipitations');
+    enforceLimit(merged.uv, activity.uvMin, activity.uvMax, 'uv');
   }
 
   // Si le cumul de précipitations est de 0mm, les critères de pluie et de précipitations doivent être favorables
@@ -361,22 +366,89 @@ function enrichPeriod(aggregated, aiSlice, activity = null) {
     merged.criteres.precipitations = 'favorable';
   }
 
-  // Si d'autres critères sont défavorables, on s'assure que favorable reste false
-  const hasOtherDefavorable = Object.values(merged.criteres).some(v => v === 'defavorable');
-  if (hasOtherDefavorable) {
-    merged.favorable = false;
-  } else {
-    // Si tous les critères sont favorables, on rend favorable
-    merged.favorable = true;
+  // Déterminer si un critère strict de l'utilisateur a été violé
+  let hasStrictViolation = false;
+  if (activity) {
+    const isViolated = (val, min, max) => {
+      if (val === undefined || val === null) return false;
+      if (min !== null && val < min) return true;
+      if (max !== null && val > max) return true;
+      return false;
+    };
+    if (
+      isViolated(merged.temp, activity.tempMin, activity.tempMax) ||
+      isViolated(merged.wind, activity.windMin, activity.windMax) ||
+      isViolated(merged.gust, activity.gustMin, activity.gustMax) ||
+      isViolated(merged.precip, activity.precipMin, activity.precipMax) ||
+      isViolated(merged.uv, activity.uvMin, activity.uvMax)
+    ) {
+      hasStrictViolation = true;
+    }
   }
 
-  // Nettoyage du conseil si l'IA parle de pluie alors qu'elle ne devrait pas (précipitations à 0 ou probabilité < 15%)
+  if (hasStrictViolation) {
+    merged.favorable = false;
+  } else {
+    // Si aucune violation stricte de seuils configurés n'est présente
+    if (originallyFavorable) {
+      // Si l'IA elle-même a considéré globalement le créneau comme favorable, on respecte ce verdict
+      merged.favorable = true;
+    } else {
+      // Si l'IA l'a mis défavorable d'origine, on regarde s'il y a un critère défavorable restant
+      const hasDefavorableCritere = Object.values(merged.criteres).some(v => v === 'defavorable');
+      if (hasDefavorableCritere) {
+        merged.favorable = false;
+      } else {
+        merged.favorable = true;
+      }
+    }
+  }
+
+  // Nettoyage du conseil si l'IA s'est trompée sur la pluie alors qu'elle ne devrait pas (precip à 0 ou probabilité < 15%)
   if ((merged.rain < 15 || merged.precip === 0) && merged.conseil) {
     const LowerConseil = merged.conseil.toLowerCase();
     if (LowerConseil.includes('pluie') || LowerConseil.includes('précipitation') || LowerConseil.includes('averse') || LowerConseil.includes('intempérie') || LowerConseil.includes('mauvais temps')) {
       if (merged.favorable) {
          merged.conseil = "Conditions correctes, pas de pluie prévue.";
       }
+    }
+  }
+
+  // Si l'évaluation a été corrigée de défavorable à favorable suite aux seuils respectés, on met un message positif générique
+  if (merged.favorable && !originallyFavorable) {
+    merged.conseil = "Conditions favorables pour votre activité.";
+  }
+
+  // Si l'évaluation a été corrigée de favorable à défavorable suite à une violation de seuil strict,
+  // on remplace le message contradictoire de l'IA par une explication claire.
+  if (!merged.favorable && originallyFavorable) {
+    const violations = [];
+    if (activity) {
+      const isViolated = (val, min, max) => {
+        if (val === undefined || val === null) return false;
+        if (min !== null && val < min) return true;
+        if (max !== null && val > max) return true;
+        return false;
+      };
+      if (isViolated(merged.temp, activity.tempMin, activity.tempMax)) violations.push("température inappropriée");
+      if (isViolated(merged.wind, activity.windMin, activity.windMax)) violations.push("vent trop fort");
+      if (isViolated(merged.gust, activity.gustMin, activity.gustMax)) violations.push("rafales de vent trop fortes");
+      if (isViolated(merged.precip, activity.precipMin, activity.precipMax)) violations.push("précipitations trop importantes");
+      if (isViolated(merged.uv, activity.uvMin, activity.uvMax)) violations.push("indice UV trop élevé");
+    }
+
+    if (violations.length > 0) {
+      let listStr = "";
+      if (violations.length === 1) {
+        listStr = violations[0];
+      } else if (violations.length === 2) {
+        listStr = `${violations[0]} et ${violations[1]}`;
+      } else {
+        listStr = `${violations.slice(0, -1).join(', ')} et ${violations[violations.length - 1]}`;
+      }
+      merged.conseil = listStr.charAt(0).toUpperCase() + listStr.slice(1) + ".";
+    } else {
+      merged.conseil = "Non-respect de vos limites météo configurées.";
     }
   }
 
@@ -772,7 +844,7 @@ app.post('/api/analyze', verifyToken, async (req, res) => {
         prompt += `
 LIMITES MÉTÉO NUMÉRIQUES DE L'ACTIVITÉ (CRITÈRES STRICTES) :
 ${numericRules.join('\n')}
-Tu DOIS impérativement mettre "favorable": false pour la demi-journée et positionner le critère correspondant sur "defavorable" si les conditions dépassent ou sont en dessous de ces limites strictes.`;
+Tu DOIS impérativement mettre "favorable": false pour la demi-journée et positionner le critère correspondant sur "defavorable" si les conditions dépassent ou sont en dessous de ces limites strictes. Inversement, si les conditions respectent ces limites strictes, tu DOIS marquer le critère correspondant comme "favorable". Tu ne dois pas déclarer un critère ou la demi-journée défavorable pour une valeur qui respecte les limites définies par l'utilisateur.`;
       }
     }
 
@@ -999,7 +1071,7 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
         prompt += `
 LIMITES MÉTÉO NUMÉRIQUES DE L'ACTIVITÉ (CRITÈRES STRICTES) :
 ${numericRules.join('\n')}
-Tu DOIS impérativement mettre "favorable": false pour la demi-journée et positionner le critère correspondant sur "defavorable" si les conditions dépassent ou sont en dessous de ces limites strictes.`;
+Tu DOIS impérativement mettre "favorable": false pour la demi-journée et positionner le critère correspondant sur "defavorable" si les conditions dépassent ou sont en dessous de ces limites strictes. Inversement, si les conditions respectent ces limites strictes, tu DOIS marquer le critère correspondant comme "favorable". Tu ne dois pas déclarer un critère ou la demi-journée défavorable pour une valeur qui respecte les limites définies par l'utilisateur.`;
       }
     }
 
