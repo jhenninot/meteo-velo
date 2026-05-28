@@ -9,7 +9,7 @@
 
     <!-- Row 2: Chart Area (SVG) -->
     <div class="timeline-chart-wrapper">
-      <svg :width="totalWidth" :height="chartHeight" class="timeline-svg">
+      <svg :width="fitContainer && containerWidth === 0 ? '100%' : totalWidth" :height="chartHeight" class="timeline-svg">
         <!-- Night backgrounds -->
         <g v-for="(h, i) in hourlyData" :key="'night-bg-'+i">
           <rect
@@ -151,7 +151,7 @@ const props = defineProps({
 // Responsive and layout sizing state
 const rootRef = ref(null)
 const containerWidth = ref(0)
-const isMobile = ref(false)
+const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth <= 768 : false)
 let mediaQuery = null
 let resizeObserver = null
 
