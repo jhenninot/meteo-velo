@@ -57,10 +57,10 @@ html.meteo-theme-dark {
   --nav-bg: #2d333c;
   --nav-active-bg: #3d4450;
   --nav-active-color: var(--color-primary-light);
-  --bg-weekend: rgba(254, 240, 138, 0.06);
-  --bg-weekend-hover: rgba(254, 240, 138, 0.1);
-  --bg-weekend-selected: rgba(254, 240, 138, 0.15);
-  --border-weekend: rgba(253, 224, 71, 0.25);
+  --bg-weekend: rgba(253, 224, 71, 0.14);
+  --bg-weekend-hover: rgba(253, 224, 71, 0.22);
+  --bg-weekend-selected: rgba(253, 224, 71, 0.3);
+  --border-weekend: rgba(253, 224, 71, 0.5);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
