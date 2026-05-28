@@ -54,6 +54,7 @@ html.meteo-theme-dark {
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.4);
+  --nav-bg: #2d333c;
   --nav-active-bg: #3d4450;
   --nav-active-color: var(--color-primary-light);
   --bg-weekend: rgba(254, 240, 138, 0.06);
