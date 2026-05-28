@@ -1935,7 +1935,7 @@ onUnmounted(() => {
                       <div class="ia-advice">{{ day.matin.conseil }}</div>
                       
                       <div v-if="expandedPeriods[`${idx}-matin`] && day.matin.hourly" @click.stop class="timeline-scroll-container">
-                        <WeatherHourlyTimeline :hourlyData="day.matin.hourly" :date="day.date" :theme="theme" />
+                        <WeatherHourlyTimeline fit-container :hourlyData="day.matin.hourly" :date="day.date" :theme="theme" />
                       </div>
                     </div>
 
@@ -1963,7 +1963,7 @@ onUnmounted(() => {
                       <div class="ia-advice">{{ day.apres_midi.conseil }}</div>
                       
                       <div v-if="expandedPeriods[`${idx}-apres_midi`] && day.apres_midi.hourly" @click.stop class="timeline-scroll-container">
-                        <WeatherHourlyTimeline :hourlyData="day.apres_midi.hourly" :date="day.date" :theme="theme" />
+                        <WeatherHourlyTimeline fit-container :hourlyData="day.apres_midi.hourly" :date="day.date" :theme="theme" />
                       </div>
                     </div>
                   </div>

@@ -1935,7 +1935,7 @@ const fetchForecast = async (useCache = true) => {
                 </div>
 
                 <div v-if="expandedPeriods[`${index}-matin`] && day.matin.hourly" @click.stop class="timeline-scroll-container">
-                  <WeatherHourlyTimeline :hourlyData="day.matin.hourly" :date="day.date" :theme="resolvedTheme" />
+                  <WeatherHourlyTimeline fit-container :hourlyData="day.matin.hourly" :date="day.date" :theme="resolvedTheme" />
                 </div>
               </div>
 
@@ -1971,7 +1971,7 @@ const fetchForecast = async (useCache = true) => {
                 </div>
 
                 <div v-if="expandedPeriods[`${index}-apres_midi`] && day.apres_midi.hourly" @click.stop class="timeline-scroll-container">
-                  <WeatherHourlyTimeline :hourlyData="day.apres_midi.hourly" :date="day.date" :theme="resolvedTheme" />
+                  <WeatherHourlyTimeline fit-container :hourlyData="day.apres_midi.hourly" :date="day.date" :theme="resolvedTheme" />
                 </div>
               </div>
             </div>

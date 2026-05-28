@@ -3107,6 +3107,10 @@ html.meteo-theme-dark .burger-strava-disconnect:hover {
   box-sizing: border-box;
 }
 
+.weather-hourly-timeline.fit-container {
+  width: 100%;
+}
+
 .theme-dark .weather-hourly-timeline,
 html.meteo-theme-dark .weather-hourly-timeline {
   --grid-color: rgba(255, 255, 255, 0.06);

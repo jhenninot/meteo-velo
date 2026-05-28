@@ -1,5 +1,5 @@
 <template>
-  <div class="weather-hourly-timeline" :class="{ 'theme-dark': theme === 'dark' }">
+  <div ref="rootRef" class="weather-hourly-timeline" :class="{ 'theme-dark': theme === 'dark', 'fit-container': fitContainer }">
     <!-- Row 1: Time labels -->
     <div class="timeline-hours">
       <div v-for="(h, i) in hourlyData" :key="'hour-'+i" class="timeline-hour-cell" :class="{ 'is-night': isNightHour(date, h.hour) }" :style="{ width: columnWidth + 'px' }">
@@ -141,19 +141,43 @@ const props = defineProps({
   theme: {
     type: String,
     default: 'light'
+  },
+  fitContainer: {
+    type: Boolean,
+    default: false
   }
 })
 
-// Responsive state
+// Responsive and layout sizing state
+const rootRef = ref(null)
+const containerWidth = ref(0)
 const isMobile = ref(false)
 let mediaQuery = null
+let resizeObserver = null
 
 const handleMediaQueryChange = (e) => {
   isMobile.value = e.matches
 }
 
+const updateWidth = () => {
+  if (rootRef.value) {
+    const style = window.getComputedStyle(rootRef.value)
+    const paddingLeft = parseFloat(style.paddingLeft) || 0
+    const paddingRight = parseFloat(style.paddingRight) || 0
+    containerWidth.value = rootRef.value.clientWidth - paddingLeft - paddingRight
+  }
+}
+
 onMounted(() => {
   if (typeof window !== 'undefined') {
+    if (props.fitContainer) {
+      updateWidth()
+      resizeObserver = new ResizeObserver(() => {
+        updateWidth()
+      })
+      resizeObserver.observe(rootRef.value)
+    }
+
     mediaQuery = window.matchMedia('(max-width: 768px)')
     isMobile.value = mediaQuery.matches
     if (mediaQuery.addEventListener) {
@@ -165,6 +189,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+  }
   if (mediaQuery) {
     if (mediaQuery.removeEventListener) {
       mediaQuery.removeEventListener('change', handleMediaQueryChange)
@@ -175,7 +202,12 @@ onUnmounted(() => {
 })
 
 // Dimensions
-const columnWidth = computed(() => isMobile.value ? 52 : 70)
+const columnWidth = computed(() => {
+  if (props.fitContainer && containerWidth.value > 0) {
+    return containerWidth.value / props.hourlyData.length
+  }
+  return isMobile.value ? 52 : 70
+})
 const chartHeight = 150
 const barWidth = computed(() => isMobile.value ? 24 : 34)
 const badgeWidth = computed(() => isMobile.value ? 38 : 46)
