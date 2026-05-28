@@ -1929,7 +1929,7 @@ onUnmounted(() => {
                       </span>
                       <h4 class="half-day-heading">
                         <WeatherIcon class="weather-main-icon" :icon="getWeatherIcon(day.matin)" />
-                        <span class="half-day-heading-label">{{ day.matin.label || 'Matin' }}</span>
+                        <span class="half-day-heading-label">{{ day.matin.label || 'Matin' }} <span class="half-day-hours">({{ analysisSelectedActivity?.slot1Start ?? 8 }}h-{{ analysisSelectedActivity?.slot1End ?? 12 }}h)</span></span>
                       </h4>
                       <div class="metrics">
                         <span :class="critereClass(day.matin, 'temperature')"><span class="mdi mdi-thermometer"></span> {{ day.matin.minTemp !== undefined ? day.matin.minTemp + ' / ' + day.matin.temp : day.matin.temp }}°C</span>
@@ -1957,7 +1957,7 @@ onUnmounted(() => {
                       </span>
                       <h4 class="half-day-heading">
                         <WeatherIcon class="weather-main-icon" :icon="getWeatherIcon(day.apres_midi)" />
-                        <span class="half-day-heading-label">{{ day.apres_midi.label || 'Après-midi' }}</span>
+                        <span class="half-day-heading-label">{{ day.apres_midi.label || 'Après-midi' }} <span class="half-day-hours">({{ analysisSelectedActivity?.slot2Start ?? 14 }}h-{{ analysisSelectedActivity?.slot2End ?? 19 }}h)</span></span>
                       </h4>
                       <div class="metrics">
                         <span :class="critereClass(day.apres_midi, 'temperature')"><span class="mdi mdi-thermometer"></span> {{ day.apres_midi.minTemp !== undefined ? day.apres_midi.minTemp + ' / ' + day.apres_midi.temp : day.apres_midi.temp }}°C</span>

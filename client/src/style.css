@@ -1013,6 +1013,13 @@ html.meteo-theme-dark .icon-grid-item.is-focused {
   font-weight: 600;
 }
 
+.half-day-hours {
+  font-size: 0.82em;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-left: 5px;
+}
+
 .hourly-details {
   margin-top: 15px;
   border-top: 1px solid rgba(0, 0, 0, 0.1);
