@@ -229,6 +229,13 @@ const formatDate = (iso) => {
   if (!iso) return ''
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(iso))
 }
+const isWeekend = (dateString) => {
+  if (!dateString) return false
+  const [year, month, day] = dateString.split('-')
+  const date = new Date(year, month - 1, day)
+  const dayOfWeek = date.getDay()
+  return dayOfWeek === 0 || dayOfWeek === 6
+}
 const getTypeLabel = (type) => {
   const labels = {
     Ride: 'Vélo de Route',
@@ -1881,7 +1888,7 @@ onUnmounted(() => {
             <!-- 7-day scroll summary -->
             <div class="daily-summary-container">
               <div class="daily-summary-scroll">
-                <div v-for="(day, idx) in analysisForecastData" :key="'analysis-sum-'+idx" class="daily-summary-card" @click="scrollToDay(idx)">
+                <div v-for="(day, idx) in analysisForecastData" :key="'analysis-sum-'+idx" class="daily-summary-card" :class="{ 'is-weekend': isWeekend(day.date) }" @click="scrollToDay(idx)">
                   <div class="summary-day">{{ getShortDayName(day.date) }}</div>
                   <div class="summary-icon"><WeatherIcon :icon="getDailyWeatherIcon(day)" /></div>
                   <div class="summary-temps">
@@ -1908,7 +1915,7 @@ onUnmounted(() => {
             <!-- Detailed Grid -->
             <section class="results-section" style="margin-top: 24px; padding: 0;">
               <div class="forecast-grid">
-                <div v-for="(day, idx) in analysisForecastData" :key="'analysis-detail-'+idx" class="day-card" :id="'analysis-day-detail-' + idx">
+                <div v-for="(day, idx) in analysisForecastData" :key="'analysis-detail-'+idx" class="day-card" :class="{ 'is-weekend': isWeekend(day.date) }" :id="'analysis-day-detail-' + idx">
                   <h3><span class="mdi mdi-calendar"></span> {{ formatDate(day.date) }}</h3>
                   <div class="day-split">
                     <!-- Morning -->

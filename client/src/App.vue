@@ -720,6 +720,14 @@ const formatDate = (dateString) => {
   return formatted.charAt(0).toUpperCase() + formatted.slice(1);
 }
 
+const isWeekend = (dateString) => {
+  if (!dateString) return false;
+  const [year, month, day] = dateString.split('-');
+  const date = new Date(year, month - 1, day);
+  const dayOfWeek = date.getDay();
+  return dayOfWeek === 0 || dayOfWeek === 6;
+}
+
 const formatDateTime = (isoString) => {
   if (!isoString) return '';
   return new Intl.DateTimeFormat('fr-FR', {
@@ -1850,7 +1858,7 @@ const fetchForecast = async (useCache = true) => {
       <!-- Résumé journalier : affiche la météo brute dès qu'elle est disponible -->
       <div v-if="(weatherData || forecastData) && !loading" class="daily-summary-container">
         <div class="daily-summary-scroll">
-          <div v-for="(day, index) in (forecastData || weatherData)" :key="'summary-'+index" class="daily-summary-card" :class="{ 'is-selected': selectedDayIndex === index }" @click="toggleDayHourly(index)">
+          <div v-for="(day, index) in (forecastData || weatherData)" :key="'summary-'+index" class="daily-summary-card" :class="{ 'is-selected': selectedDayIndex === index, 'is-weekend': isWeekend(day.date) }" @click="toggleDayHourly(index)">
             <div class="summary-day">{{ getShortDayName(day.date) }}</div>
             <div class="summary-icon"><WeatherIcon :icon="getDailyWeatherIcon(day)" /></div>
             <div class="summary-temps">
@@ -1893,7 +1901,7 @@ const fetchForecast = async (useCache = true) => {
       <!-- Grille détaillée : affiche la météo brute (sans IA) si l'IA n'a pas encore répondu -->
       <section v-if="(weatherData || forecastData) && !loading" class="results-section">
         <div class="forecast-grid">
-          <div v-for="(day, index) in (forecastData || weatherData)" :key="index" class="day-card" :id="'day-detail-' + index">
+          <div v-for="(day, index) in (forecastData || weatherData)" :key="index" class="day-card" :class="{ 'is-weekend': isWeekend(day.date) }" :id="'day-detail-' + index">
             <h3><span class="mdi mdi-calendar"></span> {{ formatDate(day.date) }}</h3>
             <div class="day-split">
               <!-- MATIN -->

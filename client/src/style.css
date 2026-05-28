@@ -29,6 +29,10 @@
   --nav-bg: #eeeeee;
   --nav-active-bg: #ffffff;
   --nav-active-color: var(--color-primary);
+  --bg-weekend: rgba(253, 224, 71, 0.25);
+  --bg-weekend-hover: rgba(253, 224, 71, 0.35);
+  --bg-weekend-selected: rgba(253, 224, 71, 0.45);
+  --border-weekend: rgba(234, 179, 8, 0.45);
   font-family: 'Segoe UI', system-ui, Avenir, Helvetica, Arial, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -50,9 +54,12 @@ html.meteo-theme-dark {
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.4);
-  --nav-bg: #2d333c;
   --nav-active-bg: #3d4450;
   --nav-active-color: var(--color-primary-light);
+  --bg-weekend: rgba(254, 240, 138, 0.1);
+  --bg-weekend-hover: rgba(254, 240, 138, 0.16);
+  --bg-weekend-selected: rgba(254, 240, 138, 0.22);
+  --border-weekend: rgba(253, 224, 71, 0.35);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -2022,6 +2029,30 @@ input:checked + .switch-slider:before {
 .theme-dark .daily-summary-card.is-selected {
   border-color: var(--color-primary-light);
   background-color: rgba(76, 175, 80, 0.12);
+}
+
+/* Weekend Cards Coloring */
+.daily-summary-card.is-weekend {
+  background-color: var(--bg-weekend);
+  border-color: var(--border-weekend);
+}
+
+.daily-summary-card.is-weekend:hover {
+  background-color: var(--bg-weekend-hover);
+}
+
+.daily-summary-card.is-weekend.is-selected {
+  background-color: var(--bg-weekend-selected);
+  border-color: var(--color-primary);
+}
+
+.theme-dark .daily-summary-card.is-weekend.is-selected {
+  border-color: var(--color-primary-light);
+}
+
+.day-card.is-weekend {
+  background-color: var(--bg-weekend);
+  border-color: var(--border-weekend);
 }
 
 /* --- Hourly Details under Weekly Summary --- */
