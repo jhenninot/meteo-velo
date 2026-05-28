@@ -1836,11 +1836,6 @@ const fetchForecast = async (useCache = true) => {
             </select>
           </div>
 
-          <!-- Fournisseur météo utilisé -->
-          <div v-if="actualWeatherProvider && (weatherData || forecastData) && !loading" class="weather-provider-badge">
-            <span class="mdi mdi-database-outline"></span> Source de données météo : 
-            <strong>{{ actualWeatherProvider === 'met.no' ? 'met.no (Norvège)' : 'Open-Meteo' }}</strong>
-          </div>
         </div>
       </section>
 
