@@ -314,7 +314,7 @@ watch(isDark, (val) => {
 }, { immediate: true })
 
 // --- CONFIGURATION ---
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || `http://${window.location.hostname}:3001`
 
 // --- LOGIQUE STRAVA HEADER ---
 const stravaStatus = ref({ connected: false, athleteName: null, athleteProfile: null })
