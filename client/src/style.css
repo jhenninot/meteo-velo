@@ -3087,4 +3087,190 @@ html.meteo-theme-dark .burger-strava-disconnect:hover {
   background: rgba(252, 76, 2, 0.1);
 }
 
+/* --- Weather Hourly Timeline Component --- */
+.weather-hourly-timeline {
+  --timeline-orange: #ff9800;
+  --timeline-orange-light: #ffa726;
+  --timeline-blue: #7ecbfa;
+  --timeline-blue-border: #90caf9;
+  --timeline-blue-text: #0288d1;
+  --grid-color: rgba(0, 0, 0, 0.05);
+  --grid-color-bottom: rgba(0, 0, 0, 0.12);
+  --text-muted: #888;
+  
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  padding: 18px 10px;
+  width: max-content;
+  box-sizing: border-box;
+}
+
+.theme-dark .weather-hourly-timeline,
+html.meteo-theme-dark .weather-hourly-timeline {
+  --grid-color: rgba(255, 255, 255, 0.06);
+  --grid-color-bottom: rgba(255, 255, 255, 0.15);
+  --timeline-blue-text: #90caf9;
+  --text-muted: #999;
+}
+
+.timeline-hours {
+  display: flex;
+  margin-bottom: 8px;
+}
+
+.timeline-hour-cell {
+  width: 70px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.timeline-chart-wrapper {
+  position: relative;
+  overflow: visible;
+  margin-bottom: 8px;
+}
+
+.timeline-svg {
+  display: block;
+  overflow: visible;
+}
+
+.grid-line {
+  stroke: var(--grid-color);
+  stroke-width: 1;
+}
+
+.grid-line-bottom {
+  stroke: var(--grid-color-bottom);
+  stroke-width: 1.5;
+}
+
+.precip-bar {
+  fill: var(--timeline-blue);
+  opacity: 0.85;
+}
+
+.temp-line {
+  stroke: var(--timeline-orange-light);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.temp-point {
+  fill: var(--timeline-orange);
+  stroke: var(--bg-surface);
+  stroke-width: 1.5;
+}
+
+.temp-label {
+  fill: var(--timeline-orange);
+  font-size: 0.75rem;
+  font-weight: 750;
+  text-anchor: middle;
+}
+
+.precip-badge rect {
+  fill: #ffffff;
+  stroke: none;
+}
+
+.precip-badge text {
+  fill: #0288d1;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-anchor: middle;
+}
+
+.timeline-icons {
+  display: flex;
+  padding: 8px 0;
+}
+
+.timeline-icon-cell {
+  width: 70px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.timeline-weather-icon {
+  font-size: 2.2rem;
+  color: var(--color-primary);
+}
+
+.theme-dark .timeline-weather-icon,
+html.meteo-theme-dark .timeline-weather-icon {
+  color: var(--color-primary-light);
+}
+
+.timeline-winds {
+  display: flex;
+  padding-top: 4px;
+}
+
+.timeline-wind-cell {
+  width: 70px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.wind-arrow {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.wind-speed {
+  font-size: 0.74rem;
+}
+
+.wind-unit {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  margin-left: 1px;
+}
+
+/* Responsiveness for timeline */
+@media (max-width: 768px) {
+  .weather-hourly-timeline {
+    padding: 12px 6px;
+  }
+}
+
+.timeline-scroll-container {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: 15px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+  scrollbar-width: thin;
+}
+
+.timeline-scroll-container::-webkit-scrollbar {
+  height: 6px;
+}
+
+.timeline-scroll-container::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.03);
+  border-radius: 3px;
+}
+
+.timeline-scroll-container::-webkit-scrollbar-thumb {
+  background: var(--color-primary);
+  border-radius: 3px;
+}
+
+
 

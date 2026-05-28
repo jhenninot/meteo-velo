@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css'
 
 import WeatherChart from './WeatherChart.vue'
 import WeatherIcon from './WeatherIcon.vue'
+import WeatherHourlyTimeline from './WeatherHourlyTimeline.vue'
 
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
@@ -1933,8 +1934,8 @@ onUnmounted(() => {
                       </div>
                       <div class="ia-advice">{{ day.matin.conseil }}</div>
                       
-                      <div v-if="expandedPeriods[`${idx}-matin`] && day.matin.hourly" @click.stop>
-                        <WeatherChart :hourlyData="day.matin.hourly" :theme="theme" />
+                      <div v-if="expandedPeriods[`${idx}-matin`] && day.matin.hourly" @click.stop class="timeline-scroll-container">
+                        <WeatherHourlyTimeline :hourlyData="day.matin.hourly" :date="day.date" :theme="theme" />
                       </div>
                     </div>
 
@@ -1961,8 +1962,8 @@ onUnmounted(() => {
                       </div>
                       <div class="ia-advice">{{ day.apres_midi.conseil }}</div>
                       
-                      <div v-if="expandedPeriods[`${idx}-apres_midi`] && day.apres_midi.hourly" @click.stop>
-                        <WeatherChart :hourlyData="day.apres_midi.hourly" :theme="theme" />
+                      <div v-if="expandedPeriods[`${idx}-apres_midi`] && day.apres_midi.hourly" @click.stop class="timeline-scroll-container">
+                        <WeatherHourlyTimeline :hourlyData="day.apres_midi.hourly" :date="day.date" :theme="theme" />
                       </div>
                     </div>
                   </div>

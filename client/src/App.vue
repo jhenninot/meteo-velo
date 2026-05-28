@@ -4,6 +4,7 @@ import axios from 'axios'
 import { jwtDecode } from 'jwt-decode'
 import WeatherChart from './components/WeatherChart.vue'
 import WeatherIcon from './components/WeatherIcon.vue'
+import WeatherHourlyTimeline from './components/WeatherHourlyTimeline.vue'
 import StravaActivities from './components/StravaActivities.vue'
 import StravaRoutes from './components/StravaRoutes.vue'
 import AdminPanel from './components/AdminPanel.vue'
@@ -73,8 +74,18 @@ const selectedDayIndex = ref(null)
 const loadedDayIndexes = ref([])
 
 watch([weatherData, forecastData], () => {
-  selectedDayIndex.value = null
-  loadedDayIndexes.value = []
+  const list = forecastData.value || weatherData.value
+  if (list && list.length > 0) {
+    selectedDayIndex.value = 0
+    if (list.length > 1) {
+      loadedDayIndexes.value = [0, 1]
+    } else {
+      loadedDayIndexes.value = [0]
+    }
+  } else {
+    selectedDayIndex.value = null
+    loadedDayIndexes.value = []
+  }
 })
 
 watch(selectedDayIndex, (newVal) => {
@@ -857,7 +868,12 @@ const toggleDayHourly = (index) => {
     loadedDayIndexes.value = [];
   } else {
     selectedDayIndex.value = index;
-    loadedDayIndexes.value = [index];
+    const list = forecastData.value || weatherData.value;
+    if (list && index + 1 < list.length) {
+      loadedDayIndexes.value = [index, index + 1];
+    } else {
+      loadedDayIndexes.value = [index];
+    }
     nextTick(() => {
       const container = document.querySelector('.hourly-scroll-container');
       if (container) {
@@ -1872,26 +1888,7 @@ const fetchForecast = async (useCache = true) => {
                 <div class="hourly-day-header">
                   <span class="mdi mdi-calendar"></span> {{ formatDate(getDayByIndex(dayIndex)?.date) }}
                 </div>
-                <div class="hourly-day-cards">
-                  <div v-for="hour in getDayByIndex(dayIndex)?.full_day?.hourly" :key="dayIndex + '-' + hour.hour" class="hourly-card" :class="{ 'is-night': isNightHour(getDayByIndex(dayIndex)?.date, hour.hour) }">
-                    <div class="hour-time">{{ String(hour.hour).padStart(2, '0') }}h00</div>
-                    <div class="hour-icon"><WeatherIcon :icon="getWeatherIcon(hour, isNightHour(getDayByIndex(dayIndex)?.date, hour.hour))" /></div>
-                    <div class="hour-temp">{{ hour.temp }}°C</div>
-                    <div class="hour-wind">
-                      <span class="mdi mdi-navigation wind-icon" :style="getWindStyle(hour.dir)"></span>
-                      {{ hour.wind }} km/h
-                    </div>
-                    <div class="hour-gust" title="Rafales">
-                      <span class="mdi mdi-weather-windy"></span> {{ hour.gust }} km/h
-                    </div>
-                    <div class="hour-precip" title="Précipitations">
-                      <span class="mdi mdi-weather-pouring"></span> {{ hour.precip }} mm
-                    </div>
-                    <div class="hour-rain" title="Probabilité de pluie">
-                      <span class="mdi mdi-water-percent"></span> {{ hour.rain }}%
-                    </div>
-                  </div>
-                </div>
+                <WeatherHourlyTimeline :hourlyData="getDayByIndex(dayIndex)?.full_day?.hourly" :date="getDayByIndex(dayIndex)?.date" :theme="resolvedTheme" />
               </div>
             </div>
           </div>
@@ -1937,8 +1934,8 @@ const fetchForecast = async (useCache = true) => {
                   <span class="mdi mdi-brain mdi-spin-slow"></span> Analyse en cours...
                 </div>
 
-                <div v-if="expandedPeriods[`${index}-matin`] && day.matin.hourly">
-                  <WeatherChart :hourlyData="day.matin.hourly" :theme="resolvedTheme" />
+                <div v-if="expandedPeriods[`${index}-matin`] && day.matin.hourly" @click.stop class="timeline-scroll-container">
+                  <WeatherHourlyTimeline :hourlyData="day.matin.hourly" :date="day.date" :theme="resolvedTheme" />
                 </div>
               </div>
 
@@ -1973,8 +1970,8 @@ const fetchForecast = async (useCache = true) => {
                   <span class="mdi mdi-brain mdi-spin-slow"></span> Analyse en cours...
                 </div>
 
-                <div v-if="expandedPeriods[`${index}-apres_midi`] && day.apres_midi.hourly">
-                  <WeatherChart :hourlyData="day.apres_midi.hourly" :theme="resolvedTheme" />
+                <div v-if="expandedPeriods[`${index}-apres_midi`] && day.apres_midi.hourly" @click.stop class="timeline-scroll-container">
+                  <WeatherHourlyTimeline :hourlyData="day.apres_midi.hourly" :date="day.date" :theme="resolvedTheme" />
                 </div>
               </div>
             </div>
