@@ -5043,3 +5043,119 @@ html.meteo-theme-dark .timeline-svg .night-rect {
     width: 100%;
   }
 }
+
+/* Kilometer Markers styling on the Leaflet Map */
+.km-marker {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-strava) !important;
+  color: #ffffff !important;
+  border: 2px solid #ffffff !important;
+  border-radius: 50% !important;
+  font-size: 0.68rem !important;
+  font-weight: 800 !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.35) !important;
+  transition: transform 0.15s ease-in-out !important;
+  cursor: pointer;
+  z-index: 1000 !important;
+}
+
+.km-marker:hover {
+  transform: scale(1.25) !important;
+  z-index: 99999 !important;
+}
+
+.hide-km-markers .km-marker {
+  display: none !important;
+}
+
+/* Active / Inactive states for Kilometer Toggle Buttons */
+.btn-map-action.btn-km-toggle.active {
+  background: var(--color-strava) !important;
+  color: #ffffff !important;
+  border-color: var(--color-strava) !important;
+}
+
+.theme-dark .btn-map-action.btn-km-toggle.active {
+  background: var(--color-strava) !important;
+  color: #ffffff !important;
+  border-color: var(--color-strava) !important;
+}
+
+.btn-fullscreen-action.btn-fullscreen-km-toggle.inactive {
+  background: #ffffff !important;
+  color: #FC4C02 !important;
+  border: 1.5px solid rgba(252, 76, 2, 0.4) !important;
+}
+
+.theme-dark .btn-fullscreen-action.btn-fullscreen-km-toggle.inactive {
+  background: rgba(37, 42, 50, 0.95) !important;
+  color: #FC4C02 !important;
+  border: 1.5px solid rgba(252, 76, 2, 0.4) !important;
+}
+
+/* Elevation Profile Chart Styles */
+.route-elevation-section {
+  padding: 16px 20px;
+  background: var(--bg-surface-2);
+  border-top: 1px solid var(--border-color);
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
+}
+
+.fullscreen-elevation-section {
+  height: 200px;
+  width: 100%;
+  background: var(--bg-surface-2);
+  border-top: 1px solid var(--border-color);
+  padding: 14px 24px;
+  box-sizing: border-box;
+}
+
+.elevation-loading,
+.elevation-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 120px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.elevation-error {
+  color: var(--color-danger);
+}
+
+.elevation-chart-container-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.elevation-chart-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.elevation-chart-box {
+  height: 120px;
+  width: 100%;
+}
+
+.fullscreen-elevation-section .elevation-chart-box {
+  height: 140px;
+}
+
+.theme-dark .route-elevation-section,
+.theme-dark .fullscreen-elevation-section {
+  background: var(--bg-surface-2);
+}

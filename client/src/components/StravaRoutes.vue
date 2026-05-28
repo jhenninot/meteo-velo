@@ -7,6 +7,7 @@ import 'leaflet/dist/leaflet.css'
 import WeatherChart from './WeatherChart.vue'
 import WeatherIcon from './WeatherIcon.vue'
 import WeatherHourlyTimeline from './WeatherHourlyTimeline.vue'
+import RouteElevationChart from './RouteElevationChart.vue'
 
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
@@ -50,6 +51,8 @@ const query = ref(props.initialCity || '')
 const suggestions = ref([])
 const enableGeoFilter = ref(false)
 const geoRadius = ref(20)
+const showKmMarkers = ref(false)
+const showFullscreenKmMarkers = ref(true)
 
 // Filtres métriques
 const minDistance = ref(null)
@@ -207,6 +210,103 @@ function getHaversineDistance(lat1, lon1, lat2, lon2) {
             Math.sin(dLon/2) * Math.sin(dLon/2)
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
   return R * c
+}
+
+const addKilometerMarkers = (mapInstance, points) => {
+  if (!points || points.length < 2) return;
+  
+  let accumDistance = 0;
+  let nextTargetKm = 1;
+  
+  for (let i = 1; i < points.length; i++) {
+    const p1 = points[i - 1];
+    const p2 = points[i];
+    
+    const segmentDist = getHaversineDistance(p1[0], p1[1], p2[0], p2[1]);
+    accumDistance += segmentDist;
+    
+    while (accumDistance >= nextTargetKm) {
+      const overshoot = accumDistance - nextTargetKm;
+      const ratio = (segmentDist - overshoot) / segmentDist;
+      
+      const markerLat = p1[0] + (p2[0] - p1[0]) * ratio;
+      const markerLng = p1[1] + (p2[1] - p1[1]) * ratio;
+      
+      const kmIcon = L.divIcon({
+        className: 'km-marker',
+        html: `<span>${nextTargetKm}</span>`,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
+      });
+      
+      L.marker([markerLat, markerLng], { icon: kmIcon, zIndexOffset: 100 }).addTo(mapInstance);
+      
+      nextTargetKm++;
+    }
+  }
+};
+
+const routeElevations = ref({})
+const routeElevationsLoading = ref({})
+const routeElevationsError = ref({})
+
+const fetchRouteElevation = async (route) => {
+  const routeId = route.id || route._id
+  if (!routeId) return
+  if (routeElevations.value[routeId]) return
+
+  const polyline = route.map?.summary_polyline
+  if (!polyline) return
+
+  routeElevationsLoading.value[routeId] = true
+  routeElevationsError.value[routeId] = null
+
+  try {
+    const points = decodePolyline(polyline)
+    if (points.length < 2) {
+      throw new Error("Pas assez de points GPS pour calculer le profil d'altitude.")
+    }
+
+    let accumDistance = 0
+    const accumDistances = [0]
+    for (let i = 1; i < points.length; i++) {
+      const segmentDist = getHaversineDistance(points[i - 1][0], points[i - 1][1], points[i][0], points[i][1])
+      accumDistance += segmentDist
+      accumDistances.push(accumDistance)
+    }
+
+    const maxSamples = 100
+    const sampledLats = []
+    const sampledLons = []
+    const sampledDistances = []
+
+    const step = (points.length - 1) / (maxSamples - 1)
+    for (let i = 0; i < maxSamples; i++) {
+      const idx = Math.min(Math.round(i * step), points.length - 1)
+      const pt = points[idx]
+      sampledLats.push(pt[0])
+      sampledLons.push(pt[1])
+      sampledDistances.push(accumDistances[idx])
+    }
+
+    const latsStr = sampledLats.join(',')
+    const lonsStr = sampledLons.join(',')
+    const response = await axios.get(`https://api.open-meteo.com/v1/elevation?latitude=${latsStr}&longitude=${lonsStr}`)
+
+    if (response.data && Array.isArray(response.data.elevation)) {
+      routeElevations.value[routeId] = {
+        elevations: response.data.elevation,
+        distances: sampledDistances
+      }
+    } else {
+      throw new Error("Format de réponse invalide de l'API d'altitude.")
+    }
+  } catch (err) {
+    console.error("Error fetching route elevation:", err)
+    routeElevationsError.value[routeId] = "Impossible de charger le profil d'altitude."
+  } finally {
+    routeElevationsLoading.value[routeId] = false
+  }
 }
 
 const getRouteDistanceToSelected = (route) => {
@@ -392,6 +492,8 @@ const initMap = (routeId, encodedPolyline) => {
     L.circleMarker(points[0], { radius: 6, fillColor: '#22c55e', color: '#fff', weight: 2, fillOpacity: 1 }).addTo(map)
     L.circleMarker(points[points.length - 1], { radius: 6, fillColor: '#ef4444', color: '#fff', weight: 2, fillOpacity: 1 }).addTo(map)
     
+    addKilometerMarkers(map, points)
+    
     map.fitBounds(poly.getBounds(), { padding: [20, 20] })
   }
   mapInstances[routeId] = map
@@ -509,7 +611,10 @@ const openFullscreenMap = async (route) => {
     L.circleMarker(points[0], { radius: 7, fillColor: '#22c55e', color: '#fff', weight: 2.5, fillOpacity: 1 }).addTo(fullscreenMapInstance)
     L.circleMarker(points[points.length - 1], { radius: 7, fillColor: '#ef4444', color: '#fff', weight: 2.5, fillOpacity: 1 }).addTo(fullscreenMapInstance)
 
+    addKilometerMarkers(fullscreenMapInstance, points)
+
     fullscreenMapInstance.fitBounds(poly.getBounds(), { padding: [50, 50] })
+    fetchRouteElevation(route)
   }
 }
 
@@ -529,6 +634,7 @@ const toggleRoute = async (route) => {
     if (route.map?.summary_polyline) {
       await nextTick()
       initMap(route.id, route.map.summary_polyline)
+      fetchRouteElevation(route)
     }
   }
 }
@@ -953,6 +1059,8 @@ const initAnalysisMap = async (route) => {
 
     L.circleMarker(points[0], { radius: 7, fillColor: '#22c55e', color: '#fff', weight: 2.5, fillOpacity: 1 }).addTo(analysisMapInstance)
     L.circleMarker(points[points.length - 1], { radius: 7, fillColor: '#ef4444', color: '#fff', weight: 2.5, fillOpacity: 1 }).addTo(analysisMapInstance)
+
+    addKilometerMarkers(analysisMapInstance, points)
 
     analysisMapInstance.fitBounds(poly.getBounds(), { padding: [50, 50] })
   }
@@ -1834,7 +1942,7 @@ onUnmounted(() => {
           </div>
 
           <!-- Carte Leaflet (collapsible) -->
-          <div v-show="expandedId === route.id" class="activity-map-wrap">
+          <div v-show="expandedId === route.id" class="activity-map-wrap" :class="{ 'hide-km-markers': !showKmMarkers }">
             <!-- Boutons d'action au-dessus de la carte -->
             <div v-if="route.map?.summary_polyline" class="map-actions-row">
               <a v-if="route.source === 'strava'" :href="`https://www.strava.com/routes/${route.id}`" target="_blank" class="btn-map-action btn-strava-link" title="Voir sur Strava (nouvel onglet)">
@@ -1845,6 +1953,15 @@ onUnmounted(() => {
               </button>
               <button class="btn-map-action" @click.stop="openFullscreenMap(route)" title="Ouvrir la carte en plein écran">
                 <span class="mdi mdi-fullscreen"></span> Plein écran
+              </button>
+              <button 
+                class="btn-map-action btn-km-toggle" 
+                :class="{ active: showKmMarkers }" 
+                @click.stop="showKmMarkers = !showKmMarkers" 
+                title="Afficher/masquer les repères kilométriques"
+              >
+                <span class="mdi" :class="showKmMarkers ? 'mdi-map-marker-distance' : 'mdi-map-marker-outline'"></span>
+                Repères km : {{ showKmMarkers ? 'Oui' : 'Non' }}
               </button>
               <button class="btn-map-action" @click.stop="exportToGPX(route)" title="Exporter le parcours en GPX">
                 <span class="mdi mdi-download"></span> Exporter GPX
@@ -1863,6 +1980,24 @@ onUnmounted(() => {
             <div v-else class="map-container-relative">
               <div :id="`strava-map-${route.id}`" class="activity-map"></div>
             </div>
+
+            <!-- Altitude profile chart for normal card view -->
+            <div v-if="route.map?.summary_polyline" class="route-elevation-section">
+              <div v-if="routeElevationsLoading[route.id]" class="elevation-loading">
+                <span class="mdi mdi-loading mdi-spin"></span> Chargement du profil d'altitude...
+              </div>
+              <div v-else-if="routeElevationsError[route.id]" class="elevation-error">
+                <span class="mdi mdi-alert-circle-outline"></span> {{ routeElevationsError[route.id] }}
+              </div>
+              <div v-else-if="routeElevations[route.id]" class="elevation-chart-container-wrapper">
+                <div class="elevation-chart-title">
+                  <span class="mdi mdi-summit"></span> Profil d'altitude (Dénivelé : +{{ formatElevation(route.elevation_gain) }})
+                </div>
+                <div class="elevation-chart-box">
+                  <RouteElevationChart :elevationData="routeElevations[route.id]" :theme="theme" />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1870,7 +2005,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Modal de Carte Plein Écran -->
-    <div v-if="fullscreenRoute" class="map-fullscreen-modal">
+    <div v-if="fullscreenRoute" class="map-fullscreen-modal" :class="{ 'hide-km-markers': !showFullscreenKmMarkers }">
       <div class="fullscreen-header">
         <div class="fullscreen-title-group">
           <div class="fullscreen-type-badge">
@@ -1888,12 +2023,39 @@ onUnmounted(() => {
           <button class="btn-fullscreen-action" @click="exportToGPX(fullscreenRoute)">
             <span class="mdi mdi-download"></span> Exporter GPX
           </button>
+          <button 
+            class="btn-fullscreen-action btn-fullscreen-km-toggle" 
+            :class="{ inactive: !showFullscreenKmMarkers }" 
+            @click="showFullscreenKmMarkers = !showFullscreenKmMarkers"
+            title="Afficher/masquer les repères kilométriques"
+          >
+            <span class="mdi" :class="showFullscreenKmMarkers ? 'mdi-map-marker-distance' : 'mdi-map-marker-outline'"></span>
+            Repères km : {{ showFullscreenKmMarkers ? 'Oui' : 'Non' }}
+          </button>
           <button class="btn-fullscreen-close" @click="closeFullscreenMap">
             <span class="mdi mdi-close"></span> Fermer
           </button>
         </div>
       </div>
       <div id="fullscreen-map" class="fullscreen-map-container"></div>
+
+      <!-- Altitude profile chart for fullscreen map view -->
+      <div v-if="fullscreenRoute && fullscreenRoute.map?.summary_polyline" class="fullscreen-elevation-section">
+        <div v-if="routeElevationsLoading[fullscreenRoute.id]" class="elevation-loading">
+          <span class="mdi mdi-loading mdi-spin"></span> Chargement du profil d'altitude...
+        </div>
+        <div v-else-if="routeElevationsError[fullscreenRoute.id]" class="elevation-error">
+          <span class="mdi mdi-alert-circle-outline"></span> {{ routeElevationsError[fullscreenRoute.id] }}
+        </div>
+        <div v-else-if="routeElevations[fullscreenRoute.id]" class="elevation-chart-container-wrapper">
+          <div class="elevation-chart-title">
+            <span class="mdi mdi-summit"></span> Profil d'altitude (Dénivelé : +{{ formatElevation(fullscreenRoute.elevation_gain) }})
+          </div>
+          <div class="elevation-chart-box">
+            <RouteElevationChart :elevationData="routeElevations[fullscreenRoute.id]" :theme="theme" />
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Modal d'Analyse Plein Écran -->
@@ -1927,8 +2089,20 @@ onUnmounted(() => {
       
       <div class="analysis-content">
         <!-- Carte en haut (affichée uniquement si demandé) -->
-        <div v-if="showAnalysisMap" class="analysis-map-pane">
-          <div id="analysis-fullscreen-map" style="height: 100%; width: 100%;"></div>
+        <div v-if="showAnalysisMap" class="analysis-map-pane" :class="{ 'hide-km-markers': !showKmMarkers }" style="position: relative;">
+          <div class="analysis-map-controls" style="padding: 6px 12px; background: var(--bg-surface-2); border-bottom: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+            <button 
+              class="btn-map-action btn-km-toggle" 
+              :class="{ active: showKmMarkers }" 
+              @click.stop="showKmMarkers = !showKmMarkers" 
+              title="Afficher/masquer les repères kilométriques"
+              style="margin: 0;"
+            >
+              <span class="mdi" :class="showKmMarkers ? 'mdi-map-marker-distance' : 'mdi-map-marker-outline'"></span>
+              Repères km : {{ showKmMarkers ? 'Oui' : 'Non' }}
+            </button>
+          </div>
+          <div id="analysis-fullscreen-map" style="height: calc(100% - 37px); width: 100%;"></div>
         </div>
         
         <!-- Résultats sous la carte -->
