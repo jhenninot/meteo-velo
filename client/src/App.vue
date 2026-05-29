@@ -8,7 +8,7 @@ import WeatherHourlyTimeline from './components/WeatherHourlyTimeline.vue'
 import StravaActivities from './components/StravaActivities.vue'
 import StravaRoutes from './components/StravaRoutes.vue'
 import AdminPanel from './components/AdminPanel.vue'
-import { MDI_ICONS } from './utils/mdi-icons.js'
+import ActivityForm from './components/ActivityForm.vue'
 
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -39,33 +39,12 @@ const passwordLoading = ref(false)
 const showLoginPassword = ref(false)
 const visiblePasswordFields = ref({})
 const userActivities = ref([])
-const activityForm = ref({
-  id: null,
-  label: '',
-  icon: 'mdi-bike',
-  constraints: '',
-  stravaSportType: '',
-  windMin: null,
-  windMax: null,
-  gustMin: null,
-  gustMax: null,
-  tempMin: null,
-  tempMax: null,
-  precipMin: null,
-  precipMax: null,
-  uvMin: null,
-  uvMax: null,
-  slot1Name: 'Matin',
-  slot1Start: 8,
-  slot1End: 12,
-  slot2Name: 'Après-midi',
-  slot2Start: 14,
-  slot2End: 19
-})
+const editingActivityId = ref(null)
+const showAddForm = ref(false)
+const showEditWeatherPageForm = ref(false)
 const activityMsg = ref({ text: '', type: '' })
 const activityLoading = ref(false)
 const selectedActivityId = ref(localStorage.getItem('selected_activity_id') || 'none')
-const showIconSuggestions = ref(false)
 
 // --- ÉTATS NAVIGATION ---
 const showAdminPanel = ref(false)
@@ -244,99 +223,6 @@ const themeIcon = computed(() => {
   if (theme.value === 'dark') return 'mdi-weather-night'
   return 'mdi-brightness-auto'
 })
-
-// --- LOGIQUE AUTOCOMPLÉTION ICÔNES MDI ---
-const focusedIconIndex = ref(0)
-
-const normalizedQuery = computed(() => {
-  return (activityForm.value.icon || '')
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-})
-
-const filteredIcons = computed(() => {
-  const q = normalizedQuery.value
-  if (!q) {
-    return MDI_ICONS
-  }
-  return MDI_ICONS.filter(icon => {
-    const nameMatch = icon.name.toLowerCase().includes(q)
-    const tagMatch = icon.tags.some(tag => 
-      tag.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q)
-    )
-    return nameMatch || tagMatch
-  })
-})
-
-const categorizedFilteredIcons = computed(() => {
-  const icons = filteredIcons.value
-  const groups = {}
-  icons.forEach(icon => {
-    const cat = icon.category || 'Autres'
-    if (!groups[cat]) {
-      groups[cat] = []
-    }
-    groups[cat].push(icon)
-  })
-  return groups
-})
-
-const focusedIcon = computed(() => {
-  const icons = filteredIcons.value
-  if (icons.length && focusedIconIndex.value >= 0 && focusedIconIndex.value < icons.length) {
-    return icons[focusedIconIndex.value]
-  }
-  return null
-})
-
-const navigateIcons = (direction) => {
-  const total = filteredIcons.value.length
-  if (!total) return
-  
-  const cols = 6
-  let current = focusedIconIndex.value
-  
-  if (direction === 'right') {
-    current = (current + 1) % total
-  } else if (direction === 'left') {
-    current = (current - 1 + total) % total
-  } else if (direction === 'down') {
-    current = current + cols
-    if (current >= total) {
-      current = current % cols
-      if (current >= total) current = 0
-    }
-  } else if (direction === 'up') {
-    current = current - cols
-    if (current < 0) {
-      const lastRowStart = Math.floor((total - 1) / cols) * cols
-      current = lastRowStart + (current + cols)
-      if (current >= total) {
-        current = total - 1
-      }
-    }
-  }
-  focusedIconIndex.value = current
-}
-
-const selectIcon = (iconName) => {
-  activityForm.value.icon = iconName
-  showIconSuggestions.value = false
-}
-
-const selectFocusedIcon = () => {
-  const icons = filteredIcons.value
-  if (icons.length && focusedIconIndex.value >= 0 && focusedIconIndex.value < icons.length) {
-    selectIcon(icons[focusedIconIndex.value].name)
-  }
-}
-
-watch(filteredIcons, () => {
-  focusedIconIndex.value = 0
-})
-
 watch(isDark, (val) => {
   document.documentElement.classList.toggle('meteo-theme-dark', val)
 }, { immediate: true })
@@ -550,32 +436,6 @@ const togglePasswordVisibility = (field) => {
   visiblePasswordFields.value[field] = !visiblePasswordFields.value[field]
 }
 
-const resetActivityForm = () => {
-  activityForm.value = {
-    id: null,
-    label: '',
-    icon: 'mdi-bike',
-    constraints: '',
-    stravaSportType: '',
-    windMin: null,
-    windMax: null,
-    gustMin: null,
-    gustMax: null,
-    tempMin: null,
-    tempMax: null,
-    precipMin: null,
-    precipMax: null,
-    uvMin: null,
-    uvMax: null,
-    slot1Name: 'Matin',
-    slot1Start: 8,
-    slot1End: 12,
-    slot2Name: 'Après-midi',
-    slot2Start: 14,
-    slot2End: 19
-  }
-}
-
 const loadUserActivities = async () => {
   activityMsg.value = { text: '', type: '' }
   activityLoading.value = true
@@ -597,48 +457,27 @@ const loadUserActivities = async () => {
   }
 }
 
-const saveActivity = async () => {
+const saveActivity = async (payload, activityId = null) => {
   activityMsg.value = { text: '', type: '' }
   activityLoading.value = true
   try {
-    const sanitizeNum = (val) => {
-      if (val === undefined || val === null || val === '') return null;
-      const num = Number(val);
-      return isNaN(num) ? null : num;
-    };
-
-    const payload = {
-      label: activityForm.value.label,
-      icon: activityForm.value.icon,
-      constraints: activityForm.value.constraints,
-      stravaSportType: activityForm.value.stravaSportType,
-      windMin: sanitizeNum(activityForm.value.windMin),
-      windMax: sanitizeNum(activityForm.value.windMax),
-      gustMin: sanitizeNum(activityForm.value.gustMin),
-      gustMax: sanitizeNum(activityForm.value.gustMax),
-      tempMin: sanitizeNum(activityForm.value.tempMin),
-      tempMax: sanitizeNum(activityForm.value.tempMax),
-      precipMin: sanitizeNum(activityForm.value.precipMin),
-      precipMax: sanitizeNum(activityForm.value.precipMax),
-      uvMin: sanitizeNum(activityForm.value.uvMin),
-      uvMax: sanitizeNum(activityForm.value.uvMax),
-      slot1Name: typeof activityForm.value.slot1Name === 'string' && activityForm.value.slot1Name.trim() !== '' ? activityForm.value.slot1Name.trim() : 'Matin',
-      slot1Start: activityForm.value.slot1Start !== null && activityForm.value.slot1Start !== '' ? Number(activityForm.value.slot1Start) : 8,
-      slot1End: activityForm.value.slot1End !== null && activityForm.value.slot1End !== '' ? Number(activityForm.value.slot1End) : 12,
-      slot2Name: typeof activityForm.value.slot2Name === 'string' && activityForm.value.slot2Name.trim() !== '' ? activityForm.value.slot2Name.trim() : 'Après-midi',
-      slot2Start: activityForm.value.slot2Start !== null && activityForm.value.slot2Start !== '' ? Number(activityForm.value.slot2Start) : 14,
-      slot2End: activityForm.value.slot2End !== null && activityForm.value.slot2End !== '' ? Number(activityForm.value.slot2End) : 19
-    }
-
-    if (activityForm.value.id) {
-      await axios.put(`${API_BASE_URL}/api/user/activities/${activityForm.value.id}`, payload)
+    if (activityId) {
+      await axios.put(`${API_BASE_URL}/api/user/activities/${activityId}`, payload)
       activityMsg.value = { text: "Activité modifiée.", type: 'success' }
+      editingActivityId.value = null
+      showEditWeatherPageForm.value = false
+      
+      // Si l'activité modifiée est celle sélectionnée sur la page météo, rafraîchir l'analyse
+      if (selectedActivityId.value === activityId && city.value && lat.value !== null && lon.value !== null) {
+        const cacheKey = `forecast_${lat.value}_${lon.value}_${selectedActivityId.value}`
+        localStorage.removeItem(cacheKey)
+        fetchForecast(false)
+      }
     } else {
       await axios.post(`${API_BASE_URL}/api/user/activities`, payload)
       activityMsg.value = { text: "Activité ajoutée.", type: 'success' }
+      showAddForm.value = false
     }
-
-    resetActivityForm()
     await loadUserActivities()
   } catch (err) {
     activityMsg.value = { text: err.response?.data?.error || "Impossible d'enregistrer l'activité.", type: 'error' }
@@ -647,30 +486,26 @@ const saveActivity = async () => {
   }
 }
 
-const editActivity = (activity) => {
-  activityForm.value = {
-    id: activity._id,
-    label: activity.label || '',
-    icon: activity.icon || 'mdi-bike',
-    constraints: activity.constraints || '',
-    stravaSportType: activity.stravaSportType || '',
-    windMin: activity.windMin ?? null,
-    windMax: activity.windMax ?? null,
-    gustMin: activity.gustMin ?? null,
-    gustMax: activity.gustMax ?? null,
-    tempMin: activity.tempMin ?? null,
-    tempMax: activity.tempMax ?? null,
-    precipMin: activity.precipMin ?? null,
-    precipMax: activity.precipMax ?? null,
-    uvMin: activity.uvMin ?? null,
-    uvMax: activity.uvMax ?? null,
-    slot1Name: activity.slot1Name || 'Matin',
-    slot1Start: activity.slot1Start !== undefined && activity.slot1Start !== null ? activity.slot1Start : 8,
-    slot1End: activity.slot1End !== undefined && activity.slot1End !== null ? activity.slot1End : 12,
-    slot2Name: activity.slot2Name || 'Après-midi',
-    slot2Start: activity.slot2Start !== undefined && activity.slot2Start !== null ? activity.slot2Start : 14,
-    slot2End: activity.slot2End !== undefined && activity.slot2End !== null ? activity.slot2End : 19
+const toggleEditActivity = (activityId) => {
+  showAddForm.value = false
+  if (editingActivityId.value === activityId) {
+    editingActivityId.value = null
+  } else {
+    editingActivityId.value = activityId
   }
+}
+
+const cancelEdit = () => {
+  editingActivityId.value = null
+}
+
+const toggleAddForm = () => {
+  editingActivityId.value = null
+  showAddForm.value = !showAddForm.value
+}
+
+const toggleEditWeatherPageActivity = () => {
+  showEditWeatherPageForm.value = !showEditWeatherPageForm.value
 }
 
 const deleteActivity = async (activityId) => {
@@ -679,7 +514,7 @@ const deleteActivity = async (activityId) => {
   activityLoading.value = true
   try {
     await axios.delete(`${API_BASE_URL}/api/user/activities/${activityId}`)
-    if (activityForm.value.id === activityId) resetActivityForm()
+    if (editingActivityId.value === activityId) editingActivityId.value = null
     activityMsg.value = { text: "Activité supprimée.", type: 'success' }
     await loadUserActivities()
   } catch (err) {
@@ -1733,236 +1568,87 @@ const fetchForecast = async (useCache = true) => {
         <section class="account-section">
           <h3><span class="mdi mdi-format-list-checks"></span> Mes activités</h3>
           <div v-if="activityMsg.text" :class="['msg-banner', activityMsg.type]">{{ activityMsg.text }}</div>
-          <form @submit.prevent="saveActivity">
-            <div class="input-group">
-              <label>Libellé :</label>
-              <input v-model="activityForm.label" type="text" maxlength="80" placeholder="Ex: Vélo route, Gravel, Course à pied..." required />
+          
+          <!-- Formulaire d'ajout d'activité pliable -->
+          <div class="add-activity-trigger-wrapper">
+            <button 
+              type="button" 
+              class="btn-add-activity" 
+              @click="toggleAddForm"
+            >
+              <span class="mdi" :class="showAddForm ? 'mdi-close' : 'mdi-plus'"></span>
+              {{ showAddForm ? 'Fermer le formulaire' : 'Ajouter une activité' }}
+            </button>
+          </div>
+
+          <Transition name="accordion">
+            <div v-if="showAddForm" class="activity-add-accordion-wrapper">
+              <ActivityForm 
+                :loading="activityLoading"
+                @submit="saveActivity"
+                @cancel="showAddForm = false"
+              />
             </div>
-            <div class="input-group">
-              <label>Icône MDI :</label>
-              <div class="activity-icon-input-container">
-                <div class="activity-icon-input">
-                  <span class="mdi activity-icon-preview" :class="activityForm.icon || 'mdi-bike'"></span>
-                  <input
-                    v-model="activityForm.icon"
-                    type="text"
-                    maxlength="60"
-                    placeholder="Ex: mdi-bike, mdi-run, mdi-hiking..."
-                    @focus="showIconSuggestions = true; focusedIconIndex = 0"
-                    @blur="showIconSuggestions = false"
-                    @keydown.down.prevent="navigateIcons('down')"
-                    @keydown.up.prevent="navigateIcons('up')"
-                    @keydown.right.prevent="navigateIcons('right')"
-                    @keydown.left.prevent="navigateIcons('left')"
-                    @keydown.enter.prevent="selectFocusedIcon"
-                    @keydown.esc="showIconSuggestions = false"
-                  />
-                </div>
-                <div v-if="showIconSuggestions" class="icon-picker-dropdown">
-                  <div class="icon-picker-body">
-                    <div
-                      v-for="(categoryIcons, categoryName) in categorizedFilteredIcons"
-                      :key="categoryName"
-                    >
-                      <div class="icon-picker-category-title">{{ categoryName }}</div>
-                      <div class="icon-picker-grid">
-                        <div
-                          v-for="icon in categoryIcons"
-                          :key="icon.name"
-                          :class="{ 'is-focused': filteredIcons.indexOf(icon) === focusedIconIndex }"
-                          @mouseenter="focusedIconIndex = filteredIcons.indexOf(icon)"
-                          @mousedown.prevent="selectIcon(icon.name)"
-                          class="icon-grid-item"
-                          :title="icon.name"
-                        >
-                          <span class="mdi" :class="icon.name"></span>
-                        </div>
-                      </div>
-                    </div>
-                    <div v-if="filteredIcons.length === 0" class="icon-picker-no-results">
-                      Aucun icône prédéfini trouvé
-                    </div>
-                  </div>
-                  <div v-if="focusedIcon" class="icon-picker-footer">
-                    <span class="mdi icon-picker-footer-preview" :class="focusedIcon.name"></span>
-                    <div class="icon-picker-footer-info">
-                      <span class="icon-picker-footer-name">{{ focusedIcon.name }}</span>
-                      <span class="icon-picker-footer-tags">{{ focusedIcon.tags.join(', ') }}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="input-group">
-              <label>Activité Strava correspondante :</label>
-              <select v-model="activityForm.stravaSportType" class="favorites-select" style="max-width: 100%; width: 100%;">
-                <option value="">Aucune (Plein air général)</option>
-                <option value="Ride">Vélo de Route (Ride)</option>
-                <option value="GravelRide">Gravel (GravelRide)</option>
-                <option value="MountainBikeRide">VTT (MountainBikeRide)</option>
-                <option value="EBikeRide">Vélo Électrique (EBikeRide)</option>
-                <option value="Run">Course à pied (Run)</option>
-                <option value="TrailRun">Trail (TrailRun)</option>
-                <option value="Walk">Marche (Walk)</option>
-                <option value="Hike">Randonnée (Hike)</option>
-              </select>
-            </div>
-            <div class="input-group">
-              <label>Contraintes :</label>
-              <textarea v-model="activityForm.constraints" maxlength="4000" placeholder="Ex: Pas de vent supérieur à 20 km/h, pas de pluie, température minimale..."></textarea>
-            </div>
-
-            <!-- Limites météo numériques strictes -->
-            <div class="weather-limits-section">
-              <h5 class="weather-limits-title">Limites météo strictes (facultatif)</h5>
-              <div class="weather-limits-grid">
-                
-                <div class="weather-limit-row">
-                  <div class="limit-label-group">
-                    <span class="mdi mdi-thermometer limit-icon"></span>
-                    <span class="limit-label-text">Température (°C)</span>
-                  </div>
-                  <div class="limit-inputs">
-                    <input type="number" step="any" v-model.number="activityForm.tempMin" placeholder="Min" class="limit-input" />
-                    <span class="limit-separator">à</span>
-                    <input type="number" step="any" v-model.number="activityForm.tempMax" placeholder="Max" class="limit-input" />
-                  </div>
-                </div>
-
-                <div class="weather-limit-row">
-                  <div class="limit-label-group">
-                    <span class="mdi mdi-navigation wind-icon-static limit-icon"></span>
-                    <span class="limit-label-text">Vent (km/h)</span>
-                  </div>
-                  <div class="limit-inputs">
-                    <input type="number" step="any" v-model.number="activityForm.windMin" placeholder="Min" class="limit-input" />
-                    <span class="limit-separator">à</span>
-                    <input type="number" step="any" v-model.number="activityForm.windMax" placeholder="Max" class="limit-input" />
-                  </div>
-                </div>
-
-                <div class="weather-limit-row">
-                  <div class="limit-label-group">
-                    <span class="mdi mdi-weather-windy limit-icon"></span>
-                    <span class="limit-label-text">Rafales (km/h)</span>
-                  </div>
-                  <div class="limit-inputs">
-                    <input type="number" step="any" v-model.number="activityForm.gustMin" placeholder="Min" class="limit-input" />
-                    <span class="limit-separator">à</span>
-                    <input type="number" step="any" v-model.number="activityForm.gustMax" placeholder="Max" class="limit-input" />
-                  </div>
-                </div>
-
-                <div class="weather-limit-row">
-                  <div class="limit-label-group">
-                    <span class="mdi mdi-weather-pouring limit-icon"></span>
-                    <span class="limit-label-text">Précipitations (mm)</span>
-                  </div>
-                  <div class="limit-inputs">
-                    <input type="number" step="any" v-model.number="activityForm.precipMin" placeholder="Min" class="limit-input" />
-                    <span class="limit-separator">à</span>
-                    <input type="number" step="any" v-model.number="activityForm.precipMax" placeholder="Max" class="limit-input" />
-                  </div>
-                </div>
-
-                <div class="weather-limit-row">
-                  <div class="limit-label-group">
-                    <span class="mdi mdi-sun-wireless limit-icon"></span>
-                    <span class="limit-label-text">Indice UV</span>
-                  </div>
-                  <div class="limit-inputs">
-                    <input type="number" step="any" v-model.number="activityForm.uvMin" placeholder="Min" class="limit-input" />
-                    <span class="limit-separator">à</span>
-                    <input type="number" step="any" v-model.number="activityForm.uvMax" placeholder="Max" class="limit-input" />
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
-            <!-- Personnalisation des plages horaires -->
-            <div class="weather-limits-section" style="margin-top: 20px;">
-              <h5 class="weather-limits-title">Créneaux horaires d'analyse</h5>
-              <div class="weather-limits-grid">
-                
-                <div class="weather-limit-row">
-                  <div class="limit-label-group">
-                    <span class="mdi mdi-clock-outline limit-icon"></span>
-                    <input type="text" v-model="activityForm.slot1Name" placeholder="Nom créneau 1" class="slot-name-input" required maxlength="30" />
-                  </div>
-                  <div class="limit-inputs">
-                    <input type="number" min="0" max="23" v-model.number="activityForm.slot1Start" placeholder="Début" class="limit-input" required />
-                    <span class="limit-separator">h à</span>
-                    <input type="number" min="0" max="23" v-model.number="activityForm.slot1End" placeholder="Fin" class="limit-input" required />
-                    <span class="limit-separator">h</span>
-                  </div>
-                </div>
-
-                <div class="weather-limit-row">
-                  <div class="limit-label-group">
-                    <span class="mdi mdi-clock-outline limit-icon"></span>
-                    <input type="text" v-model="activityForm.slot2Name" placeholder="Nom créneau 2" class="slot-name-input" required maxlength="30" />
-                  </div>
-                  <div class="limit-inputs">
-                    <input type="number" min="0" max="23" v-model.number="activityForm.slot2Start" placeholder="Début" class="limit-input" required />
-                    <span class="limit-separator">h à</span>
-                    <input type="number" min="0" max="23" v-model.number="activityForm.slot2End" placeholder="Fin" class="limit-input" required />
-                    <span class="limit-separator">h</span>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
-            <div class="activity-form-actions">
-              <button type="submit" class="login-btn" :disabled="activityLoading">
-                {{ activityLoading ? 'Enregistrement...' : (activityForm.id ? 'Modifier l’activité' : 'Ajouter l’activité') }}
-              </button>
-              <button v-if="activityForm.id" type="button" class="secondary-btn" @click="resetActivityForm" :disabled="activityLoading">
-                Annuler
-              </button>
-            </div>
-          </form>
+          </Transition>
 
           <div class="activity-list">
             <p v-if="activityLoading && userActivities.length === 0" class="empty-activities">Chargement des activités...</p>
             <p v-else-if="userActivities.length === 0" class="empty-activities">Aucune activité enregistrée.</p>
-            <article v-for="activity in userActivities" :key="activity._id" class="activity-card">
-              <div class="activity-card-content">
-                <h4><span class="mdi" :class="activity.icon || 'mdi-bike'"></span> {{ activity.label }}</h4>
-                <div v-if="activity.stravaSportType" style="font-size: 0.78rem; font-weight: 600; color: var(--color-strava); margin-top: 4px; display: flex; align-items: center; gap: 4px;">
-                  <span class="mdi mdi-strava"></span> Strava : {{ getStravaTypeLabel(activity.stravaSportType) }}
+            
+            <div 
+              v-for="activity in userActivities" 
+              :key="activity._id" 
+              class="activity-item-container"
+              :class="{ 'is-editing': editingActivityId === activity._id }"
+            >
+              <article class="activity-card">
+                <div class="activity-card-content">
+                  <h4><span class="mdi" :class="activity.icon || 'mdi-bike'"></span> {{ activity.label }}</h4>
+                  <div v-if="activity.stravaSportType" style="font-size: 0.78rem; font-weight: 600; color: var(--color-strava); margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+                    <span class="mdi mdi-strava"></span> Strava : {{ getStravaTypeLabel(activity.stravaSportType) }}
+                  </div>
+                  <p v-if="activity.constraints" class="activity-constraints-text">
+                    {{ activity.constraints }}
+                  </p>
+                  <div v-if="hasNumericalConstraints(activity)" class="activity-numerical-constraints-list">
+                    <span v-if="activity.tempMin !== null || activity.tempMax !== null" class="activity-limit-badge">
+                      <span class="mdi mdi-thermometer"></span> {{ formatLimit(activity.tempMin, activity.tempMax, '°C') }}
+                    </span>
+                    <span v-if="activity.windMin !== null || activity.windMax !== null" class="activity-limit-badge">
+                      <span class="mdi mdi-navigation wind-icon-static"></span> {{ formatLimit(activity.windMin, activity.windMax, 'km/h') }}
+                    </span>
+                    <span v-if="activity.gustMin !== null || activity.gustMax !== null" class="activity-limit-badge">
+                      <span class="mdi mdi-weather-windy"></span> {{ formatLimit(activity.gustMin, activity.gustMax, 'km/h') }}
+                    </span>
+                    <span v-if="activity.precipMin !== null || activity.precipMax !== null" class="activity-limit-badge">
+                      <span class="mdi mdi-weather-pouring"></span> {{ formatLimit(activity.precipMin, activity.precipMax, 'mm') }}
+                    </span>
+                    <span v-if="activity.uvMin !== null || activity.uvMax !== null" class="activity-limit-badge">
+                      <span class="mdi mdi-sun-wireless"></span> UV {{ formatLimit(activity.uvMin, activity.uvMax) }}
+                    </span>
+                  </div>
                 </div>
-                <p v-if="activity.constraints" class="activity-constraints-text">
-                  {{ activity.constraints }}
-                </p>
-                <div v-if="hasNumericalConstraints(activity)" class="activity-numerical-constraints-list">
-                  <span v-if="activity.tempMin !== null || activity.tempMax !== null" class="activity-limit-badge">
-                    <span class="mdi mdi-thermometer"></span> {{ formatLimit(activity.tempMin, activity.tempMax, '°C') }}
-                  </span>
-                  <span v-if="activity.windMin !== null || activity.windMax !== null" class="activity-limit-badge">
-                    <span class="mdi mdi-navigation wind-icon-static"></span> {{ formatLimit(activity.windMin, activity.windMax, 'km/h') }}
-                  </span>
-                  <span v-if="activity.gustMin !== null || activity.gustMax !== null" class="activity-limit-badge">
-                    <span class="mdi mdi-weather-windy"></span> {{ formatLimit(activity.gustMin, activity.gustMax, 'km/h') }}
-                  </span>
-                  <span v-if="activity.precipMin !== null || activity.precipMax !== null" class="activity-limit-badge">
-                    <span class="mdi mdi-weather-pouring"></span> {{ formatLimit(activity.precipMin, activity.precipMax, 'mm') }}
-                  </span>
-                  <span v-if="activity.uvMin !== null || activity.uvMax !== null" class="activity-limit-badge">
-                    <span class="mdi mdi-sun-wireless"></span> UV {{ formatLimit(activity.uvMin, activity.uvMax) }}
-                  </span>
+                <div class="activity-actions">
+                  <button type="button" @click="toggleEditActivity(activity._id)" :title="editingActivityId === activity._id ? 'Fermer' : 'Modifier'">
+                    <span class="mdi" :class="editingActivityId === activity._id ? 'mdi-close' : 'mdi-pencil'"></span>
+                  </button>
+                  <button type="button" @click="deleteActivity(activity._id)" title="Supprimer">
+                    <span class="mdi mdi-delete"></span>
+                  </button>
                 </div>
-              </div>
-              <div class="activity-actions">
-                <button type="button" @click="editActivity(activity)" title="Modifier">
-                  <span class="mdi mdi-pencil"></span>
-                </button>
-                <button type="button" @click="deleteActivity(activity._id)" title="Supprimer">
-                  <span class="mdi mdi-delete"></span>
-                </button>
-              </div>
-            </article>
+              </article>
+
+              <Transition name="accordion">
+                <div v-if="editingActivityId === activity._id" class="activity-edit-accordion">
+                  <ActivityForm 
+                    :initialData="activity"
+                    :loading="activityLoading"
+                    @submit="saveActivity"
+                    @cancel="cancelEdit"
+                  />
+                </div>
+              </Transition>
+            </div>
           </div>
         </section>
       </div>
@@ -1987,45 +1673,69 @@ const fetchForecast = async (useCache = true) => {
         <div class="search-container">
           <div class="input-group">
             <label><span class="mdi mdi-format-list-checks"></span> Activité à analyser :</label>
-            <div class="custom-select-container">
+            <div class="activity-select-row">
+              <div class="custom-select-container">
+                <button
+                  type="button"
+                  class="custom-select-trigger"
+                  @click.stop="toggleActivityDropdown"
+                  :disabled="activityLoading"
+                  aria-haspopup="listbox"
+                  :aria-expanded="showActivityDropdown"
+                >
+                  <span class="mdi custom-select-trigger-icon" :class="selectedActivityIcon"></span>
+                  <span class="custom-select-trigger-text">
+                    {{ selectedActivityId === 'none' ? 'Aucune (Plein air général)' : (selectedActivity?.label || 'Aucune') }}
+                  </span>
+                  <span class="mdi mdi-chevron-down custom-select-arrow" :class="{ 'arrow-rotate': showActivityDropdown }"></span>
+                </button>
+                
+                <ul v-if="showActivityDropdown" class="custom-select-options" role="listbox">
+                  <li
+                    class="custom-select-option"
+                    :class="{ 'is-selected': selectedActivityId === 'none' }"
+                    role="option"
+                    @click="selectActivityCustom('none')"
+                  >
+                    <span class="mdi option-icon mdi-compass-outline"></span>
+                    <span class="option-label">Aucune (Plein air général)</span>
+                  </li>
+                  <li
+                    v-for="activity in userActivities"
+                    :key="activity._id"
+                    class="custom-select-option"
+                    :class="{ 'is-selected': selectedActivityId === activity._id }"
+                    role="option"
+                    @click="selectActivityCustom(activity._id)"
+                  >
+                    <span class="mdi option-icon" :class="activity.icon || 'mdi-bike'"></span>
+                    <span class="option-label">{{ activity.label }}</span>
+                  </li>
+                </ul>
+              </div>
+
               <button
+                v-if="selectedActivityId !== 'none'"
                 type="button"
-                class="custom-select-trigger"
-                @click.stop="toggleActivityDropdown"
-                :disabled="activityLoading"
-                aria-haspopup="listbox"
-                :aria-expanded="showActivityDropdown"
+                class="btn-edit-selected-activity"
+                @click="toggleEditWeatherPageActivity"
+                :title="showEditWeatherPageForm ? 'Fermer la modification' : 'Modifier cette activité'"
               >
-                <span class="mdi custom-select-trigger-icon" :class="selectedActivityIcon"></span>
-                <span class="custom-select-trigger-text">
-                  {{ selectedActivityId === 'none' ? 'Aucune (Plein air général)' : (selectedActivity?.label || 'Aucune') }}
-                </span>
-                <span class="mdi mdi-chevron-down custom-select-arrow" :class="{ 'arrow-rotate': showActivityDropdown }"></span>
+                <span class="mdi" :class="showEditWeatherPageForm ? 'mdi-close' : 'mdi-pencil'"></span>
               </button>
-              
-              <ul v-if="showActivityDropdown" class="custom-select-options" role="listbox">
-                <li
-                  class="custom-select-option"
-                  :class="{ 'is-selected': selectedActivityId === 'none' }"
-                  role="option"
-                  @click="selectActivityCustom('none')"
-                >
-                  <span class="mdi option-icon mdi-compass-outline"></span>
-                  <span class="option-label">Aucune (Plein air général)</span>
-                </li>
-                <li
-                  v-for="activity in userActivities"
-                  :key="activity._id"
-                  class="custom-select-option"
-                  :class="{ 'is-selected': selectedActivityId === activity._id }"
-                  role="option"
-                  @click="selectActivityCustom(activity._id)"
-                >
-                  <span class="mdi option-icon" :class="activity.icon || 'mdi-bike'"></span>
-                  <span class="option-label">{{ activity.label }}</span>
-                </li>
-              </ul>
             </div>
+
+            <!-- Formulaire d'édition de l'activité sélectionnée en accordéon -->
+            <Transition name="accordion">
+              <div v-if="showEditWeatherPageForm && selectedActivity && selectedActivityId !== 'none'" class="weather-page-activity-edit-accordion">
+                <ActivityForm
+                  :initialData="selectedActivity"
+                  :loading="activityLoading"
+                  @submit="saveActivity"
+                  @cancel="showEditWeatherPageForm = false"
+                />
+              </div>
+            </Transition>
             <!-- Affichage des critères et plages horaires de l'activité sélectionnée -->
             <div v-if="selectedActivity" class="selected-activity-details" style="margin-top: 8px;">
               <p v-if="selectedActivity.constraints && selectedActivityId !== 'none'" class="activity-constraints-text" style="margin: 6px 0; font-size: 0.82rem; color: var(--text-secondary);">
