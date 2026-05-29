@@ -961,7 +961,8 @@ html.meteo-theme-dark .icon-grid-item.is-focused {
   flex: 1;
 }
 
-.btn-edit-selected-activity {
+.btn-edit-selected-activity,
+.btn-add-selected-activity {
   flex-shrink: 0;
   width: 42px;
   height: 42px;
@@ -976,7 +977,8 @@ html.meteo-theme-dark .icon-grid-item.is-focused {
   transition: all 0.2s ease;
 }
 
-.btn-edit-selected-activity:hover {
+.btn-edit-selected-activity:hover,
+.btn-add-selected-activity:hover {
   color: var(--text-primary);
   background: var(--nav-active-bg);
   border-color: var(--color-primary);

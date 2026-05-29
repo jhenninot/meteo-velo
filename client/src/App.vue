@@ -42,6 +42,7 @@ const userActivities = ref([])
 const editingActivityId = ref(null)
 const showAddForm = ref(false)
 const showEditWeatherPageForm = ref(false)
+const showAddWeatherPageForm = ref(false)
 const activityMsg = ref({ text: '', type: '' })
 const activityLoading = ref(false)
 const selectedActivityId = ref(localStorage.getItem('selected_activity_id') || 'none')
@@ -474,9 +475,19 @@ const saveActivity = async (payload, activityId = null) => {
         fetchForecast(false)
       }
     } else {
-      await axios.post(`${API_BASE_URL}/api/user/activities`, payload)
+      const { data } = await axios.post(`${API_BASE_URL}/api/user/activities`, payload)
       activityMsg.value = { text: "Activité ajoutée.", type: 'success' }
       showAddForm.value = false
+      showAddWeatherPageForm.value = false
+      
+      // Sélectionner automatiquement la nouvelle activité
+      if (data && data._id) {
+        selectedActivityId.value = data._id
+        localStorage.setItem('selected_activity_id', data._id)
+        if (city.value && lat.value !== null && lon.value !== null) {
+          fetchForecast(false)
+        }
+      }
     }
     await loadUserActivities()
   } catch (err) {
@@ -505,7 +516,13 @@ const toggleAddForm = () => {
 }
 
 const toggleEditWeatherPageActivity = () => {
+  showAddWeatherPageForm.value = false
   showEditWeatherPageForm.value = !showEditWeatherPageForm.value
+}
+
+const toggleAddWeatherPageActivity = () => {
+  showEditWeatherPageForm.value = false
+  showAddWeatherPageForm.value = !showAddWeatherPageForm.value
 }
 
 const deleteActivity = async (activityId) => {
@@ -1723,6 +1740,15 @@ const fetchForecast = async (useCache = true) => {
               >
                 <span class="mdi" :class="showEditWeatherPageForm ? 'mdi-close' : 'mdi-pencil'"></span>
               </button>
+
+              <button
+                type="button"
+                class="btn-add-selected-activity"
+                @click="toggleAddWeatherPageActivity"
+                :title="showAddWeatherPageForm ? 'Fermer l\'ajout' : 'Ajouter une activité'"
+              >
+                <span class="mdi" :class="showAddWeatherPageForm ? 'mdi-close' : 'mdi-plus'"></span>
+              </button>
             </div>
 
             <!-- Formulaire d'édition de l'activité sélectionnée en accordéon -->
@@ -1733,6 +1759,17 @@ const fetchForecast = async (useCache = true) => {
                   :loading="activityLoading"
                   @submit="saveActivity"
                   @cancel="showEditWeatherPageForm = false"
+                />
+              </div>
+            </Transition>
+
+            <!-- Formulaire d'ajout d'activité en accordéon -->
+            <Transition name="accordion">
+              <div v-if="showAddWeatherPageForm" class="weather-page-activity-edit-accordion">
+                <ActivityForm
+                  :loading="activityLoading"
+                  @submit="saveActivity"
+                  @cancel="showAddWeatherPageForm = false"
                 />
               </div>
             </Transition>
