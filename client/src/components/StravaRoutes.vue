@@ -28,7 +28,8 @@ const props = defineProps({
   initialLat: [Number, String],
   initialLon: [Number, String],
   favorites: { type: Array, default: () => [] },
-  userActivities: { type: Array, default: () => [] }
+  userActivities: { type: Array, default: () => [] },
+  useAiAnalysis: { type: Boolean, default: true }
 })
 
 const emit = defineEmits(['update:location'])
@@ -995,13 +996,16 @@ const startAnalysisForRoute = async (route) => {
       city: analysisStartCityName.value,
       lat,
       lon,
-      activityId: matchedActivityId
+      activityId: matchedActivityId,
+      useAi: props.useAiAnalysis
     })
     analysisForecastData.value = response.data.forecast
     analysisFallbackWarning.value = response.data.fallbackMessage || ''
   } catch (err) {
     console.error("Forecast analysis error:", err)
-    analysisError.value = "Impossible de générer l'analyse météo par l'IA. Veuillez réessayer."
+    analysisError.value = props.useAiAnalysis
+      ? "Impossible de générer l'analyse météo par l'IA. Veuillez réessayer."
+      : "Impossible de générer l'analyse météo. Veuillez réessayer."
   } finally {
     isAnalyzing.value = false
   }
@@ -2109,9 +2113,9 @@ onUnmounted(() => {
         <div class="analysis-results-pane">
           <!-- Loading state -->
           <div v-if="isAnalyzing" class="analysis-loading-state">
-            <span class="mdi mdi-brain mdi-spin loading-brain-icon"></span>
-            <h3>Analyse météo intelligente en cours...</h3>
-            <p>Nous interrogeons les données météo locales au point de départ de votre itinéraire et laissons l'IA évaluer vos conditions.</p>
+            <span class="mdi mdi-spin loading-brain-icon" :class="useAiAnalysis ? 'mdi-brain' : 'mdi-sync'"></span>
+            <h3>{{ useAiAnalysis ? 'Analyse météo intelligente en cours...' : 'Analyse des critères en cours...' }}</h3>
+            <p>{{ useAiAnalysis ? 'Nous interrogeons les données météo locales au point de départ de votre itinéraire et laissons l\'IA évaluer vos conditions.' : 'Nous interrogeons les données météo locales au point de départ de votre itinéraire et validons vos critères.' }}</p>
           </div>
           
           <!-- Error state -->

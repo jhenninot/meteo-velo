@@ -89,7 +89,8 @@ const userSchema = new mongoose.Schema({
     lon: Number,
     consignes: String,
     theme: { type: String, enum: ['light', 'dark', 'auto'], default: 'auto' },
-    stravaFilters: { type: [String], default: [] }
+    stravaFilters: { type: [String], default: [] },
+    useAiAnalysis: { type: Boolean, default: true }
   },
   activities: [{
     label: { type: String, required: true, trim: true, maxlength: 80 },
@@ -320,7 +321,7 @@ function normalizeCriteres(aiSlice, globalFavorable) {
   return out;
 }
 
-function enrichPeriod(aggregated, aiSlice, activity = null) {
+function enrichPeriod(aggregated, aiSlice, activity = null, useAi = true) {
   const merged = { ...aggregated, ...aiSlice };
   let originallyFavorable = (merged.favorable === true);
   merged.criteres = normalizeCriteres(aiSlice, originallyFavorable);
@@ -421,7 +422,7 @@ function enrichPeriod(aggregated, aiSlice, activity = null) {
 
   // Si l'évaluation a été corrigée de favorable à défavorable suite à une violation de seuil strict,
   // on remplace le message contradictoire de l'IA par une explication claire.
-  if (!merged.favorable && originallyFavorable) {
+  if (!merged.favorable && (originallyFavorable || !useAi)) {
     const violations = [];
     if (activity) {
       const isViolated = (val, min, max) => {
@@ -765,7 +766,7 @@ app.post('/api/weather', verifyToken, async (req, res) => {
 
 // --- ROUTE ANALYSE IA (étape 2 : reçoit la météo brute + activityId, retourne l'analyse enrichie) ---
 app.post('/api/analyze', verifyToken, async (req, res) => {
-  const { city, activityId, structuredWeather } = req.body;
+  const { city, activityId, structuredWeather, useAi } = req.body;
   let activityLabel = '';
   let userRules = '';
   let activity = null;
@@ -784,6 +785,21 @@ app.post('/api/analyze', verifyToken, async (req, res) => {
       if (!activity) return res.status(404).json({ error: "Activité introuvable" });
       activityLabel = activity.label;
       userRules = (activity.constraints || '').trim();
+    }
+
+    if (useAi === false) {
+      const finalData = structuredWeather.map(day => {
+        return {
+          date: day.date,
+          matin: day.matin ? enrichPeriod(day.matin, {}, activity, false) : null,
+          apres_midi: day.apres_midi ? enrichPeriod(day.apres_midi, {}, activity, false) : null,
+          full_day: day.full_day
+        };
+      });
+      return res.json({
+        forecast: finalData,
+        useAi: false
+      });
     }
 
     let activeModel = 'gemini-3.1-flash-lite';
@@ -923,7 +939,7 @@ Les valeurs dans criteres sont uniquement les chaînes "favorable" ou "defavorab
 
 // --- ROUTE LEGACY /api/forecast (conservée pour compatibilité cache) ---
 app.post('/api/forecast', verifyToken, async (req, res) => {
-  const { lat, lon, city, activityId } = req.body;
+  const { lat, lon, city, activityId, useAi } = req.body;
   let activityLabel = '';
   let userRules = '';
   let activity = null;
@@ -1011,6 +1027,22 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
         structuredWeather = await fetchFromMetNo();
         actualProviderUsed = 'met.no';
       }
+    }
+
+    if (useAi === false) {
+      const finalData = structuredWeather.map(day => {
+        return {
+          date: day.date,
+          matin: day.matin ? enrichPeriod(day.matin, {}, activity, false) : null,
+          apres_midi: day.apres_midi ? enrichPeriod(day.apres_midi, {}, activity, false) : null,
+          full_day: day.full_day
+        };
+      });
+      return res.json({
+        forecast: finalData,
+        useAi: false,
+        provider: actualProviderUsed
+      });
     }
 
     let activeModel = 'gemini-3.1-flash-lite';

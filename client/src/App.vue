@@ -46,6 +46,7 @@ const showAddWeatherPageForm = ref(false)
 const activityMsg = ref({ text: '', type: '' })
 const activityLoading = ref(false)
 const selectedActivityId = ref(localStorage.getItem('selected_activity_id') || 'none')
+const useAiAnalysis = ref(true)
 
 // --- ÉTATS NAVIGATION ---
 const showAdminPanel = ref(false)
@@ -305,6 +306,11 @@ const handleLogin = async () => {
       lat.value = preferences.lat || null
       lon.value = preferences.lon || null
       theme.value = preferences.theme === 'dark' || preferences.theme === 'light' || preferences.theme === 'auto' ? preferences.theme : 'auto'
+      if (preferences.useAiAnalysis !== undefined) {
+        useAiAnalysis.value = preferences.useAiAnalysis
+      } else {
+        useAiAnalysis.value = true
+      }
 
       // On met aussi à jour le localStorage pour que initializeApp() soit cohérent
       localStorage.setItem('selected_city', city.value)
@@ -576,7 +582,8 @@ const syncPreferences = async () => {
       lat: lat.value,
       lon: lon.value,
       consignes: consignes.value,
-      theme: theme.value
+      theme: theme.value,
+      useAiAnalysis: useAiAnalysis.value
     })
   } catch (err) {
     console.error("Erreur de synchronisation BDD", err)
@@ -589,6 +596,9 @@ const loadUserPreferences = async () => {
     if (data.theme === 'dark' || data.theme === 'light' || data.theme === 'auto') {
       theme.value = data.theme
       localStorage.setItem('user_theme', theme.value)
+    }
+    if (data.useAiAnalysis !== undefined) {
+      useAiAnalysis.value = data.useAiAnalysis
     }
   } catch (err) {
     console.error('Erreur chargement préférences', err)
@@ -666,6 +676,13 @@ const isWeekend = (dateString) => {
   const date = new Date(year, month - 1, day);
   const dayOfWeek = date.getDay();
   return dayOfWeek === 0 || dayOfWeek === 6;
+}
+
+const scrollToDayDetail = (index) => {
+  const el = document.getElementById(`day-detail-${index}`)
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
 }
 
 const formatDateTime = (isoString) => {
@@ -1263,7 +1280,7 @@ const roundCoord = (value) => {
 }
 
 const getForecastCacheKey = () => {
-  return [roundCoord(lat.value), roundCoord(lon.value), selectedActivityId.value].join('::')
+  return [roundCoord(lat.value), roundCoord(lon.value), selectedActivityId.value, useAiAnalysis.value ? 'ai' : 'rules'].join('::')
 }
 
 const loadForecastCache = () => {
@@ -1333,6 +1350,46 @@ const saveForecastToCache = (weather, forecast, fallbackMessage = '', provider =
   saveForecastCache(cache)
 }
 
+const runAnalysisOnly = async () => {
+  if (!weatherData.value || !city.value || !selectedActivityId.value) return
+  
+  aiLoading.value = true
+  error.value = null
+  try {
+    const analyzeRes = await axios.post(`${API_BASE_URL}/api/analyze`, {
+      city: city.value,
+      activityId: selectedActivityId.value,
+      structuredWeather: weatherData.value,
+      useAi: useAiAnalysis.value
+    })
+    forecastData.value = analyzeRes.data.forecast
+    fallbackWarning.value = analyzeRes.data.fallbackMessage || ''
+    forecastCollectedAt.value = new Date().toISOString()
+    saveForecastToCache(weatherData.value, analyzeRes.data.forecast, fallbackWarning.value, actualWeatherProvider.value)
+  } catch (err) {
+    if (err.response?.status !== 401) {
+      error.value = useAiAnalysis.value ? "Impossible d'obtenir l'analyse IA" : "Impossible d'obtenir l'analyse"
+    }
+  } finally {
+    aiLoading.value = false
+  }
+}
+
+const toggleAiPreference = () => {
+  useAiAnalysis.value = !useAiAnalysis.value
+  handleAiToggle()
+}
+
+const handleAiToggle = () => {
+  syncPreferences()
+  if (restoreCachedForecast()) {
+    return
+  }
+  if (weatherData.value && city.value && selectedActivityId.value) {
+    runAnalysisOnly()
+  }
+}
+
 const fetchForecast = async (useCache = true) => {
   if (!city.value || !lat.value || !lon.value) return;
   if (!selectedActivityId.value) {
@@ -1379,26 +1436,8 @@ const fetchForecast = async (useCache = true) => {
     loading.value = false
   }
 
-  // --- ÉTAPE 2 : Analyse IA (lancée après affichage de la météo) ---
-  aiLoading.value = true
-  try {
-    const analyzeRes = await axios.post(`${API_BASE_URL}/api/analyze`, {
-      city: city.value,
-      activityId: selectedActivityId.value,
-      structuredWeather: rawWeather
-    })
-    forecastData.value = analyzeRes.data.forecast
-    fallbackWarning.value = analyzeRes.data.fallbackMessage || ''
-    forecastCollectedAt.value = new Date().toISOString()
-    saveForecastToCache(rawWeather, analyzeRes.data.forecast, fallbackWarning.value, detectedProvider)
-  } catch (err) {
-    if (err.response?.status !== 401) {
-      error.value = "Impossible d'obtenir l'analyse IA"
-    }
-  } finally {
-    aiLoading.value = false
-    syncPreferences()
-  }
+  // --- ÉTAPE 2 : Analyse ---
+  await runAnalysisOnly()
 }
 </script>
 
@@ -1453,6 +1492,18 @@ const fetchForecast = async (useCache = true) => {
                   <option value="auto">Auto</option>
                   <option value="dark">Nuit</option>
                 </select>
+              </div>
+
+              <div class="burger-menu-divider"></div>
+
+              <!-- Analyse IA Toggle -->
+              <div class="burger-menu-item burger-ai-item">
+                <span class="burger-menu-icon mdi mdi-brain"></span>
+                <span class="burger-menu-label">Analyse par l'IA</span>
+                <label class="switch-container">
+                  <input type="checkbox" v-model="useAiAnalysis" @change="handleAiToggle" />
+                  <span class="switch-slider"></span>
+                </label>
               </div>
 
               <div class="burger-menu-divider"></div>
@@ -1682,6 +1733,7 @@ const fetchForecast = async (useCache = true) => {
         :initial-lon="lon"
         :favorites="favorites"
         :user-activities="userActivities"
+        :use-ai-analysis="useAiAnalysis"
         @update:location="updateGlobalLocation"
       />
     </main>
@@ -1750,6 +1802,8 @@ const fetchForecast = async (useCache = true) => {
                 <span class="mdi" :class="showAddWeatherPageForm ? 'mdi-close' : 'mdi-plus'"></span>
               </button>
             </div>
+
+
 
             <!-- Formulaire d'édition de l'activité sélectionnée en accordéon -->
             <Transition name="accordion">
@@ -1868,7 +1922,10 @@ const fetchForecast = async (useCache = true) => {
       </section>
 
       <div v-if="loading" class="status-msg"><span class="mdi mdi-cloud-download-outline mdi-spin-slow"></span> Récupération de la météo...</div>
-      <div v-if="aiLoading" class="status-msg status-msg-ai"><span class="mdi mdi-brain mdi-pulse"></span> Analyse IA en cours...</div>
+      <div v-if="aiLoading" class="status-msg status-msg-ai">
+        <span class="mdi" :class="useAiAnalysis ? 'mdi-brain mdi-pulse' : 'mdi-sync mdi-spin'"></span>
+        {{ useAiAnalysis ? 'Analyse IA en cours...' : 'Analyse des critères en cours...' }}
+      </div>
       <div v-if="error" class="error-msg"><span class="mdi mdi-alert-circle"></span> {{ error }}</div>
       <div v-if="fallbackWarning" class="fallback-msg">
         <span class="mdi mdi-alert"></span> {{ fallbackWarning }}
@@ -1917,6 +1974,42 @@ const fetchForecast = async (useCache = true) => {
           </div>
         </div>
       </Transition>
+
+      <!-- Récapitulatif des demi-journées (seulement après analyse) -->
+      <div v-if="forecastData && !loading" class="periods-recap-container">
+        <h3 class="recap-title">
+          <span class="mdi mdi-checkbox-multiple-marked-outline"></span> Aperçu rapide des créneaux
+        </h3>
+        <div class="periods-recap-scroll">
+          <div 
+            v-for="(day, index) in forecastData" 
+            :key="'recap-'+index" 
+            class="recap-day-tile" 
+            :class="{ 'is-weekend': isWeekend(day.date) }"
+            @click="scrollToDayDetail(index)"
+            title="Cliquer pour voir le détail de ce jour"
+          >
+            <div class="recap-day-label">{{ getShortDayName(day.date) }}</div>
+            <div class="recap-periods">
+              <!-- Demi-journée 1 (Matin) -->
+              <span v-if="day.matin" class="bike-day-indicator" :class="day.matin.favorable ? 'bike-day-favorable' : 'bike-day-defavorable'" :title="`${day.matin.label || 'Matin'} : ${day.matin.favorable ? 'Favorable' : 'Défavorable'}`" role="img" :aria-label="day.matin.favorable ? 'Activité : conditions favorables' : 'Activité : conditions défavorables'">
+                <span class="mdi bike-day-indicator__icon" :class="selectedActivityIcon" aria-hidden="true"></span>
+              </span>
+              <div v-else class="recap-slot-empty">
+                <span class="mdi mdi-minus"></span>
+              </div>
+              
+              <!-- Demi-journée 2 (Après-midi) -->
+              <span v-if="day.apres_midi" class="bike-day-indicator" :class="day.apres_midi.favorable ? 'bike-day-favorable' : 'bike-day-defavorable'" :title="`${day.apres_midi.label || 'Après-midi'} : ${day.apres_midi.favorable ? 'Favorable' : 'Défavorable'}`" role="img" :aria-label="day.apres_midi.favorable ? 'Activité : conditions favorables' : 'Activité : conditions défavorables'">
+                <span class="mdi bike-day-indicator__icon" :class="selectedActivityIcon" aria-hidden="true"></span>
+              </span>
+              <div v-else class="recap-slot-empty">
+                <span class="mdi mdi-minus"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Grille détaillée : affiche la météo brute (sans IA) si l'IA n'a pas encore répondu -->
       <section v-if="(weatherData || forecastData) && !loading" class="results-section">
