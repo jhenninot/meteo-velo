@@ -1738,7 +1738,119 @@ const fetchForecast = async (useCache = true) => {
       />
     </main>
     <main v-else>
-      <section class="config-section">
+      <section class="config-section location-section">
+        <div class="search-container">
+          <div class="input-group">
+            <label><span class="mdi mdi-map-marker"></span> Localisation :</label>
+            <div class="search-input-wrapper">
+              <input v-model="query" @input="searchCities" placeholder="Ville..." @keyup.enter="fetchForecast"/>
+              <button type="button" @click="toggleFavorite" :disabled="!city || loading" class="fav-btn" :title="isCurrentCityFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'">
+                <span class="mdi" :class="isCurrentCityFavorite ? 'mdi-star text-warning' : 'mdi-star-outline'"></span>
+              </button>
+              <button type="button" @click="useDeviceLocation" :disabled="loading || geoLoading" class="geo-btn" title="Utiliser ma position actuelle">
+                <span v-if="!geoLoading" class="mdi mdi-crosshairs-gps"></span>
+                <span v-else class="mdi mdi-loading mdi-spin"></span>
+              </button>
+              <button type="button" @click="toggleMap" :disabled="!lat || !lon" class="map-btn" :class="{ 'map-active': showMap }" :title="showMap ? 'Masquer la carte' : 'Afficher la carte'">
+                <span class="mdi" :class="showMap ? 'mdi-map-legend' : 'mdi-map'"></span>
+              </button>
+              <button @click="fetchForecast(false)" :disabled="loading || !city || geoLoading" class="refresh-btn" title="Actualiser">
+                <span v-if="!loading" class="mdi mdi-refresh"></span>
+                <span v-else class="mdi mdi-loading mdi-spin"></span>
+              </button>
+            </div>
+          </div>
+          <!-- Carte de localisation interactive -->
+          <div v-show="showMap" class="weather-map-container-wrapper">
+            <div class="map-container-relative">
+              <div class="map-actions-overlay">
+                <button type="button" class="btn-map-action" @click="openWeatherFullscreen" title="Ouvrir la carte en plein écran">
+                  <span class="mdi mdi-fullscreen"></span> Plein écran
+                </button>
+              </div>
+              <div id="weather-map-container" class="weather-map-container"></div>
+            </div>
+          </div>
+          <ul v-if="suggestions.length > 0" class="suggestions-list">
+            <li v-for="(s, index) in suggestions" :key="index" @click="selectCity(s)" class="suggestion-item">
+              <div class="suggestion-info">
+                <span v-if="isSuggestionFavorite(s)" class="mdi mdi-star suggestion-fav-star" title="Cette ville est dans vos favoris"></span>
+                <strong>{{ s.properties.name }}</strong>
+                <span class="region-text" v-if="s.properties.state">- {{ s.properties.state }}</span>
+              </div>
+            </li>
+          </ul>
+
+          <div v-if="favorites.length > 0" class="favorites-dropdown-container">
+            <label for="favorites-select" class="favorites-dropdown-label">
+              <span class="mdi mdi-star"></span> Favoris :
+            </label>
+            <select id="favorites-select" v-model="selectedFavoriteIndex" class="favorites-select" aria-label="Sélectionner une ville favorite">
+              <option value="-1" disabled>Choisir une ville favorite...</option>
+              <option v-for="(fav, index) in favorites" :key="fav._id || fav.city" :value="index">
+                {{ fav.city }}
+              </option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <div v-if="loading" class="status-msg"><span class="mdi mdi-cloud-download-outline mdi-spin-slow"></span> Récupération de la météo...</div>
+      <div v-if="aiLoading" class="status-msg status-msg-ai">
+        <span class="mdi" :class="useAiAnalysis ? 'mdi-brain mdi-pulse' : 'mdi-sync mdi-spin'"></span>
+        {{ useAiAnalysis ? 'Analyse IA en cours...' : 'Analyse des critères en cours...' }}
+      </div>
+      <div v-if="error" class="error-msg"><span class="mdi mdi-alert-circle"></span> {{ error }}</div>
+      <div v-if="fallbackWarning" class="fallback-msg">
+        <span class="mdi mdi-alert"></span> {{ fallbackWarning }}
+        <button class="fallback-close" @click="fallbackWarning = ''" aria-label="Fermer">&times;</button>
+      </div>
+
+      <!-- Résumé journalier : affiche la météo brute dès qu'elle est disponible -->
+      <div v-if="(weatherData || forecastData) && !loading" class="daily-summary-container">
+        <div class="daily-summary-scroll">
+          <div v-for="(day, index) in (forecastData || weatherData)" :key="'summary-'+index" class="daily-summary-card" :class="{ 'is-selected': selectedDayIndex === index, 'is-weekend': isWeekend(day.date) }" @click="toggleDayHourly(index)">
+            <div class="summary-day">{{ getShortDayName(day.date) }}</div>
+            <div class="summary-icon"><WeatherIcon :icon="getDailyWeatherIcon(day)" /></div>
+            <div class="summary-temps">
+              <span class="temp-min">{{ getDailyMinTemp(day) }}°</span> /
+              <span class="temp-max">{{ getDailyMaxTemp(day) }}°</span>
+            </div>
+            <div class="summary-wind">
+              <span class="mdi mdi-navigation wind-icon" :style="getWindStyle(getDailyWindDir(day))"></span>
+              {{ getDailyWind(day) }} km/h
+            </div>
+            <div class="summary-gust">
+              <span class="mdi mdi-weather-windy" title="Rafales"></span> {{ getDailyGust(day) }} km/h
+            </div>
+            <div class="summary-precip">
+              <span class="mdi mdi-weather-pouring" title="Précipitations"></span> {{ getDailyPrecip(day) }} mm
+            </div>
+            <div class="summary-rain">
+              <span class="mdi mdi-water-percent" title="Probabilité de pluie"></span> {{ getDailyRain(day) }}%
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Détail heure par heure du jour sélectionné -->
+      <Transition name="fade">
+        <div v-if="selectedDayForHourly" class="selected-day-hourly-details">
+          <div class="hourly-scroll-wrapper">
+            <div class="hourly-scroll-container" @scroll="handleHourlyScroll">
+              <div v-for="dayIndex in loadedDayIndexes" :key="dayIndex" class="hourly-day-group">
+                <div class="hourly-day-header">
+                  <span class="mdi mdi-calendar"></span> {{ formatDate(getDayByIndex(dayIndex)?.date) }}
+                </div>
+                <WeatherHourlyTimeline :hourlyData="getDayByIndex(dayIndex)?.full_day?.hourly" :date="getDayByIndex(dayIndex)?.date" :theme="resolvedTheme" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- Activité à analyser (scindé et relocalisé) -->
+      <section class="config-section activity-section">
         <div class="search-container">
           <div class="input-group">
             <label><span class="mdi mdi-format-list-checks"></span> Activité à analyser :</label>
@@ -1803,8 +1915,6 @@ const fetchForecast = async (useCache = true) => {
               </button>
             </div>
 
-
-
             <!-- Formulaire d'édition de l'activité sélectionnée en accordéon -->
             <Transition name="accordion">
               <div v-if="showEditWeatherPageForm && selectedActivity && selectedActivityId !== 'none'" class="weather-page-activity-edit-accordion">
@@ -1827,6 +1937,7 @@ const fetchForecast = async (useCache = true) => {
                 />
               </div>
             </Transition>
+            
             <!-- Affichage des critères et plages horaires de l'activité sélectionnée -->
             <div v-if="selectedActivity" class="selected-activity-details" style="margin-top: 8px;">
               <p v-if="selectedActivity.constraints && selectedActivityId !== 'none'" class="activity-constraints-text" style="margin: 6px 0; font-size: 0.82rem; color: var(--text-secondary);">
@@ -1864,116 +1975,8 @@ const fetchForecast = async (useCache = true) => {
               </div>
             </div>
           </div>
-
-          <div class="input-group">
-            <label><span class="mdi mdi-map-marker"></span> Localisation :</label>
-            <div class="search-input-wrapper">
-              <input v-model="query" @input="searchCities" placeholder="Ville..." @keyup.enter="fetchForecast"/>
-              <button type="button" @click="toggleFavorite" :disabled="!city || loading" class="fav-btn" :title="isCurrentCityFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'">
-                <span class="mdi" :class="isCurrentCityFavorite ? 'mdi-star text-warning' : 'mdi-star-outline'"></span>
-              </button>
-              <button type="button" @click="useDeviceLocation" :disabled="loading || geoLoading" class="geo-btn" title="Utiliser ma position actuelle">
-                <span v-if="!geoLoading" class="mdi mdi-crosshairs-gps"></span>
-                <span v-else class="mdi mdi-loading mdi-spin"></span>
-              </button>
-              <button type="button" @click="toggleMap" :disabled="!lat || !lon" class="map-btn" :class="{ 'map-active': showMap }" :title="showMap ? 'Masquer la carte' : 'Afficher la carte'">
-                <span class="mdi" :class="showMap ? 'mdi-map-legend' : 'mdi-map'"></span>
-              </button>
-              <button @click="fetchForecast(false)" :disabled="loading || !city || geoLoading" class="refresh-btn" title="Actualiser">
-                <span v-if="!loading" class="mdi mdi-refresh"></span>
-                <span v-else class="mdi mdi-loading mdi-spin"></span>
-              </button>
-            </div>
-          </div>
-          <!-- Carte de localisation interactive -->
-          <div v-show="showMap" class="weather-map-container-wrapper">
-            <div class="map-container-relative">
-              <div class="map-actions-overlay">
-                <button type="button" class="btn-map-action" @click="openWeatherFullscreen" title="Ouvrir la carte en plein écran">
-                  <span class="mdi mdi-fullscreen"></span> Plein écran
-                </button>
-              </div>
-              <div id="weather-map-container" class="weather-map-container"></div>
-            </div>
-          </div>
-          <ul v-if="suggestions.length > 0" class="suggestions-list">
-            <li v-for="(s, index) in suggestions" :key="index" @click="selectCity(s)" class="suggestion-item">
-              <div class="suggestion-info">
-                <span v-if="isSuggestionFavorite(s)" class="mdi mdi-star suggestion-fav-star" title="Cette ville est dans vos favoris"></span>
-                <strong>{{ s.properties.name }}</strong>
-                <span class="region-text" v-if="s.properties.state">- {{ s.properties.state }}</span>
-              </div>
-            </li>
-          </ul>
-
-          <div v-if="favorites.length > 0" class="favorites-dropdown-container">
-            <label for="favorites-select" class="favorites-dropdown-label">
-              <span class="mdi mdi-star"></span> Favoris :
-            </label>
-            <select id="favorites-select" v-model="selectedFavoriteIndex" class="favorites-select" aria-label="Sélectionner une ville favorite">
-              <option value="-1" disabled>Choisir une ville favorite...</option>
-              <option v-for="(fav, index) in favorites" :key="fav._id || fav.city" :value="index">
-                {{ fav.city }}
-              </option>
-            </select>
-          </div>
-
         </div>
       </section>
-
-      <div v-if="loading" class="status-msg"><span class="mdi mdi-cloud-download-outline mdi-spin-slow"></span> Récupération de la météo...</div>
-      <div v-if="aiLoading" class="status-msg status-msg-ai">
-        <span class="mdi" :class="useAiAnalysis ? 'mdi-brain mdi-pulse' : 'mdi-sync mdi-spin'"></span>
-        {{ useAiAnalysis ? 'Analyse IA en cours...' : 'Analyse des critères en cours...' }}
-      </div>
-      <div v-if="error" class="error-msg"><span class="mdi mdi-alert-circle"></span> {{ error }}</div>
-      <div v-if="fallbackWarning" class="fallback-msg">
-        <span class="mdi mdi-alert"></span> {{ fallbackWarning }}
-        <button class="fallback-close" @click="fallbackWarning = ''" aria-label="Fermer">&times;</button>
-      </div>
-
-      <!-- Résumé journalier : affiche la météo brute dès qu'elle est disponible -->
-      <div v-if="(weatherData || forecastData) && !loading" class="daily-summary-container">
-        <div class="daily-summary-scroll">
-          <div v-for="(day, index) in (forecastData || weatherData)" :key="'summary-'+index" class="daily-summary-card" :class="{ 'is-selected': selectedDayIndex === index, 'is-weekend': isWeekend(day.date) }" @click="toggleDayHourly(index)">
-            <div class="summary-day">{{ getShortDayName(day.date) }}</div>
-            <div class="summary-icon"><WeatherIcon :icon="getDailyWeatherIcon(day)" /></div>
-            <div class="summary-temps">
-              <span class="temp-min">{{ getDailyMinTemp(day) }}°</span> /
-              <span class="temp-max">{{ getDailyMaxTemp(day) }}°</span>
-            </div>
-            <div class="summary-wind">
-              <span class="mdi mdi-navigation wind-icon" :style="getWindStyle(getDailyWindDir(day))"></span>
-              {{ getDailyWind(day) }} km/h
-            </div>
-            <div class="summary-gust">
-              <span class="mdi mdi-weather-windy" title="Rafales"></span> {{ getDailyGust(day) }} km/h
-            </div>
-            <div class="summary-precip">
-              <span class="mdi mdi-weather-pouring" title="Précipitations"></span> {{ getDailyPrecip(day) }} mm
-            </div>
-            <div class="summary-rain">
-              <span class="mdi mdi-water-percent" title="Probabilité de pluie"></span> {{ getDailyRain(day) }}%
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Détail heure par heure du jour sélectionné -->
-      <Transition name="fade">
-        <div v-if="selectedDayForHourly" class="selected-day-hourly-details">
-          <div class="hourly-scroll-wrapper">
-            <div class="hourly-scroll-container" @scroll="handleHourlyScroll">
-              <div v-for="dayIndex in loadedDayIndexes" :key="dayIndex" class="hourly-day-group">
-                <div class="hourly-day-header">
-                  <span class="mdi mdi-calendar"></span> {{ formatDate(getDayByIndex(dayIndex)?.date) }}
-                </div>
-                <WeatherHourlyTimeline :hourlyData="getDayByIndex(dayIndex)?.full_day?.hourly" :date="getDayByIndex(dayIndex)?.date" :theme="resolvedTheme" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </Transition>
 
       <!-- Récapitulatif des demi-journées (seulement après analyse) -->
       <div v-if="forecastData && !loading" class="periods-recap-container">
