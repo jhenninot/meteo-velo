@@ -5285,6 +5285,12 @@ html.meteo-theme-dark .timeline-svg .night-rect {
   border: 1px solid var(--border-color);
 }
 
+.periods-recap-inside-card {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px dashed var(--border-color);
+}
+
 .recap-title {
   font-size: 0.95rem;
   font-weight: 700;

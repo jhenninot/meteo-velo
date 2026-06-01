@@ -1974,45 +1974,45 @@ const fetchForecast = async (useCache = true) => {
                 </template>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
 
-      <!-- Récapitulatif des demi-journées (seulement après analyse) -->
-      <div v-if="forecastData && !loading" class="periods-recap-container">
-        <h3 class="recap-title">
-          <span class="mdi mdi-checkbox-multiple-marked-outline"></span> Aperçu rapide des créneaux
-        </h3>
-        <div class="periods-recap-scroll">
-          <div 
-            v-for="(day, index) in forecastData" 
-            :key="'recap-'+index" 
-            class="recap-day-tile" 
-            :class="{ 'is-weekend': isWeekend(day.date) }"
-            @click="scrollToDayDetail(index)"
-            title="Cliquer pour voir le détail de ce jour"
-          >
-            <div class="recap-day-label">{{ getShortDayName(day.date) }}</div>
-            <div class="recap-periods">
-              <!-- Demi-journée 1 (Matin) -->
-              <span v-if="day.matin" class="bike-day-indicator" :class="day.matin.favorable ? 'bike-day-favorable' : 'bike-day-defavorable'" :title="`${day.matin.label || 'Matin'} : ${day.matin.favorable ? 'Favorable' : 'Défavorable'}`" role="img" :aria-label="day.matin.favorable ? 'Activité : conditions favorables' : 'Activité : conditions défavorables'">
-                <span class="mdi bike-day-indicator__icon" :class="selectedActivityIcon" aria-hidden="true"></span>
-              </span>
-              <div v-else class="recap-slot-empty">
-                <span class="mdi mdi-minus"></span>
-              </div>
-              
-              <!-- Demi-journée 2 (Après-midi) -->
-              <span v-if="day.apres_midi" class="bike-day-indicator" :class="day.apres_midi.favorable ? 'bike-day-favorable' : 'bike-day-defavorable'" :title="`${day.apres_midi.label || 'Après-midi'} : ${day.apres_midi.favorable ? 'Favorable' : 'Défavorable'}`" role="img" :aria-label="day.apres_midi.favorable ? 'Activité : conditions favorables' : 'Activité : conditions défavorables'">
-                <span class="mdi bike-day-indicator__icon" :class="selectedActivityIcon" aria-hidden="true"></span>
-              </span>
-              <div v-else class="recap-slot-empty">
-                <span class="mdi mdi-minus"></span>
+            <!-- Récapitulatif des demi-journées (seulement après analyse, fusionné dans le pavé activité) -->
+            <div v-if="forecastData && !loading" class="periods-recap-inside-card">
+              <h3 class="recap-title">
+                <span class="mdi mdi-checkbox-multiple-marked-outline"></span> Aperçu rapide des créneaux
+              </h3>
+              <div class="periods-recap-scroll">
+                <div 
+                  v-for="(day, index) in forecastData" 
+                  :key="'recap-'+index" 
+                  class="recap-day-tile" 
+                  :class="{ 'is-weekend': isWeekend(day.date) }"
+                  @click="scrollToDayDetail(index)"
+                  title="Cliquer pour voir le détail de ce jour"
+                >
+                  <div class="recap-day-label">{{ getShortDayName(day.date) }}</div>
+                  <div class="recap-periods">
+                    <!-- Demi-journée 1 (Matin) -->
+                    <span v-if="day.matin" class="bike-day-indicator" :class="day.matin.favorable ? 'bike-day-favorable' : 'bike-day-defavorable'" :title="`${day.matin.label || 'Matin'} : ${day.matin.favorable ? 'Favorable' : 'Défavorable'}`" role="img" :aria-label="day.matin.favorable ? 'Activité : conditions favorables' : 'Activité : conditions défavorables'">
+                      <span class="mdi bike-day-indicator__icon" :class="selectedActivityIcon" aria-hidden="true"></span>
+                    </span>
+                    <div v-else class="recap-slot-empty">
+                      <span class="mdi mdi-minus"></span>
+                    </div>
+                    
+                    <!-- Demi-journée 2 (Après-midi) -->
+                    <span v-if="day.apres_midi" class="bike-day-indicator" :class="day.apres_midi.favorable ? 'bike-day-favorable' : 'bike-day-defavorable'" :title="`${day.apres_midi.label || 'Après-midi'} : ${day.apres_midi.favorable ? 'Favorable' : 'Défavorable'}`" role="img" :aria-label="day.apres_midi.favorable ? 'Activité : conditions favorables' : 'Activité : conditions défavorables'">
+                      <span class="mdi bike-day-indicator__icon" :class="selectedActivityIcon" aria-hidden="true"></span>
+                    </span>
+                    <div v-else class="recap-slot-empty">
+                      <span class="mdi mdi-minus"></span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
       <!-- Grille détaillée : affiche la météo brute (sans IA) si l'IA n'a pas encore répondu -->
       <section v-if="(weatherData || forecastData) && !loading" class="results-section">
