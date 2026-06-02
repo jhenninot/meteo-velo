@@ -697,6 +697,7 @@ app.post('/api/weather', verifyToken, async (req, res) => {
     }
 
     let structuredWeather;
+    let currentConditions = null;
 
     const fetchFromMetNo = async () => {
       // 1. Récupérer l'offset UTC via Open-Meteo (requête minimale) avec fallback robuste
@@ -724,14 +725,60 @@ app.post('/api/weather', verifyToken, async (req, res) => {
       if (!timeseries || !Array.isArray(timeseries)) {
         throw new Error("Données met.no invalides");
       }
+
+      if (timeseries.length > 0) {
+        const currentEntry = timeseries[0];
+        const instant = currentEntry.data?.instant?.details || {};
+        const next1h = currentEntry.data?.next_1_hours?.details || {};
+        const temp = instant.air_temperature;
+        const rh = instant.relative_humidity;
+        const windSpeed = instant.wind_speed;
+        const windKmh = windSpeed !== undefined ? Math.round(windSpeed * 3.6) : 0;
+        const gustKmh = instant.wind_speed_of_gust !== undefined ? Math.round(instant.wind_speed_of_gust * 3.6) : windKmh;
+        const windDir = instant.wind_from_direction !== undefined ? instant.wind_from_direction : 0;
+        const precip = next1h.precipitation_amount !== undefined ? Number(next1h.precipitation_amount.toFixed(1)) : 0;
+
+        let apparentTemp = temp;
+        if (temp !== undefined && rh !== undefined && windSpeed !== undefined) {
+          const v = windSpeed;
+          const e = (rh / 100) * 6.105 * Math.exp((17.27 * temp) / (237.7 + temp));
+          const at = temp + 0.33 * e - 0.7 * v - 4.0;
+          apparentTemp = Math.round(at);
+        }
+
+        currentConditions = {
+          temp: temp !== undefined ? Math.round(temp) : null,
+          apparentTemp: apparentTemp !== undefined ? Math.round(apparentTemp) : null,
+          precip,
+          wind: windKmh,
+          windDir,
+          gust: gustKmh,
+          rain: precip > 0 ? 100 : 0
+        };
+      }
+
       return buildStructuredWeatherMetNo(timeseries, utcOffsetSeconds, activity);
     };
 
     const fetchFromOpenMeteo = async () => {
-      const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index&timezone=auto`;
+      const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index&current=temperature_2m,apparent_temperature,precipitation,wind_speed_10m,wind_direction_10m,wind_gusts_10m&timezone=auto`;
       const weatherRes = await axios.get(weatherUrl);
       const hourly = weatherRes.data.hourly;
       const utcOffsetSeconds = weatherRes.data.utc_offset_seconds ?? 0;
+
+      if (weatherRes.data.current) {
+        const cur = weatherRes.data.current;
+        currentConditions = {
+          temp: Math.round(cur.temperature_2m),
+          apparentTemp: Math.round(cur.apparent_temperature),
+          precip: cur.precipitation !== undefined ? Number(cur.precipitation.toFixed(1)) : 0,
+          wind: cur.wind_speed_10m !== undefined ? Math.round(cur.wind_speed_10m) : 0,
+          windDir: cur.wind_direction_10m !== undefined ? cur.wind_direction_10m : 0,
+          gust: cur.wind_gusts_10m !== undefined ? Math.round(cur.wind_gusts_10m) : 0,
+          rain: cur.precipitation > 0 ? 100 : 0
+        };
+      }
+
       return buildStructuredWeather(hourly, utcOffsetSeconds, activity);
     };
 
@@ -757,7 +804,7 @@ app.post('/api/weather', verifyToken, async (req, res) => {
       }
     }
 
-    res.json({ weather: structuredWeather, provider: actualProviderUsed });
+    res.json({ weather: structuredWeather, current: currentConditions, provider: actualProviderUsed });
   } catch (error) {
     console.error("Erreur /api/weather:", error);
     res.status(500).json({ error: "Impossible de récupérer la météo" });

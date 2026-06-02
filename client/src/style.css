@@ -5384,3 +5384,246 @@ html.meteo-theme-dark .timeline-svg .night-rect {
   border-radius: 50%;
   box-sizing: border-box;
 }
+
+/* --- Conditions Actuelles --- */
+.current-weather-panel {
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 20px;
+  border: 1px solid var(--border-color);
+  margin-top: 10px;
+  margin-bottom: 20px;
+  transition: all 0.3s ease;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.current-weather-title {
+  margin: 0 0 16px 0;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.current-weather-title .mdi-weather-cloudy {
+  font-size: 1.8rem;
+  color: var(--color-primary);
+}
+
+html.meteo-theme-dark .current-weather-title .mdi-weather-cloudy {
+  color: var(--color-primary-light);
+}
+
+.current-weather-title-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.current-weather-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.current-city-name {
+  font-size: 1.35rem;
+  color: var(--color-primary);
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+html.meteo-theme-dark .current-city-name {
+  color: var(--color-primary-light);
+}
+
+.current-weather-layout {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.current-weather-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 130px;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--border-color);
+  padding: 8px 24px 8px 8px;
+  text-align: center;
+}
+
+.current-weather-main-icon {
+  font-size: 5.5rem;
+  width: 90px;
+  height: 90px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.current-weather-label-text {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-top: 6px;
+  text-transform: capitalize;
+}
+
+.current-weather-right {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.current-weather-card {
+  background: transparent;
+  border: none;
+  padding: 2px 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: var(--radius-sm);
+  transition: background 0.2s ease;
+}
+
+.current-weather-card:hover {
+  background: var(--bg-surface-2);
+}
+
+.current-weather-icon {
+  font-size: 1.3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+}
+
+.current-weather-icon.text-temp {
+  color: #ff9800;
+}
+
+.current-weather-icon.text-apparent {
+  color: #0288d1;
+}
+
+.current-weather-icon.text-wind {
+  color: #4caf50;
+}
+
+.current-weather-icon.text-gust {
+  color: #9c27b0;
+}
+
+html.meteo-theme-dark .current-weather-icon.text-temp {
+  color: #ffb74d;
+}
+
+html.meteo-theme-dark .current-weather-icon.text-apparent {
+  color: #29b6f6;
+}
+
+html.meteo-theme-dark .current-weather-icon.text-wind {
+  color: #81c784;
+}
+
+html.meteo-theme-dark .current-weather-icon.text-gust {
+  color: #ba68c8;
+}
+
+.current-weather-details {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.current-weather-label {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  min-width: 80px;
+}
+
+.current-weather-value {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 600px) {
+  .current-weather-panel {
+    padding: 12px;
+    width: 100%;
+  }
+
+  .current-weather-layout {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+  }
+  
+  .current-weather-left {
+    min-width: 90px;
+    padding: 4px 16px 4px 4px;
+    background: transparent;
+    border: none;
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .current-weather-main-icon {
+    font-size: 4rem;
+    width: 65px;
+    height: 65px;
+  }
+  
+  .current-weather-label-text {
+    font-size: 0.82rem;
+    margin-top: 4px;
+  }
+  
+  .current-weather-right {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+  }
+  
+  .current-weather-card {
+    padding: 1px 4px;
+    gap: 8px;
+  }
+  
+  .current-weather-icon {
+    font-size: 1.1rem;
+    width: 20px;
+    height: 20px;
+    background: transparent;
+  }
+  
+  .current-weather-label {
+    font-size: 0.78rem;
+    min-width: 70px;
+  }
+  
+  .current-weather-value {
+    font-size: 0.92rem;
+  }
+}

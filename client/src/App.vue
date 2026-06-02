@@ -70,6 +70,7 @@ const aiLoading = ref(false)       // chargement analyse IA
 const error = ref(null)
 const fallbackWarning = ref('')
 const actualWeatherProvider = ref(null)
+const currentWeather = ref(null)
 const geoLoading = ref(false)
 const expandedPeriods = ref({})
 const favorites = ref([])
@@ -349,6 +350,7 @@ const handleLogout = () => {
   currentUser.value = ''
   weatherData.value = null
   forecastData.value = null
+  currentWeather.value = null
   userActivities.value = []
   favorites.value = []
   selectedActivityId.value = ''
@@ -776,6 +778,16 @@ const formatLimit = (min, max, unit = '') => {
   if (hasMin) return `≥ ${min}${u}`;
   if (hasMax) return `≤ ${max}${u}`;
   return '';
+}
+
+const getCurrentWeatherLabel = (current) => {
+  if (!current) return ''
+  const isNight = isNightHour(new Date().toISOString().split('T')[0], new Date().getHours())
+  if (current.precip >= 2) return 'Pluie forte'
+  if (current.precip > 0 || current.rain >= 50) return 'Pluie'
+  if (current.wind > 35) return 'Vent fort'
+  if (current.rain > 20) return 'Nuageux'
+  return isNight ? 'Dégagé' : 'Ensoleillé'
 }
 
 const getShortDayName = (dateString) => {
@@ -1324,11 +1336,12 @@ const restoreCachedForecast = () => {
   fallbackWarning.value = cached.fallbackMessage || ''
   actualWeatherProvider.value = cached.provider || 'open-meteo'
   forecastCollectedAt.value = cached.collectedAt || new Date(Number(cached.fetchedAt || Date.now())).toISOString()
+  currentWeather.value = cached.current || null
   forecastLoadedFromCache.value = true
   return true
 }
 
-const saveForecastToCache = (weather, forecast, fallbackMessage = '', provider = '') => {
+const saveForecastToCache = (weather, forecast, fallbackMessage = '', provider = '', current = null) => {
   if (!city.value || lat.value === null || lon.value === null || !selectedActivityId.value) {
     return
   }
@@ -1345,7 +1358,8 @@ const saveForecastToCache = (weather, forecast, fallbackMessage = '', provider =
     weather,
     forecast,
     fallbackMessage,
-    provider
+    provider,
+    current
   }
   saveForecastCache(cache)
 }
@@ -1365,7 +1379,7 @@ const runAnalysisOnly = async () => {
     forecastData.value = analyzeRes.data.forecast
     fallbackWarning.value = analyzeRes.data.fallbackMessage || ''
     forecastCollectedAt.value = new Date().toISOString()
-    saveForecastToCache(weatherData.value, analyzeRes.data.forecast, fallbackWarning.value, actualWeatherProvider.value)
+    saveForecastToCache(weatherData.value, analyzeRes.data.forecast, fallbackWarning.value, actualWeatherProvider.value, currentWeather.value)
   } catch (err) {
     if (err.response?.status !== 401) {
       error.value = useAiAnalysis.value ? "Impossible d'obtenir l'analyse IA" : "Impossible d'obtenir l'analyse"
@@ -1407,6 +1421,7 @@ const fetchForecast = async (useCache = true) => {
   suggestions.value = []
   weatherData.value = null
   forecastData.value = null
+  currentWeather.value = null
   forecastLoadedFromCache.value = false
 
   localStorage.setItem('selected_city', city.value)
@@ -1423,6 +1438,7 @@ const fetchForecast = async (useCache = true) => {
       activityId: selectedActivityId.value
     })
     rawWeather = weatherRes.data.weather
+    currentWeather.value = weatherRes.data.current || null
     weatherData.value = rawWeather
     detectedProvider = weatherRes.data.provider || 'open-meteo'
     actualWeatherProvider.value = detectedProvider
@@ -1794,6 +1810,67 @@ const fetchForecast = async (useCache = true) => {
           </div>
         </div>
       </section>
+
+      <!-- Pavé des conditions actuelles -->
+      <Transition name="fade">
+        <div v-if="currentWeather && !loading" class="current-weather-panel">
+          <h3 class="current-weather-title">
+            <span class="mdi mdi-weather-cloudy" aria-hidden="true"></span>
+            <div class="current-weather-title-text">
+              <span class="current-weather-subtitle">Conditions actuelles à</span>
+              <span class="current-city-name">{{ city }}</span>
+            </div>
+          </h3>
+          <div class="current-weather-layout">
+            <!-- Icone météo principale sur la gauche -->
+            <div class="current-weather-left">
+              <WeatherIcon :icon="getWeatherIcon(currentWeather, isNightHour(new Date().toISOString().split('T')[0], new Date().getHours()))" class="current-weather-main-icon" />
+              <span class="current-weather-label-text">{{ getCurrentWeatherLabel(currentWeather) }}</span>
+            </div>
+
+            <!-- Informations chiffrées sur la droite -->
+            <div class="current-weather-right">
+              <!-- Carte Température Actuelle -->
+              <div class="current-weather-card">
+                <span class="mdi mdi-thermometer current-weather-icon text-temp" aria-hidden="true"></span>
+                <div class="current-weather-details">
+                  <span class="current-weather-label">Température</span>
+                  <span class="current-weather-value">{{ currentWeather.temp }}°C</span>
+                </div>
+              </div>
+
+              <!-- Carte Température Ressentie -->
+              <div class="current-weather-card">
+                <span class="mdi mdi-thermometer-lines current-weather-icon text-apparent" aria-hidden="true"></span>
+                <div class="current-weather-details">
+                  <span class="current-weather-label">Ressentie</span>
+                  <span class="current-weather-value">{{ currentWeather.apparentTemp }}°C</span>
+                </div>
+              </div>
+
+              <!-- Carte Vent -->
+              <div class="current-weather-card">
+                <div class="current-weather-icon text-wind">
+                  <span class="mdi mdi-navigation wind-icon" :style="getWindStyle(currentWeather.windDir)" aria-hidden="true"></span>
+                </div>
+                <div class="current-weather-details">
+                  <span class="current-weather-label">Vent</span>
+                  <span class="current-weather-value">{{ currentWeather.wind }} km/h</span>
+                </div>
+              </div>
+
+              <!-- Carte Rafales -->
+              <div class="current-weather-card">
+                <span class="mdi mdi-weather-windy current-weather-icon text-gust" aria-hidden="true"></span>
+                <div class="current-weather-details">
+                  <span class="current-weather-label">Rafales</span>
+                  <span class="current-weather-value">{{ currentWeather.gust }} km/h</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
 
       <div v-if="loading" class="status-msg"><span class="mdi mdi-cloud-download-outline mdi-spin-slow"></span> Récupération de la météo...</div>
       <div v-if="aiLoading" class="status-msg status-msg-ai">
