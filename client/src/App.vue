@@ -1550,7 +1550,7 @@ const updateMapRadarLayer = (mapInst, position, cache) => {
     const host = "https://tilecache.rainviewer.com"
     const newLayer = createRadarTileLayer(frame, host)
     
-    newLayer.on('load', () => {
+    newLayer.once('load', () => {
       if (radarPosition.value === position && radarEnabled.value) {
         newLayer.setOpacity(RADAR_OPACITY)
         if (oldLayer && oldLayer !== newLayer) {
@@ -1574,7 +1574,7 @@ const preloadRadarFrame = (position) => {
   const host = "https://tilecache.rainviewer.com"
   if (weatherMapInstance && !radarLayersNormal[position]) {
     const newLayer = createRadarTileLayer(frame, host)
-    newLayer.on('load', () => {
+    newLayer.once('load', () => {
       newLayer.setOpacity(0)
       radarLayersNormal[position] = newLayer
     })
@@ -1583,7 +1583,7 @@ const preloadRadarFrame = (position) => {
 
   if (weatherFullscreenMapInstance && !radarLayersFullscreen[position]) {
     const newLayer = createRadarTileLayer(frame, host)
-    newLayer.on('load', () => {
+    newLayer.once('load', () => {
       newLayer.setOpacity(0)
       radarLayersFullscreen[position] = newLayer
     })
@@ -1671,6 +1671,7 @@ const toggleRadarEnabled = () => {
 }
 
 const clearRadarLayersCache = (cache, mapInst) => {
+  stopRadarAnimation()
   for (const pos in cache) {
     if (pos === 'currentLayer') continue
     const positionIndex = parseInt(pos, 10)
