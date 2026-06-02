@@ -375,6 +375,7 @@ const openWeather = () => {
   showStravaPage.value = false
   showStravaRoutesPage.value = false
   showAccountPanel.value = false
+  fetchCurrentWeatherOnly()
 }
 
 const openStrava = () => {
@@ -653,6 +654,8 @@ const initializeApp = () => {
     if (selectedActivityId.value) {
       if (!restoreCachedForecast()) {
         fetchForecast()
+      } else {
+        fetchCurrentWeatherOnly()
       }
     }
   }
@@ -1372,7 +1375,7 @@ const restoreCachedForecast = () => {
   fallbackWarning.value = cached.fallbackMessage || ''
   actualWeatherProvider.value = cached.provider || 'open-meteo'
   forecastCollectedAt.value = cached.collectedAt || new Date(Number(cached.fetchedAt || Date.now())).toISOString()
-  currentWeather.value = cached.current || null
+  currentWeather.value = null
   forecastLoadedFromCache.value = true
   return true
 }
@@ -1395,7 +1398,7 @@ const saveForecastToCache = (weather, forecast, fallbackMessage = '', provider =
     forecast,
     fallbackMessage,
     provider,
-    current
+    current: null
   }
   saveForecastCache(cache)
 }
@@ -1433,6 +1436,7 @@ const toggleAiPreference = () => {
 const handleAiToggle = () => {
   syncPreferences()
   if (restoreCachedForecast()) {
+    fetchCurrentWeatherOnly()
     return
   }
   if (weatherData.value && city.value && selectedActivityId.value) {
@@ -1447,6 +1451,7 @@ const fetchForecast = async (useCache = true) => {
     return
   }
   if (useCache && restoreCachedForecast()) {
+    fetchCurrentWeatherOnly()
     return
   }
 
@@ -1490,6 +1495,20 @@ const fetchForecast = async (useCache = true) => {
 
   // --- ÉTAPE 2 : Analyse ---
   await runAnalysisOnly()
+}
+
+const fetchCurrentWeatherOnly = async () => {
+  if (!lat.value || !lon.value) return
+  try {
+    const weatherRes = await axios.post(`${API_BASE_URL}/api/weather`, {
+      lat: lat.value,
+      lon: lon.value,
+      activityId: selectedActivityId.value
+    })
+    currentWeather.value = weatherRes.data.current || null
+  } catch (err) {
+    console.error("Erreur lors du rafraîchissement des conditions actuelles :", err)
+  }
 }
 
 // --- ÉTATS DU RADAR MÉTÉO (RAINVIEWER) ---
