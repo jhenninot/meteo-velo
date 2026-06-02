@@ -90,30 +90,41 @@ const userSchema = new mongoose.Schema({
     consignes: String,
     theme: { type: String, enum: ['light', 'dark', 'auto'], default: 'auto' },
     stravaFilters: { type: [String], default: [] },
-    useAiAnalysis: { type: Boolean, default: true }
+    useAiAnalysis: { type: Boolean, default: false }
   },
-  activities: [{
-    label: { type: String, required: true, trim: true, maxlength: 80 },
-    icon: { type: String, default: 'mdi-bike', trim: true, maxlength: 60 },
-    constraints: { type: String, default: '', trim: true, maxlength: 4000 },
-    stravaSportType: { type: String, default: '', trim: true },
-    windMin: { type: Number, default: null },
-    windMax: { type: Number, default: null },
-    gustMin: { type: Number, default: null },
-    gustMax: { type: Number, default: null },
-    tempMin: { type: Number, default: null },
-    tempMax: { type: Number, default: null },
-    precipMin: { type: Number, default: null },
-    precipMax: { type: Number, default: null },
-    uvMin: { type: Number, default: null },
-    uvMax: { type: Number, default: null },
-    slot1Name: { type: String, default: 'Matin' },
-    slot1Start: { type: Number, default: 8 },
-    slot1End: { type: Number, default: 12 },
-    slot2Name: { type: String, default: 'Après-midi' },
-    slot2Start: { type: Number, default: 14 },
-    slot2End: { type: Number, default: 19 }
-  }],
+  activities: {
+    type: [{
+      label: { type: String, required: true, trim: true, maxlength: 80 },
+      icon: { type: String, default: 'mdi-bike', trim: true, maxlength: 60 },
+      constraints: { type: String, default: '', trim: true, maxlength: 4000 },
+      stravaSportType: { type: String, default: '', trim: true },
+      windMin: { type: Number, default: null },
+      windMax: { type: Number, default: null },
+      gustMin: { type: Number, default: null },
+      gustMax: { type: Number, default: null },
+      tempMin: { type: Number, default: null },
+      tempMax: { type: Number, default: null },
+      precipMin: { type: Number, default: null },
+      precipMax: { type: Number, default: null },
+      uvMin: { type: Number, default: null },
+      uvMax: { type: Number, default: null },
+      slot1Name: { type: String, default: 'Matin' },
+      slot1Start: { type: Number, default: 8 },
+      slot1End: { type: Number, default: 12 },
+      slot2Name: { type: String, default: 'Après-midi' },
+      slot2Start: { type: Number, default: 14 },
+      slot2End: { type: Number, default: 19 }
+    }],
+    default: () => [{
+      label: "Course à pied",
+      icon: "mdi-run",
+      stravaSportType: "Run",
+      tempMin: 10,
+      tempMax: 28,
+      precipMax: 0.1,
+      constraints: ""
+    }]
+  },
   favorites: [{
     city: { type: String, required: true, trim: true },
     lat: { type: Number, required: true },
@@ -1236,7 +1247,23 @@ app.post('/api/admin/create-user', verifyToken, async (req, res) => {
   if (!validatePasswordStrength(password)) return res.status(400).json({ error: PASSWORD_RULES_MESSAGE });
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ username, password: hashedPassword, role });
+    const newUser = new User({ 
+      username, 
+      password: hashedPassword, 
+      role,
+      activities: [{
+        label: "Course à pied",
+        icon: "mdi-run",
+        stravaSportType: "Run",
+        tempMin: 10,
+        tempMax: 28,
+        precipMax: 0.1,
+        constraints: ""
+      }],
+      preferences: {
+        useAiAnalysis: false
+      }
+    });
     await newUser.save();
     res.json({ message: "Utilisateur créé avec succès" });
   } catch (err) {

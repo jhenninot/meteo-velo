@@ -452,6 +452,13 @@ const loadUserActivities = async () => {
   try {
     const { data } = await axios.get(`${API_BASE_URL}/api/user/activities`)
     userActivities.value = data
+    
+    // Auto-select the first activity for new users/connections
+    const hasSavedActivity = !!localStorage.getItem('selected_activity_id')
+    if ((selectedActivityId.value === 'none' || !hasSavedActivity) && userActivities.value.length > 0) {
+      selectedActivityId.value = userActivities.value[0]._id
+    }
+
     if (selectedActivityId.value !== 'none' && !userActivities.value.some(activity => activity._id === selectedActivityId.value)) {
       selectedActivityId.value = userActivities.value[0]?._id || 'none'
     }
@@ -603,6 +610,21 @@ const loadUserPreferences = async () => {
     if (data.useAiAnalysis !== undefined) {
       useAiAnalysis.value = data.useAiAnalysis
     }
+    if (data.consignes !== undefined) {
+      consignes.value = data.consignes || ''
+      localStorage.setItem('user_consignes', consignes.value)
+    }
+    if (data.city && data.lat !== undefined && data.lon !== undefined) {
+      if (!localStorage.getItem('selected_city') || !localStorage.getItem('selected_lat') || !localStorage.getItem('selected_lon')) {
+        city.value = data.city
+        lat.value = Number(data.lat)
+        lon.value = Number(data.lon)
+        query.value = data.city
+        localStorage.setItem('selected_city', data.city)
+        localStorage.setItem('selected_lat', data.lat.toString())
+        localStorage.setItem('selected_lon', data.lon.toString())
+      }
+    }
   } catch (err) {
     console.error('Erreur chargement préférences', err)
   }
@@ -648,8 +670,12 @@ onMounted(async () => {
 
 const initializeApp = () => {
   const savedCity = localStorage.getItem('selected_city') || city.value
-  if (savedCity && lat.value && lon.value) {
+  const savedLat = localStorage.getItem('selected_lat') || lat.value
+  const savedLon = localStorage.getItem('selected_lon') || lon.value
+  if (savedCity && savedLat && savedLon) {
     city.value = savedCity
+    lat.value = Number(savedLat)
+    lon.value = Number(savedLon)
     query.value = savedCity
     if (selectedActivityId.value) {
       if (!restoreCachedForecast()) {
@@ -658,6 +684,16 @@ const initializeApp = () => {
         fetchCurrentWeatherOnly()
       }
     }
+  } else {
+    detectAndSetUserLocation()
+      .then(() => {
+        if (selectedActivityId.value) {
+          fetchForecast()
+        }
+      })
+      .catch((err) => {
+        console.error("Erreur géolocalisation initiale :", err)
+      })
   }
 }
 
@@ -1510,6 +1546,53 @@ const fetchCurrentWeatherOnly = async () => {
     console.error("Erreur lors du rafraîchissement des conditions actuelles :", err)
   }
 }
+
+const detectAndSetUserLocation = () => {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("La géolocalisation n'est pas supportée par votre navigateur."));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      try {
+        const { latitude, longitude } = position.coords;
+        const res = await axios.get(`${API_BASE_URL}/api/reverse?lat=${latitude}&lon=${longitude}`);
+        let cityName = "Ma position";
+        if (res.data && res.data.length > 0) {
+          const feature = res.data[0];
+          cityName = feature.properties.city || feature.properties.name || feature.properties.town || "Ma position";
+        }
+        
+        city.value = cityName;
+        lat.value = latitude;
+        lon.value = longitude;
+        query.value = cityName;
+        
+        localStorage.setItem('selected_city', cityName);
+        localStorage.setItem('selected_lat', latitude.toString());
+        localStorage.setItem('selected_lon', longitude.toString());
+
+        await syncPreferences();
+        resolve({ city: cityName, lat: latitude, lon: longitude });
+      } catch (err) {
+        console.error("Erreur lors de la géolocalisation inversée :", err);
+        const cityName = "Ma position";
+        city.value = cityName;
+        lat.value = position.coords.latitude;
+        lon.value = position.coords.longitude;
+        query.value = cityName;
+        localStorage.setItem('selected_city', cityName);
+        localStorage.setItem('selected_lat', position.coords.latitude.toString());
+        localStorage.setItem('selected_lon', position.coords.longitude.toString());
+        await syncPreferences();
+        resolve({ city: cityName, lat: position.coords.latitude, lon: position.coords.longitude });
+      }
+    }, (err) => {
+      console.warn("Permission de géolocalisation refusée ou indisponible :", err.message);
+      reject(err);
+    });
+  });
+};
 
 // --- ÉTATS DU RADAR MÉTÉO (RAINVIEWER) ---
 const radarEnabled = ref(true)
