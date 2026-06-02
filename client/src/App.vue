@@ -1118,6 +1118,15 @@ const initOrUpdateWeatherMap = async () => {
   const latitude = parseFloat(lat.value)
   const longitude = parseFloat(lon.value)
 
+  const loadRadar = async () => {
+    if (radarFrames.value.length === 0) {
+      await fetchRadarMetadata()
+    }
+    if (radarFrames.value.length > 0) {
+      showRadarFrame(radarPosition.value)
+    }
+  }
+
   if (!weatherMapInstance) {
     if (container._leaflet_id) {
       container._leaflet_id = null
@@ -1126,7 +1135,7 @@ const initOrUpdateWeatherMap = async () => {
     weatherMapInstance = L.map(container, {
       zoomControl: true,
       scrollWheelZoom: false
-    }).setView([latitude, longitude], 13)
+    }).setView([latitude, longitude], 11)
 
     const standardLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors',
@@ -1153,13 +1162,22 @@ const initOrUpdateWeatherMap = async () => {
     L.control.layers(baseLayers, null, { position: 'bottomleft' }).addTo(weatherMapInstance)
 
     weatherMarkerInstance = L.marker([latitude, longitude]).addTo(weatherMapInstance)
+
+    // Initialisation du radar
+    loadRadar()
+
+    weatherMapInstance.on('movestart', () => {
+      clearRadarLayersCache(radarLayersNormal, weatherMapInstance)
+    })
   } else {
-    weatherMapInstance.setView([latitude, longitude], 13)
+    weatherMapInstance.setView([latitude, longitude], 11)
     if (weatherMarkerInstance) {
       weatherMarkerInstance.setLatLng([latitude, longitude])
     } else {
       weatherMarkerInstance = L.marker([latitude, longitude]).addTo(weatherMapInstance)
     }
+    // Chargement/Mise à jour du radar
+    loadRadar()
     // Force Leaflet recalculation for dynamic visibility/sizing
     setTimeout(() => {
       if (weatherMapInstance) {
@@ -1197,7 +1215,7 @@ const openWeatherFullscreen = async () => {
   weatherFullscreenMapInstance = L.map(container, {
     zoomControl: true,
     scrollWheelZoom: true
-  }).setView([latitude, longitude], 13)
+  }).setView([latitude, longitude], 11)
 
   const standardLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors',
@@ -1224,6 +1242,21 @@ const openWeatherFullscreen = async () => {
   L.control.layers(baseLayers, null, { position: 'bottomleft' }).addTo(weatherFullscreenMapInstance)
 
   weatherFullscreenMarkerInstance = L.marker([latitude, longitude]).addTo(weatherFullscreenMapInstance)
+
+  // Initialisation du radar en plein écran
+  if (radarFrames.value.length > 0) {
+    showRadarFrame(radarPosition.value)
+  } else {
+    fetchRadarMetadata().then(() => {
+      if (radarFrames.value.length > 0) {
+        showRadarFrame(radarPosition.value)
+      }
+    })
+  }
+
+  weatherFullscreenMapInstance.on('movestart', () => {
+    clearRadarLayersCache(radarLayersFullscreen, weatherFullscreenMapInstance)
+  })
 }
 
 const closeWeatherFullscreen = () => {
@@ -1236,6 +1269,7 @@ const closeWeatherFullscreen = () => {
     weatherFullscreenMapInstance = null
   }
   weatherFullscreenMarkerInstance = null
+  radarLayersFullscreen = { currentLayer: null }
   showWeatherFullscreen.value = false
 }
 
@@ -1250,6 +1284,7 @@ watch([lat, lon], ([newLat, newLon]) => {
     showMap.value = false
     closeWeatherFullscreen()
   } else {
+    resetRadar()
     if (showMap.value) {
       initOrUpdateWeatherMap()
     }
@@ -1261,6 +1296,7 @@ watch([lat, lon], ([newLat, newLon]) => {
 
 onUnmounted(() => {
   document.removeEventListener('click', closeActivityDropdown)
+  stopRadarAnimation()
   if (weatherMapInstance) {
     try { weatherMapInstance.remove() } catch (e) {}
     weatherMapInstance = null
@@ -1454,6 +1490,239 @@ const fetchForecast = async (useCache = true) => {
 
   // --- ÉTAPE 2 : Analyse ---
   await runAnalysisOnly()
+}
+
+// --- ÉTATS DU RADAR MÉTÉO (RAINVIEWER) ---
+const radarEnabled = ref(true)
+const radarPlaying = ref(false)
+const radarFrames = ref([])
+const radarPosition = ref(0)
+const radarLoading = ref(false)
+
+let radarLayersNormal = { currentLayer: null }
+let radarLayersFullscreen = { currentLayer: null }
+let radarTimer = null
+
+const RADAR_OPACITY = 0.8
+const TILE_SIZE = window.devicePixelRatio >= 2 ? 512 : 256
+const API_URL = "https://api.rainviewer.com/public/weather-maps.json"
+
+const fetchRadarMetadata = async () => {
+  try {
+    const response = await axios.get(API_URL)
+    if (response.data && response.data.radar && response.data.radar.past) {
+      radarFrames.value = response.data.radar.past
+      radarPosition.value = radarFrames.value.length - 1
+    }
+  } catch (err) {
+    console.error("Impossible de récupérer les métadonnées RainViewer :", err)
+  }
+}
+
+const createRadarTileLayer = (frame, host) => {
+  return L.tileLayer(`${host}${frame.path}/${TILE_SIZE}/{z}/{x}/{y}/2/1_1.png`, {
+    tileSize: 256,
+    opacity: 0.001,
+    maxNativeZoom: 7,
+    maxZoom: 18,
+    zIndex: 100
+  })
+}
+
+const updateMapRadarLayer = (mapInst, position, cache) => {
+  if (radarFrames.value.length === 0) return
+  const frame = radarFrames.value[position]
+  if (!frame) return
+
+  const oldLayer = cache.currentLayer
+  
+  if (cache[position]) {
+    if (oldLayer && oldLayer !== cache[position]) {
+      oldLayer.setOpacity(0)
+    }
+    if (radarEnabled.value) {
+      cache[position].setOpacity(RADAR_OPACITY)
+    } else {
+      cache[position].setOpacity(0)
+    }
+    cache.currentLayer = cache[position]
+  } else {
+    const host = "https://tilecache.rainviewer.com"
+    const newLayer = createRadarTileLayer(frame, host)
+    
+    newLayer.on('load', () => {
+      if (radarPosition.value === position && radarEnabled.value) {
+        newLayer.setOpacity(RADAR_OPACITY)
+        if (oldLayer && oldLayer !== newLayer) {
+          oldLayer.setOpacity(0)
+        }
+        cache.currentLayer = newLayer
+      } else {
+        newLayer.setOpacity(0)
+      }
+      cache[position] = newLayer
+    })
+    newLayer.addTo(mapInst)
+  }
+}
+
+const preloadRadarFrame = (position) => {
+  if (radarFrames.value.length === 0) return
+  const frame = radarFrames.value[position]
+  if (!frame) return
+
+  const host = "https://tilecache.rainviewer.com"
+  if (weatherMapInstance && !radarLayersNormal[position]) {
+    const newLayer = createRadarTileLayer(frame, host)
+    newLayer.on('load', () => {
+      newLayer.setOpacity(0)
+      radarLayersNormal[position] = newLayer
+    })
+    newLayer.addTo(weatherMapInstance)
+  }
+
+  if (weatherFullscreenMapInstance && !radarLayersFullscreen[position]) {
+    const newLayer = createRadarTileLayer(frame, host)
+    newLayer.on('load', () => {
+      newLayer.setOpacity(0)
+      radarLayersFullscreen[position] = newLayer
+    })
+    newLayer.addTo(weatherFullscreenMapInstance)
+  }
+}
+
+const showRadarFrame = (position) => {
+  if (radarFrames.value.length === 0) return
+  
+  if (position >= radarFrames.value.length) {
+    position = 0
+  } else if (position < 0) {
+    position = radarFrames.value.length - 1
+  }
+  
+  radarPosition.value = position
+
+  if (weatherMapInstance && radarEnabled.value) {
+    updateMapRadarLayer(weatherMapInstance, position, radarLayersNormal)
+  }
+
+  if (weatherFullscreenMapInstance && radarEnabled.value) {
+    updateMapRadarLayer(weatherFullscreenMapInstance, position, radarLayersFullscreen)
+  }
+
+  const nextPos = (position + 1) % radarFrames.value.length
+  preloadRadarFrame(nextPos)
+}
+
+const startRadarAnimation = () => {
+  if (radarTimer) return
+  radarPlaying.value = true
+  
+  const playStep = () => {
+    let nextPos = radarPosition.value + 1
+    if (nextPos >= radarFrames.value.length) {
+      nextPos = 0
+    }
+    showRadarFrame(nextPos)
+    radarTimer = setTimeout(playStep, 800)
+  }
+  radarTimer = setTimeout(playStep, 800)
+}
+
+const stopRadarAnimation = () => {
+  if (radarTimer) {
+    clearTimeout(radarTimer)
+    radarTimer = null
+  }
+  radarPlaying.value = false
+}
+
+const toggleRadarAnimation = () => {
+  if (radarPlaying.value) {
+    stopRadarAnimation()
+  } else {
+    startRadarAnimation()
+  }
+}
+
+const stepRadarFrame = (direction) => {
+  stopRadarAnimation()
+  showRadarFrame(radarPosition.value + direction)
+}
+
+const selectRadarPosition = (idx) => {
+  stopRadarAnimation()
+  showRadarFrame(idx)
+}
+
+const toggleRadarEnabled = () => {
+  radarEnabled.value = !radarEnabled.value
+  if (!radarEnabled.value) {
+    stopRadarAnimation()
+    if (radarLayersNormal.currentLayer) {
+      radarLayersNormal.currentLayer.setOpacity(0)
+    }
+    if (radarLayersFullscreen.currentLayer) {
+      radarLayersFullscreen.currentLayer.setOpacity(0)
+    }
+  } else {
+    showRadarFrame(radarPosition.value)
+  }
+}
+
+const clearRadarLayersCache = (cache, mapInst) => {
+  for (const pos in cache) {
+    if (pos === 'currentLayer') continue
+    const positionIndex = parseInt(pos, 10)
+    if (positionIndex !== radarPosition.value && cache[positionIndex]) {
+      if (mapInst) {
+        try { mapInst.removeLayer(cache[positionIndex]) } catch (e) {}
+      }
+      delete cache[positionIndex]
+    }
+  }
+}
+
+const resetRadar = () => {
+  stopRadarAnimation()
+  if (weatherMapInstance) {
+    for (const pos in radarLayersNormal) {
+      if (pos === 'currentLayer') continue
+      if (radarLayersNormal[pos]) {
+        try { weatherMapInstance.removeLayer(radarLayersNormal[pos]) } catch (e) {}
+      }
+    }
+    if (radarLayersNormal.currentLayer) {
+      try { weatherMapInstance.removeLayer(radarLayersNormal.currentLayer) } catch (e) {}
+    }
+  }
+  radarLayersNormal = { currentLayer: null }
+
+  if (weatherFullscreenMapInstance) {
+    for (const pos in radarLayersFullscreen) {
+      if (pos === 'currentLayer') continue
+      if (radarLayersFullscreen[pos]) {
+        try { weatherFullscreenMapInstance.removeLayer(radarLayersFullscreen[pos]) } catch (e) {}
+      }
+    }
+    if (radarLayersFullscreen.currentLayer) {
+      try { weatherFullscreenMapInstance.removeLayer(radarLayersFullscreen.currentLayer) } catch (e) {}
+    }
+  }
+  radarLayersFullscreen = { currentLayer: null }
+  
+  radarFrames.value = []
+  radarPosition.value = 0
+}
+
+const formatRadarTime = (timestamp) => {
+  if (!timestamp) return ''
+  const date = new Date(timestamp * 1000)
+  const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  if (radarFrames.value.length > 0 && timestamp === radarFrames.value[radarFrames.value.length - 1].time) {
+    return `${timeStr} (Direct)`
+  }
+  return timeStr
 }
 </script>
 
@@ -1776,17 +2045,6 @@ const fetchForecast = async (useCache = true) => {
               </button>
             </div>
           </div>
-          <!-- Carte de localisation interactive -->
-          <div v-show="showMap" class="weather-map-container-wrapper">
-            <div class="map-container-relative">
-              <div class="map-actions-overlay">
-                <button type="button" class="btn-map-action" @click="openWeatherFullscreen" title="Ouvrir la carte en plein écran">
-                  <span class="mdi mdi-fullscreen"></span> Plein écran
-                </button>
-              </div>
-              <div id="weather-map-container" class="weather-map-container"></div>
-            </div>
-          </div>
           <ul v-if="suggestions.length > 0" class="suggestions-list">
             <li v-for="(s, index) in suggestions" :key="index" @click="selectCity(s)" class="suggestion-item">
               <div class="suggestion-info">
@@ -1796,6 +2054,50 @@ const fetchForecast = async (useCache = true) => {
               </div>
             </li>
           </ul>
+          <!-- Carte de localisation interactive -->
+          <div v-show="showMap" class="weather-map-container-wrapper">
+            <div class="map-container-relative">
+              <div class="map-actions-overlay">
+                <button type="button" class="btn-map-action" :class="{ 'radar-active': radarEnabled }" @click="toggleRadarEnabled" title="Activer/Désactiver le radar météo">
+                  <span class="mdi" :class="radarEnabled ? 'mdi-radar' : 'mdi-radar-off'"></span> Radar
+                </button>
+                <button type="button" class="btn-map-action" @click="openWeatherFullscreen" title="Ouvrir la carte en plein écran">
+                  <span class="mdi mdi-fullscreen"></span> Plein écran
+                </button>
+              </div>
+              <div id="weather-map-container" class="weather-map-container"></div>
+
+              <!-- Contrôles du radar météo -->
+              <div v-if="radarFrames.length > 0 && radarEnabled" class="radar-controls-overlay">
+                <div class="radar-animation-panel">
+                  <button type="button" class="btn-radar-control" @click="stepRadarFrame(-1)" title="Image précédente">
+                    <span class="mdi mdi-chevron-left"></span>
+                  </button>
+                  <button type="button" class="btn-radar-control btn-play-pause" @click="toggleRadarAnimation" :title="radarPlaying ? 'Pause' : 'Play'">
+                    <span class="mdi" :class="radarPlaying ? 'mdi-pause' : 'mdi-play'"></span>
+                  </button>
+                  <button type="button" class="btn-radar-control" @click="stepRadarFrame(1)" title="Image suivante">
+                    <span class="mdi mdi-chevron-right"></span>
+                  </button>
+                  
+                  <div class="radar-info">
+                    <span class="radar-timestamp">{{ formatRadarTime(radarFrames[radarPosition]?.time) }}</span>
+                  </div>
+
+                  <div class="radar-timeline">
+                    <div 
+                      v-for="(frame, idx) in radarFrames" 
+                      :key="frame.time" 
+                      class="radar-timeline-tick"
+                      :class="{ 'is-active': idx === radarPosition }"
+                      @click="selectRadarPosition(idx)"
+                      :title="formatRadarTime(frame.time)"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div v-if="favorites.length > 0" class="favorites-dropdown-container">
             <label for="favorites-select" class="favorites-dropdown-label">
@@ -2189,12 +2491,47 @@ const fetchForecast = async (useCache = true) => {
           </div>
         </div>
         <div class="fullscreen-actions">
+          <button type="button" class="btn-fullscreen-close" :class="{ 'radar-active': radarEnabled }" @click="toggleRadarEnabled" title="Activer/Désactiver le radar météo" style="margin-right: 8px;">
+            <span class="mdi" :class="radarEnabled ? 'mdi-radar' : 'mdi-radar-off'"></span> Radar
+          </button>
           <button type="button" class="btn-fullscreen-close" @click="closeWeatherFullscreen">
             <span class="mdi mdi-close"></span> Fermer
           </button>
         </div>
       </div>
-      <div id="weather-fullscreen-map" class="fullscreen-map-container"></div>
+      <div class="map-container-relative" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+        <div id="weather-fullscreen-map" class="fullscreen-map-container"></div>
+        
+        <!-- Contrôles du radar météo en plein écran -->
+        <div v-if="radarFrames.length > 0 && radarEnabled" class="radar-controls-overlay">
+          <div class="radar-animation-panel">
+            <button type="button" class="btn-radar-control" @click="stepRadarFrame(-1)" title="Image précédente">
+              <span class="mdi mdi-chevron-left"></span>
+            </button>
+            <button type="button" class="btn-radar-control btn-play-pause" @click="toggleRadarAnimation" :title="radarPlaying ? 'Pause' : 'Play'">
+              <span class="mdi" :class="radarPlaying ? 'mdi-pause' : 'mdi-play'"></span>
+            </button>
+            <button type="button" class="btn-radar-control" @click="stepRadarFrame(1)" title="Image suivante">
+              <span class="mdi mdi-chevron-right"></span>
+            </button>
+            
+            <div class="radar-info">
+              <span class="radar-timestamp">{{ formatRadarTime(radarFrames[radarPosition]?.time) }}</span>
+            </div>
+
+            <div class="radar-timeline">
+              <div 
+                v-for="(frame, idx) in radarFrames" 
+                :key="frame.time" 
+                class="radar-timeline-tick"
+                :class="{ 'is-active': idx === radarPosition }"
+                @click="selectRadarPosition(idx)"
+                :title="formatRadarTime(frame.time)"
+              ></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>

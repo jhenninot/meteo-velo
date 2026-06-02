@@ -5627,3 +5627,217 @@ html.meteo-theme-dark .current-weather-icon.text-gust {
     font-size: 0.92rem;
   }
 }
+
+/* --- CONTRÔLES DU RADAR MÉTÉO (RAINVIEWER) --- */
+.radar-controls-overlay {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 32px);
+  max-width: 440px;
+  pointer-events: none;
+}
+
+.radar-controls-overlay > * {
+  pointer-events: auto;
+}
+
+.radar-animation-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(229, 231, 235, 0.6);
+  border-radius: var(--radius-xl);
+  padding: 6px 14px;
+  box-shadow: var(--shadow-md);
+  width: 100%;
+  box-sizing: border-box;
+  transition: all 0.3s ease;
+}
+
+.html.meteo-theme-dark .radar-animation-panel,
+.theme-dark .radar-animation-panel {
+  background: rgba(37, 42, 50, 0.85);
+  border-color: rgba(61, 68, 80, 0.6);
+  box-shadow: var(--shadow-lg);
+}
+
+.btn-radar-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 1.3rem;
+  transition: background-color 0.2s, transform 0.1s, color 0.2s;
+  padding: 0;
+  outline: none;
+}
+
+.btn-radar-control:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+.html.meteo-theme-dark .btn-radar-control:hover,
+.theme-dark .btn-radar-control:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.btn-radar-control:active {
+  transform: scale(0.9);
+}
+
+.btn-radar-control.btn-play-pause {
+  background-color: var(--color-primary);
+  color: white;
+  width: 34px;
+  height: 34px;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-radar-control.btn-play-pause:hover {
+  background-color: var(--color-primary-dark);
+  color: white;
+}
+
+.html.meteo-theme-dark .btn-radar-control.btn-play-pause,
+.theme-dark .btn-radar-control.btn-play-pause {
+  background-color: var(--color-primary-light);
+  color: #1a1d23;
+}
+
+.html.meteo-theme-dark .btn-radar-control.btn-play-pause:hover,
+.theme-dark .btn-radar-control.btn-play-pause:hover {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.radar-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 95px;
+  text-align: center;
+}
+
+.radar-timestamp {
+  font-size: 0.85rem;
+  font-weight: 750;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.radar-timeline {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+}
+
+.radar-timeline-tick {
+  flex: 1;
+  height: 6px;
+  background-color: var(--border-input);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.radar-timeline-tick:hover {
+  background-color: var(--color-primary-light);
+  height: 8px;
+}
+
+.radar-timeline-tick.is-active {
+  background-color: var(--color-primary);
+  height: 8px;
+  box-shadow: 0 0 4px rgba(76, 175, 80, 0.4);
+}
+
+.html.meteo-theme-dark .radar-timeline-tick {
+  background-color: var(--border-color);
+}
+
+.html.meteo-theme-dark .radar-timeline-tick.is-active,
+.theme-dark .radar-timeline-tick.is-active {
+  background-color: var(--color-primary-light);
+  box-shadow: 0 0 6px rgba(129, 199, 132, 0.5);
+}
+
+/* Radar toggle button styles in map overlays */
+.btn-map-action.radar-active,
+.btn-fullscreen-close.radar-active {
+  background-color: var(--color-primary) !important;
+  color: white !important;
+  border-color: var(--color-primary) !important;
+}
+
+.btn-map-action.radar-active:hover,
+.btn-fullscreen-close.radar-active:hover {
+  background-color: var(--color-primary-dark) !important;
+  border-color: var(--color-primary-dark) !important;
+}
+
+.html.meteo-theme-dark .btn-map-action.radar-active,
+.theme-dark .btn-map-action.radar-active,
+.html.meteo-theme-dark .btn-fullscreen-close.radar-active,
+.theme-dark .btn-fullscreen-close.radar-active {
+  background-color: var(--color-primary-light) !important;
+  color: #1a1d23 !important;
+  border-color: var(--color-primary-light) !important;
+}
+
+.html.meteo-theme-dark .btn-map-action.radar-active:hover,
+.theme-dark .btn-map-action.radar-active:hover,
+.html.meteo-theme-dark .btn-fullscreen-close.radar-active:hover,
+.theme-dark .btn-fullscreen-close.radar-active:hover {
+  background-color: var(--color-primary) !important;
+  color: white !important;
+  border-color: var(--color-primary) !important;
+}
+
+@media (max-width: 480px) {
+  .radar-controls-overlay {
+    width: calc(100% - 16px);
+    bottom: 8px;
+  }
+  
+  .radar-animation-panel {
+    padding: 4px 10px;
+    gap: 8px;
+  }
+
+  .btn-radar-control {
+    width: 28px;
+    height: 28px;
+    font-size: 1.1rem;
+  }
+
+  .btn-radar-control.btn-play-pause {
+    width: 30px;
+    height: 30px;
+  }
+
+  .radar-info {
+    min-width: 80px;
+  }
+
+  .radar-timestamp {
+    font-size: 0.76rem;
+  }
+}
