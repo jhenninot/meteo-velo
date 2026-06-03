@@ -734,6 +734,16 @@ const formatDateTime = (isoString) => {
   }).format(new Date(isoString));
 }
 
+const formatCollectionTime = (timeStr) => {
+  if (!timeStr) return '';
+  const parts = timeStr.split('T');
+  if (parts.length < 2) return '';
+  const timePart = parts[1];
+  const timeSubparts = timePart.split(':');
+  if (timeSubparts.length < 2) return '';
+  return `${timeSubparts[0]}:${timeSubparts[1]}`;
+}
+
 const getWindStyle = (degrees) => ({ transform: `rotate(${degrees}deg)`, display: 'inline-block' })
 
 const critereLabels = {
@@ -2222,7 +2232,10 @@ const formatRadarTime = (timestamp) => {
           <h3 class="current-weather-title">
             <span class="mdi mdi-weather-cloudy" aria-hidden="true"></span>
             <div class="current-weather-title-text">
-              <span class="current-weather-subtitle">Conditions actuelles à</span>
+              <span class="current-weather-subtitle">
+                Conditions météo à
+                <span v-if="currentWeather.time"> {{ formatCollectionTime(currentWeather.time) }} (heure locale)</span>
+              </span>
               <span class="current-city-name">{{ city }}</span>
             </div>
           </h3>

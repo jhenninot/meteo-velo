@@ -757,6 +757,23 @@ app.post('/api/weather', verifyToken, async (req, res) => {
           apparentTemp = Math.round(at);
         }
 
+        let localTimeStr = null;
+        if (currentEntry.time) {
+          try {
+            const utcTime = new Date(currentEntry.time);
+            const localTimeMs = utcTime.getTime() + (utcOffsetSeconds * 1000);
+            const localDate = new Date(localTimeMs);
+            const yyyy = localDate.getUTCFullYear();
+            const mm = String(localDate.getUTCMonth() + 1).padStart(2, '0');
+            const dd = String(localDate.getUTCDate()).padStart(2, '0');
+            const hh = String(localDate.getUTCHours()).padStart(2, '0');
+            const min = String(localDate.getUTCMinutes()).padStart(2, '0');
+            localTimeStr = `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+          } catch (e) {
+            console.error("Erreur formatage heure locale met.no:", e);
+          }
+        }
+
         currentConditions = {
           temp: temp !== undefined ? Math.round(temp) : null,
           apparentTemp: apparentTemp !== undefined ? Math.round(apparentTemp) : null,
@@ -764,7 +781,8 @@ app.post('/api/weather', verifyToken, async (req, res) => {
           wind: windKmh,
           windDir,
           gust: gustKmh,
-          rain: precip > 0 ? 100 : 0
+          rain: precip > 0 ? 100 : 0,
+          time: localTimeStr
         };
       }
 
@@ -786,7 +804,8 @@ app.post('/api/weather', verifyToken, async (req, res) => {
           wind: cur.wind_speed_10m !== undefined ? Math.round(cur.wind_speed_10m) : 0,
           windDir: cur.wind_direction_10m !== undefined ? cur.wind_direction_10m : 0,
           gust: cur.wind_gusts_10m !== undefined ? Math.round(cur.wind_gusts_10m) : 0,
-          rain: cur.precipitation > 0 ? 100 : 0
+          rain: cur.precipitation > 0 ? 100 : 0,
+          time: cur.time
         };
       }
 
