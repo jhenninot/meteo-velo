@@ -1537,6 +1537,7 @@ app.delete('/api/admin/users/:id', verifyToken, async (req, res) => {
       return res.status(400).json({ error: "Impossible de supprimer l'utilisateur administrateur principal jhenninot" });
     }
     await User.findByIdAndDelete(req.params.id);
+    await Route.deleteMany({ userId: req.params.id });
     res.json({ message: "Utilisateur supprimé" });
   } catch (err) {
     res.status(500).json({ error: "Erreur lors de la suppression de l'utilisateur" });
