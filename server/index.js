@@ -40,7 +40,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), (req, res) =
   // 4. Exécuter la mise à jour (fetch + reset pour éviter les conflits et l'identité Git) + docker compose
   // On utilise un conteneur temporaire détaché (run -d --rm --no-deps) pour éviter que le processus ne soit tué
   // lorsque le conteneur backend se redémarre lors de la mise à jour.
-  const cmd = `docker compose -p meteo-velo run -d --rm --no-deps backend sh -c "cd /app/stack && (git fetch --all && git reset --hard origin/main && docker compose -p meteo-velo up -d --build) > update.log 2>&1"`;
+  const cmd = `cd /app/stack && docker compose -p meteo-velo run -d --rm --no-deps backend sh -c "cd /app/stack && (git fetch --all && git reset --hard origin/main && docker compose -p meteo-velo up -d --build) > update.log 2>&1"`;
   console.log(`[webhook] Exécution : ${cmd}`);
   exec(cmd, (err, stdout, stderr) => {
     if (err) {
