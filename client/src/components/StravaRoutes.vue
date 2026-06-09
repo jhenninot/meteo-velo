@@ -790,8 +790,51 @@ const showAnalysisMap = ref(false)
 let analysisMapInstance = null
 
 // ---- Weather helpers for AI analysis display ----
+const getWmoWeatherIcon = (wmoCode, isNight = false) => {
+  if (wmoCode === undefined || wmoCode === null) return 'mdi-help-circle-outline';
+  switch (wmoCode) {
+    case 0:
+      return isNight ? 'mdi-weather-night' : 'mdi-weather-sunny';
+    case 1:
+    case 2:
+    case 3:
+    case 45:
+    case 48:
+      return isNight ? 'mdi-weather-night-partly-cloudy' : 'mdi-weather-partly-cloudy';
+    case 51:
+    case 53:
+    case 55:
+    case 56:
+    case 57:
+    case 61:
+    case 63:
+    case 66:
+    case 67:
+    case 71:
+    case 73:
+    case 75:
+    case 77:
+    case 80:
+    case 81:
+    case 85:
+    case 86:
+      return 'mdi-weather-rainy';
+    case 65:
+    case 82:
+    case 95:
+    case 96:
+    case 99:
+      return 'mdi-weather-pouring';
+    default:
+      return 'mdi-help-circle-outline';
+  }
+}
+
 const getWeatherIcon = (periodData, isNight = false) => {
   if (!periodData) return 'mdi-help-circle-outline';
+  if (periodData.weatherCode !== undefined && periodData.weatherCode !== null) {
+    return getWmoWeatherIcon(periodData.weatherCode, isNight);
+  }
   if (periodData.precip >= 2) return 'mdi-weather-pouring';
   if (periodData.precip > 0 || periodData.rain >= 50) return 'mdi-weather-rainy';
   if (periodData.wind > 35) return 'mdi-weather-windy';
@@ -870,6 +913,9 @@ const getDailyRain = (day) => {
 }
 
 const getDailyWeatherIcon = (day) => {
+  if (day.weatherCode !== undefined && day.weatherCode !== null) {
+    return getWmoWeatherIcon(day.weatherCode, false);
+  }
   if (day.full_day) return getWeatherIcon(day.full_day);
   const mainPeriod = day.apres_midi || day.matin;
   return getWeatherIcon(mainPeriod);

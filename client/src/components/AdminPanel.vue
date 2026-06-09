@@ -17,7 +17,6 @@ const showNewUserPassword = ref(false)
 const selectedModel = ref('gemini-3.1-flash-lite')
 const selectedFallbackModel = ref('gemini-3.5-flash')
 const cacheMaxAge = ref(60)
-const weatherProvider = ref('open-meteo')
 const settingsMsg = ref({ text: '', type: '' })
 const settingsLoading = ref(false)
 const availableModels = ref([
@@ -85,7 +84,6 @@ const fetchSettings = async () => {
       selectedModel.value = response.data.gemini_model || 'gemini-3.1-flash-lite'
       selectedFallbackModel.value = response.data.gemini_fallback_model || 'gemini-3.5-flash'
       cacheMaxAge.value = parseInt(response.data.cache_max_age, 10) || 60
-      weatherProvider.value = response.data.weather_provider || 'open-meteo'
       ensureSelectedModelInList()
     }
   } catch (err) {
@@ -100,8 +98,7 @@ const saveSettings = async () => {
     await axios.post(`${props.apiBaseUrl}/api/admin/settings`, {
       gemini_model: selectedModel.value,
       gemini_fallback_model: selectedFallbackModel.value,
-      cache_max_age: cacheMaxAge.value,
-      weather_provider: weatherProvider.value
+      cache_max_age: cacheMaxAge.value
     })
     try {
       localStorage.removeItem('weather_forecast_cache')
@@ -201,18 +198,6 @@ fetchAvailableModels()
           </select>
         </div>
 
-        <div class="input-group">
-          <label>Fournisseur météo :</label>
-          <select v-model="weatherProvider" :disabled="settingsLoading">
-            <option value="open-meteo">Open-Meteo (défaut, gratuit)</option>
-            <option value="met.no">met.no (Institut Météorologique Norvégien)</option>
-          </select>
-          <p class="password-rules" style="margin-top:4px">
-            <span class="mdi mdi-information-outline"></span>
-            Open-Meteo : données mondiales, très détaillées.
-            met.no : source officielle norvégienne, excellente pour l'Europe, sans clé API.
-          </p>
-        </div>
 
         <div class="input-group">
           <label>Validité du cache météo (minutes) :</label>
