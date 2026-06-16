@@ -81,11 +81,7 @@ watch([weatherData, forecastData], () => {
   const list = forecastData.value || weatherData.value
   if (list && list.length > 0) {
     selectedDayIndex.value = 0
-    if (list.length > 1) {
-      loadedDayIndexes.value = [0, 1]
-    } else {
-      loadedDayIndexes.value = [0]
-    }
+    loadedDayIndexes.value = list.map((_, i) => i)
   } else {
     selectedDayIndex.value = null
     loadedDayIndexes.value = []
@@ -95,6 +91,11 @@ watch([weatherData, forecastData], () => {
 watch(selectedDayIndex, (newVal) => {
   if (newVal === null) {
     loadedDayIndexes.value = []
+  } else {
+    const list = forecastData.value || weatherData.value
+    if (list) {
+      loadedDayIndexes.value = list.map((_, i) => i)
+    }
   }
 })
 
@@ -962,36 +963,25 @@ const getDailyWeatherIcon = (day) => {
 const toggleDayHourly = (index) => {
   if (selectedDayIndex.value === index) {
     selectedDayIndex.value = null;
-    loadedDayIndexes.value = [];
   } else {
     selectedDayIndex.value = index;
     const list = forecastData.value || weatherData.value;
-    if (list && index + 1 < list.length) {
-      loadedDayIndexes.value = [index, index + 1];
-    } else {
-      loadedDayIndexes.value = [index];
+    if (list) {
+      loadedDayIndexes.value = list.map((_, i) => i);
     }
     nextTick(() => {
       const container = document.querySelector('.hourly-scroll-container');
       if (container) {
-        container.scrollLeft = 0;
+        const groups = container.querySelectorAll('.hourly-day-group');
+        if (groups && groups[index]) {
+          container.scrollLeft = groups[index].offsetLeft;
+        }
       }
     });
   }
 }
 
-const handleHourlyScroll = (event) => {
-  const container = event.target;
-  const isNearEnd = container.scrollWidth - container.scrollLeft - container.clientWidth < 80;
-  if (isNearEnd) {
-    const list = forecastData.value || weatherData.value;
-    if (!list) return;
-    const maxIndex = Math.max(...loadedDayIndexes.value);
-    if (maxIndex + 1 < list.length) {
-      loadedDayIndexes.value.push(maxIndex + 1);
-    }
-  }
-}
+
 
 const getDayByIndex = (index) => {
   const list = forecastData.value || weatherData.value;
@@ -2378,7 +2368,7 @@ const formatRadarTime = (timestamp) => {
       <Transition name="fade">
         <div v-if="selectedDayForHourly" class="selected-day-hourly-details">
           <div class="hourly-scroll-wrapper">
-            <div class="hourly-scroll-container" @scroll="handleHourlyScroll">
+            <div class="hourly-scroll-container">
               <div v-for="dayIndex in loadedDayIndexes" :key="dayIndex" class="hourly-day-group">
                 <div class="hourly-day-header">
                   <span class="mdi mdi-calendar"></span> {{ formatDate(getDayByIndex(dayIndex)?.date) }}
@@ -2561,6 +2551,10 @@ const formatRadarTime = (timestamp) => {
           <div v-for="(day, index) in (forecastData || weatherData)" :key="index" class="day-card" :class="{ 'is-weekend': isWeekend(day.date) }" :id="'day-detail-' + index">
             <h3><span class="mdi mdi-calendar"></span> {{ formatDate(day.date) }}</h3>
             <div class="day-split">
+              <div v-if="!day.matin && !day.apres_midi" class="no-slots-message" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; color: var(--text-secondary); font-size: 0.9rem; text-align: center; width: 100%; border: 1px dashed var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.02);">
+                <span class="mdi mdi-clock-alert-outline" style="font-size: 1.5rem; opacity: 0.7;"></span>
+                <span>Créneaux d'activité passés pour aujourd'hui</span>
+              </div>
               <!-- MATIN -->
               <div v-if="day.matin" class="half-day" :class="[
                 forecastData ? (day.matin.favorable ? 'favorable' : 'defavorable') : 'weather-only',

@@ -619,7 +619,7 @@ function buildStructuredWeather(hourly, utcOffsetSeconds, activity = null, daily
         full_day: aggregate(d.full_day, 'Journée')
       };
     })
-    .filter(d => d.matin !== null || d.apres_midi !== null)
+    .filter(d => d.full_day !== null)
     .slice(0, 7);
 }
 
