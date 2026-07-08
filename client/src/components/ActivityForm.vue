@@ -61,20 +61,7 @@
       </div>
     </div>
     
-    <div class="input-group">
-      <label>Activité Strava correspondante :</label>
-      <select v-model="form.stravaSportType" class="favorites-select" style="max-width: 100%; width: 100%;">
-        <option value="">Aucune (Plein air général)</option>
-        <option value="Ride">Vélo de Route (Ride)</option>
-        <option value="GravelRide">Gravel (GravelRide)</option>
-        <option value="MountainBikeRide">VTT (MountainBikeRide)</option>
-        <option value="EBikeRide">Vélo Électrique (EBikeRide)</option>
-        <option value="Run">Course à pied (Run)</option>
-        <option value="TrailRun">Trail (TrailRun)</option>
-        <option value="Walk">Marche (Walk)</option>
-        <option value="Hike">Randonnée (Hike)</option>
-      </select>
-    </div>
+
     
     <div class="input-group">
       <label>Contraintes :</label>
@@ -220,7 +207,7 @@ const getInitialForm = () => {
       label: props.initialData.label || '',
       icon: props.initialData.icon || 'mdi-bike',
       constraints: props.initialData.constraints || '',
-      stravaSportType: props.initialData.stravaSportType || '',
+
       windMin: props.initialData.windMin ?? null,
       windMax: props.initialData.windMax ?? null,
       gustMin: props.initialData.gustMin ?? null,
@@ -244,7 +231,7 @@ const getInitialForm = () => {
     label: '',
     icon: 'mdi-bike',
     constraints: '',
-    stravaSportType: '',
+
     windMin: null,
     windMax: null,
     gustMin: null,
@@ -373,7 +360,7 @@ const handleSubmit = () => {
     label: form.value.label,
     icon: form.value.icon,
     constraints: form.value.constraints,
-    stravaSportType: form.value.stravaSportType,
+
     windMin: sanitizeNum(form.value.windMin),
     windMax: sanitizeNum(form.value.windMax),
     gustMin: sanitizeNum(form.value.gustMin),

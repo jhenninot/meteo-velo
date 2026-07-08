@@ -4,16 +4,16 @@
 ![docker](https://img.shields.io/badge/docker-ready-blue.svg)
 ![CI](https://github.com/jhenninot/meteo-velo/actions/workflows/ci.yml/badge.svg?branch=main)
 
-Application web pour consulter les données météo et suivre des activités (Strava).
+Application web pour consulter les données météo, suivre des activités et importer des parcours GPX.
 
 ## Description
 
-ActiWeather est une application full‑stack composée d'un backend Node.js et d'un frontend Vite (+Vue). Elle centralise les prévisions météo et les activités Strava pour aider les sportifs à planifier leurs sorties.
+ActiWeather est une application full‑stack composée d'un backend Node.js et d'un frontend Vite (+Vue). Elle centralise les prévisions météo et les itinéraires de sportifs (via GPX) pour les aider à planifier leurs sorties.
 
 ## Principales fonctionnalités
 
 - Prévisions météo agrégées (matin / après-midi) et conseils basés sur des règles
-- Intégration OAuth avec Strava pour importer les activités
+- Import de fichiers GPX pour analyser les parcours et itinéraires
 - Gestion des préférences et activités personnalisées par utilisateur
 - Interface d'administration pour gérer les utilisateurs et paramètres
 
@@ -65,9 +65,6 @@ PORT=3001
 MONGO_URL=mongodb://mongodb:27017/meteo_velo
 JWT_SECRET=une_clef_secrete_longue
 GEMINI_API_KEY=xxx
-STRAVA_CLIENT_ID=your_strava_client_id
-STRAVA_CLIENT_SECRET=your_strava_client_secret
-STRAVA_CALLBACK_URL=https://votre-frontend/strava/callback
 FRONTEND_URL=http://localhost:5173
 WEBHOOK_SECRET=une_autre_clef_pour_webhook
 ```
@@ -76,8 +73,7 @@ Descriptions :
 - `MONGO_URL` : chaîne de connexion MongoDB.
 - `JWT_SECRET` : clé pour signer les tokens JWT.
 - `GEMINI_API_KEY` : clé pour le service Gemini (IA), optionnel.
-- `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `STRAVA_CALLBACK_URL` : paramètres OAuth pour Strava.
-- `FRONTEND_URL` : URL du frontend (utilisée pour redirections OAuth).
+- `FRONTEND_URL` : URL du frontend.
 - `WEBHOOK_SECRET` : secret HMAC pour la route `/api/webhook` utilisée par déploiement automatisé.
 
 ## Captures d'écran
@@ -94,10 +90,9 @@ Liste non exhaustive des endpoints utiles exposés par le backend (`/server/inde
 
 - POST `/api/login` — Auth: none. Body: `{ "username":"...", "password":"..." }` → `{ token, role, username, preferences }`
 - POST `/api/forecast` — Auth required. Body: `{ "lat":48.8, "lon":2.3, "city":"Paris", "activityId":"<id|none>" }` → retourne `forecast` et métadonnées IA.
-- GET `/api/strava/authorize` — Auth required. Retourne l'URL d'autorisation Strava.
-- GET `/api/strava/callback` — Callback OAuth Strava (frontend redirigé).
-- GET `/api/strava/activities` — Auth required. Params: `days` ou `startDate`/`endDate`. Retourne activités vélo.
-- DELETE `/api/strava/disconnect` — Délie le compte Strava de l'utilisateur.
+- POST `/api/routes` — Auth required. Body: parcours GPX à enregistrer.
+- GET `/api/routes` — Auth required. Retourne la liste des parcours importés.
+- DELETE `/api/routes/:id` — Auth required. Supprime un parcours importé.
 - GET/POST/DELETE `/api/user/favorites` — Gérer les favoris (requiert auth).
 - POST `/api/admin/create-user` — Admin uniquement: créer un utilisateur.
 

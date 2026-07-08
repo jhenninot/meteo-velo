@@ -10,7 +10,6 @@ const userSchema = new mongoose.Schema({
     lon: Number,
     consignes: String,
     theme: { type: String, enum: ['light', 'dark', 'auto'], default: 'auto' },
-    stravaFilters: { type: [String], default: [] },
     useAiAnalysis: { type: Boolean, default: false }
   },
   activities: {
@@ -18,7 +17,6 @@ const userSchema = new mongoose.Schema({
       label: { type: String, required: true, trim: true, maxlength: 80 },
       icon: { type: String, default: 'mdi-bike', trim: true, maxlength: 60 },
       constraints: { type: String, default: '', trim: true, maxlength: 4000 },
-      stravaSportType: { type: String, default: '', trim: true },
       windMin: { type: Number, default: null },
       windMax: { type: Number, default: null },
       gustMin: { type: Number, default: null },
@@ -39,7 +37,6 @@ const userSchema = new mongoose.Schema({
     default: () => [{
       label: "Course à pied",
       icon: "mdi-run",
-      stravaSportType: "Run",
       tempMin: 10,
       tempMax: 28,
       precipMax: 0.1,
@@ -50,15 +47,7 @@ const userSchema = new mongoose.Schema({
     city: { type: String, required: true, trim: true },
     lat: { type: Number, required: true },
     lon: { type: Number, required: true }
-  }],
-  strava: {
-    athleteId: Number,
-    accessToken: String,
-    refreshToken: String,
-    expiresAt: Number, // Unix timestamp seconds
-    athleteName: String,
-    athleteProfile: String
-  }
+  }]
 });
 
 // Avoid OverwriteModelError if already compiled

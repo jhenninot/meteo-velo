@@ -34,17 +34,11 @@ const props = defineProps({
 
 const emit = defineEmits(['update:location'])
 
-const stravaStatus = ref({ connected: false, athleteName: null, athleteProfile: null })
-const stravaRoutes = ref([])
 const importedRoutes = ref([])
-const selectedSource = ref('all')
 const routes = computed(() => {
-  const sList = stravaRoutes.value.map(r => ({ ...r, source: 'strava' }))
-  const iList = importedRoutes.value.map(r => ({ ...r, id: r._id, source: 'imported' }))
-  return [...sList, ...iList]
+  return importedRoutes.value.map(r => ({ ...r, id: r._id, source: 'imported' }))
 })
 const loading = ref(false)
-const loadingConnect = ref(false)
 const error = ref(null)
 const expandedId = ref(null)
 
@@ -80,10 +74,7 @@ const SORT_OPTIONS = [
 const activeTypeFilters = ref([])
 
 const getSportType = (route) => {
-  if (route.sport_type) return route.sport_type
-  if (route.type === 1) return 'Ride'
-  if (route.type === 2) return 'Run'
-  return 'Ride'
+  return route.sport_type || 'Ride'
 }
 
 // Types effectivement présents dans les parcours chargés
@@ -98,9 +89,6 @@ const availableTypes = computed(() => {
 
 const displayedRoutes = computed(() => {
   let list = routes.value
-  if (selectedSource.value !== 'all') {
-    list = list.filter(r => r.source === selectedSource.value)
-  }
 
   let filtered = activeTypeFilters.value.length === 0
     ? list
@@ -164,7 +152,6 @@ const setSortField = (field) => {
   else { sortField.value = field; sortOrder.value = 'desc' }
 }
 
-const stravaNotif = ref(null) // 'success' | 'error' | null
 const mapInstances = {} // plain JS, not reactive
 
 // ---- Polyline decoder (Google Encoded Polyline Algorithm) ----
@@ -379,57 +366,17 @@ const overallStats = computed(() => {
 })
 
 // ---- API calls ----
-const fetchStatus = async () => {
-  try {
-    const { data } = await axios.get(`${props.apiBaseUrl}/api/strava/status`)
-    stravaStatus.value = data
-  } catch (e) { console.error('Strava status error', e) }
-}
-
 const fetchRoutes = async () => {
   loading.value = true
   error.value = null
   try {
     const importedRes = await axios.get(`${props.apiBaseUrl}/api/routes`)
     importedRoutes.value = importedRes.data
-
-    if (stravaStatus.value.connected) {
-      try {
-        const stravaRes = await axios.get(`${props.apiBaseUrl}/api/strava/routes`)
-        stravaRoutes.value = stravaRes.data
-      } catch (stravaErr) {
-        console.error('Error fetching Strava routes', stravaErr)
-        error.value = 'Impossible de charger les parcours Strava.'
-      }
-    } else {
-      stravaRoutes.value = []
-    }
   } catch (e) {
     error.value = 'Impossible de charger les parcours.'
   } finally {
     loading.value = false
   }
-}
-
-const connectStrava = async () => {
-  loadingConnect.value = true
-  try {
-    const { data } = await axios.get(`${props.apiBaseUrl}/api/strava/authorize`)
-    window.location.href = data.url
-  } catch (e) {
-    loadingConnect.value = false
-    error.value = 'Impossible de contacter Strava.'
-  }
-}
-
-const disconnectStrava = async () => {
-  if (!confirm('Délier votre compte Strava ?')) return
-  try {
-    await axios.delete(`${props.apiBaseUrl}/api/strava/disconnect`)
-    stravaStatus.value = { connected: false, athleteName: null, athleteProfile: null }
-    stravaRoutes.value = []
-    Object.keys(mapInstances).forEach(k => { try { mapInstances[k].remove() } catch {} ; delete mapInstances[k] })
-  } catch (e) { error.value = 'Erreur lors de la déconnexion.' }
 }
 
 // ---- Map logic ----
@@ -943,51 +890,14 @@ const scrollToDay = (index) => {
 }
 
 const findMatchingActivityId = (route) => {
-  const sportType = getSportType(route) // e.g. 'Ride', 'GravelRide', etc.
+  const sportType = getSportType(route)
   if (!props.userActivities || props.userActivities.length === 0) {
     return 'none'
   }
 
-  // First try: match directly by activity label (for imported routes)
+  // match directly by activity label
   const matchedLabel = props.userActivities.find(act => act.label.toLowerCase() === sportType.toLowerCase())
   if (matchedLabel) return matchedLabel._id
-
-  // Second try: match based on the explicitly configured Strava activity type mapping
-  const matchedConfig = props.userActivities.find(act => act.stravaSportType === sportType)
-  if (matchedConfig) return matchedConfig._id
-
-  const normalizedSportType = sportType.toLowerCase()
-
-  // Define keywords mapping to match user activities labels
-  let keywords = []
-  if (normalizedSportType.includes('ride') || normalizedSportType.includes('bike')) {
-    if (normalizedSportType.includes('gravel')) {
-      keywords = ['gravel', 'velo', 'vélo', 'bike']
-    } else if (normalizedSportType.includes('mountain') || normalizedSportType.includes('mtb')) {
-      keywords = ['vtt', 'mountain', 'gravel', 'velo', 'vélo', 'bike']
-    } else {
-      // standard Ride or EBike
-      keywords = ['route', 'cyclisme', 'velo', 'vélo', 'bike']
-    }
-  } else if (normalizedSportType.includes('run') || normalizedSportType.includes('trail')) {
-    keywords = ['course', 'pied', 'run', 'trail', 'jogging']
-  } else if (normalizedSportType.includes('walk') || normalizedSportType.includes('hike')) {
-    keywords = ['marche', 'rando', 'hike', 'walk', 'pied']
-  }
-
-  // Second try: exact or fuzzy keyword matches in order of preference
-  for (const keyword of keywords) {
-    const matched = props.userActivities.find(act => {
-      const label = act.label.toLowerCase()
-      return label.includes(keyword)
-    })
-    if (matched) return matched._id
-  }
-
-  // Third try: if no match, try to match any activity if there's only one
-  if (props.userActivities.length === 1) {
-    return props.userActivities[0]._id
-  }
 
   return 'none'
 }
@@ -1475,6 +1385,64 @@ const submitImport = async () => {
   }
 }
 
+const submitEdit = async () => {
+  if (!importName.value.trim()) {
+    importError.value = "Le nom du parcours est obligatoire."
+    return
+  }
+  if (!importActivityId.value) {
+    importError.value = "Veuillez associer un type d'activité."
+    return
+  }
+
+  isImporting.value = true
+  importError.value = null
+
+  try {
+    const selectedAct = props.userActivities.find(a => a._id === importActivityId.value)
+    const sportType = selectedAct ? selectedAct.label : 'Plein air'
+
+    const payload = {
+      name: importName.value.trim(),
+      description: importDescription.value.trim(),
+      sport_type: sportType,
+      estimated_moving_time: computedImportDuration.value
+    }
+
+    const { data } = await axios.put(`${props.apiBaseUrl}/api/routes/${editingRouteId.value}`, payload)
+    
+    // Update route in local lists
+    importedRoutes.value = importedRoutes.value.map(r => r._id === editingRouteId.value ? data : r)
+    
+    closeImportModal()
+  } catch (err) {
+    console.error("Error editing GPX route:", err)
+    importError.value = err.response?.data?.error || "Impossible de modifier le parcours."
+  } finally {
+    isImporting.value = false
+  }
+}
+
+const deleteImportedRoute = async (routeId) => {
+  if (!confirm("Voulez-vous vraiment supprimer ce parcours importé ?")) return
+  try {
+    await axios.delete(`${props.apiBaseUrl}/api/routes/${routeId}`)
+    importedRoutes.value = importedRoutes.value.filter(r => r._id !== routeId)
+    if (expandedId.value === routeId) {
+      expandedId.value = null
+    }
+    if (mapInstances[routeId]) {
+      try {
+        mapInstances[routeId].remove()
+      } catch {}
+      delete mapInstances[routeId]
+    }
+  } catch (err) {
+    console.error("Error deleting route:", err)
+    alert("Impossible de supprimer le parcours.")
+  }
+}
+
 const openImportModal = () => {
   isEditing.value = false
   isInitializingEdit.value = false
@@ -1597,75 +1565,7 @@ const openEditModal = (route) => {
   })
 }
 
-const submitEdit = async () => {
-  if (!importName.value.trim()) {
-    importError.value = "Le nom du parcours est obligatoire."
-    return
-  }
-  if (!importActivityId.value) {
-    importError.value = "Veuillez associer un type d'activité."
-    return
-  }
-
-  isImporting.value = true
-  importError.value = null
-
-  try {
-    const selectedAct = props.userActivities.find(a => a._id === importActivityId.value)
-    const sportType = selectedAct ? selectedAct.label : 'Plein air'
-
-    const payload = {
-      name: importName.value.trim(),
-      description: importDescription.value.trim(),
-      sport_type: sportType,
-      estimated_moving_time: computedImportDuration.value
-    }
-
-    const { data } = await axios.put(`${props.apiBaseUrl}/api/routes/${editingRouteId.value}`, payload)
-    
-    // Update route in local lists
-    importedRoutes.value = importedRoutes.value.map(r => r._id === editingRouteId.value ? data : r)
-    
-    closeImportModal()
-  } catch (err) {
-    console.error("Error editing GPX route:", err)
-    importError.value = err.response?.data?.error || "Impossible de modifier le parcours."
-  } finally {
-    isImporting.value = false
-  }
-}
-
-const deleteImportedRoute = async (routeId) => {
-  if (!confirm("Voulez-vous vraiment supprimer ce parcours importé ?")) return
-  try {
-    await axios.delete(`${props.apiBaseUrl}/api/routes/${routeId}`)
-    importedRoutes.value = importedRoutes.value.filter(r => r._id !== routeId)
-    if (expandedId.value === routeId) {
-      expandedId.value = null
-    }
-    if (mapInstances[routeId]) {
-      try {
-        mapInstances[routeId].remove()
-      } catch {}
-      delete mapInstances[routeId]
-    }
-  } catch (err) {
-    console.error("Error deleting route:", err)
-    alert("Impossible de supprimer le parcours.")
-  }
-}
-
 onMounted(async () => {
-  const params = new URLSearchParams(window.location.search)
-  if (params.get('strava') === 'success') stravaNotif.value = 'success'
-  if (params.get('strava') === 'error') stravaNotif.value = 'error'
-  if (params.has('strava')) {
-    const url = new URL(window.location)
-    url.searchParams.delete('strava')
-    window.history.replaceState({}, '', url)
-  }
-
-  await fetchStatus()
   await fetchRoutes()
 })
 
@@ -1684,24 +1584,6 @@ onUnmounted(() => {
 
 <template>
   <div class="strava-page" :class="{ 'theme-dark': theme === 'dark' }">
-
-
-
-    <!-- Bannière d'invitation Strava si non connecté -->
-    <div v-if="!stravaStatus.connected && !loading" class="strava-promo-banner">
-      <div class="promo-content">
-        <span class="mdi mdi-strava promo-icon"></span>
-        <div class="promo-text">
-          <h4>Connectez votre compte Strava</h4>
-          <p>Synchronisez automatiquement vos itinéraires planifiés Strava pour les analyser avec la météo.</p>
-        </div>
-      </div>
-      <button class="btn-strava-connect-small" @click="connectStrava" :disabled="loadingConnect">
-        <span v-if="loadingConnect" class="mdi mdi-loading mdi-spin"></span>
-        <span v-else class="mdi mdi-link"></span>
-        {{ loadingConnect ? 'Redirection…' : 'Associer mon Strava' }}
-      </button>
-    </div>
 
     <!-- Contenu principal -->
     <div>
@@ -1852,38 +1734,7 @@ onUnmounted(() => {
       <!-- Aucun parcours -->
       <div v-if="!loading && !error && routes.length === 0" class="strava-empty">
         <span class="mdi mdi-map-marker-off strava-empty-icon"></span>
-        <p>Aucun itinéraire trouvé. Importez un fichier GPX ou connectez votre compte Strava.</p>
-      </div>
-
-      <!-- Fin du panneau des filtres avancés (intégré au-dessus) -->
-
-      <!-- Filtres par source -->
-      <div v-if="!loading && routes.length" class="filter-controls">
-        <span class="sort-label"><span class="mdi mdi-source-branch"></span> Source :</span>
-        <div class="sort-buttons">
-          <button
-            class="sort-btn"
-            :class="{ active: selectedSource === 'all' }"
-            @click="selectedSource = 'all'"
-          >
-            <span class="mdi mdi-all-inclusive"></span> Toutes
-          </button>
-          <button
-            class="sort-btn"
-            :class="{ active: selectedSource === 'strava' }"
-            @click="selectedSource = 'strava'"
-            :disabled="!stravaStatus.connected"
-          >
-            <span class="mdi mdi-strava"></span> Strava
-          </button>
-          <button
-            class="sort-btn"
-            :class="{ active: selectedSource === 'imported' }"
-            @click="selectedSource = 'imported'"
-          >
-            <span class="mdi mdi-file-gpx"></span> Importées GPX
-          </button>
-        </div>
+        <p>Aucun itinéraire trouvé. Importez un fichier GPX.</p>
       </div>
 
       <!-- Filtres par type -->
@@ -1957,7 +1808,7 @@ onUnmounted(() => {
           v-for="route in displayedRoutes"
           :key="route.id"
           class="strava-activity-card"
-          :class="{ 'is-expanded': expandedId === route.id, 'is-imported': route.source === 'imported' }"
+          :class="{ 'is-expanded': expandedId === route.id, 'is-imported': true }"
         >
           <!-- En-tête de la carte (cliquable) -->
           <div class="activity-header" @click="toggleRoute(route)">
@@ -1967,11 +1818,8 @@ onUnmounted(() => {
             <div class="activity-main">
               <div class="activity-name-row" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
                 <div class="activity-name" style="margin-bottom: 0;">{{ route.name }}</div>
-                <span v-if="route.source === 'imported'" class="badge-source imported" title="Tracé GPX importé">
+                <span class="badge-source imported" title="Tracé GPX importé">
                   <span class="mdi mdi-file-gpx"></span> GPX
-                </span>
-                <span v-else class="badge-source strava" title="Synchronisé depuis Strava">
-                  <span class="mdi mdi-strava"></span> Strava
                 </span>
               </div>
               <div v-if="route.description" class="activity-date" style="font-size: 0.85rem; opacity: 0.8; margin: 4px 0 10px 0; line-height: 1.4; white-space: normal;">
@@ -1995,10 +1843,7 @@ onUnmounted(() => {
           <div v-show="expandedId === route.id" class="activity-map-wrap" :class="{ 'hide-km-markers': !showKmMarkers }">
             <!-- Boutons d'action au-dessus de la carte -->
             <div v-if="route.map?.summary_polyline" class="map-actions-row">
-              <a v-if="route.source === 'strava'" :href="`https://www.strava.com/routes/${route.id}`" target="_blank" class="btn-map-action btn-strava-link" title="Voir sur Strava (nouvel onglet)">
-                <span class="mdi mdi-open-in-new"></span> Voir sur Strava
-              </a>
-               <button class="btn-map-action btn-analyse" @click.stop="startAnalysisForRoute(route)" title="Analyser cet itinéraire par l'IA">
+              <button class="btn-map-action btn-analyse" @click.stop="startAnalysisForRoute(route)" title="Analyser cet itinéraire par l'IA">
                 <span class="mdi mdi-brain"></span> Analyser
               </button>
               <button class="btn-map-action" @click.stop="openFullscreenMap(route)" title="Ouvrir la carte en plein écran">
@@ -2016,10 +1861,10 @@ onUnmounted(() => {
               <button class="btn-map-action" @click.stop="exportToGPX(route)" title="Exporter le parcours en GPX">
                 <span class="mdi mdi-download"></span> Exporter GPX
               </button>
-              <button v-if="route.source === 'imported'" class="btn-map-action btn-edit-route" @click.stop="openEditModal(route)" title="Modifier ce parcours">
+              <button class="btn-map-action btn-edit-route" @click.stop="openEditModal(route)" title="Modifier ce parcours">
                 <span class="mdi mdi-pencil-outline"></span> Modifier
               </button>
-              <button v-if="route.source === 'imported'" class="btn-map-action btn-delete-route" @click.stop="deleteImportedRoute(route.id)" title="Supprimer ce parcours">
+              <button class="btn-map-action btn-delete-route" @click.stop="deleteImportedRoute(route.id)" title="Supprimer ce parcours">
                 <span class="mdi mdi-trash-can-outline"></span> Supprimer
               </button>
             </div>
@@ -2067,9 +1912,6 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="fullscreen-actions">
-          <a :href="`https://www.strava.com/routes/${fullscreenRoute.id}`" target="_blank" class="btn-fullscreen-action btn-strava-link-full" title="Voir sur Strava (nouvel onglet)">
-            <span class="mdi mdi-open-in-new"></span> Voir sur Strava
-          </a>
           <button class="btn-fullscreen-action" @click="exportToGPX(fullscreenRoute)">
             <span class="mdi mdi-download"></span> Exporter GPX
           </button>

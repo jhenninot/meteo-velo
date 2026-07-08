@@ -5,8 +5,7 @@ import { jwtDecode } from 'jwt-decode'
 import WeatherChart from './components/WeatherChart.vue'
 import WeatherIcon from './components/WeatherIcon.vue'
 import WeatherHourlyTimeline from './components/WeatherHourlyTimeline.vue'
-import StravaActivities from './components/StravaActivities.vue'
-import StravaRoutes from './components/StravaRoutes.vue'
+import GpxRoutes from './components/GpxRoutes.vue'
 import AdminPanel from './components/AdminPanel.vue'
 import ActivityForm from './components/ActivityForm.vue'
 
@@ -50,9 +49,8 @@ const useAiAnalysis = ref(true)
 
 // --- ÉTATS NAVIGATION ---
 const showAdminPanel = ref(false)
-const showStravaPage = ref(false)
-const showStravaRoutesPage = ref(false)
-const isWeatherPage = computed(() => !showAdminPanel.value && !showStravaPage.value && !showStravaRoutesPage.value && !showAccountPanel.value)
+const showRoutesPage = ref(false)
+const isWeatherPage = computed(() => !showAdminPanel.value && !showRoutesPage.value && !showAccountPanel.value)
 
 // --- ÉTATS DE L'APPLICATION MÉTÉO ---
 const city = ref('')
@@ -234,40 +232,7 @@ watch(isDark, (val) => {
 // --- CONFIGURATION ---
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || `http://${window.location.hostname}:3001`
 
-// --- LOGIQUE STRAVA HEADER ---
-const stravaStatus = ref({ connected: false, athleteName: null, athleteProfile: null })
-const loadingConnect = ref(false)
-
-const fetchStravaStatus = async () => {
-  try {
-    const { data } = await axios.get(`${API_BASE_URL}/api/strava/status`)
-    stravaStatus.value = data
-  } catch (e) {
-    console.error('Strava status error', e)
-  }
-}
-
-const connectStrava = async () => {
-  loadingConnect.value = true
-  try {
-    const { data } = await axios.get(`${API_BASE_URL}/api/strava/authorize`)
-    window.location.href = data.url
-  } catch (e) {
-    loadingConnect.value = false
-    console.error('Impossible de contacter Strava.', e)
-  }
-}
-
-const disconnectStrava = async () => {
-  if (!confirm('Délier votre compte Strava ?')) return
-  try {
-    await axios.delete(`${API_BASE_URL}/api/strava/disconnect`)
-    stravaStatus.value = { connected: false, athleteName: null, athleteProfile: null }
-    window.location.reload()
-  } catch (e) {
-    console.error('Erreur lors de la déconnexion Strava.', e)
-  }
-}
+// --- LOGIQUE STRAVA HEADER SUPPRIMÉE ---
 
 // --- GESTION DE LA CONNEXION ---
 const setupAxiosToken = (token) => {
@@ -335,7 +300,6 @@ const handleLogin = async () => {
     await loadUserActivities()
     await loadFavorites()
     await loadSystemSettings()
-    await fetchStravaStatus()
     initializeApp()
   } catch (err) {
     loginError.value = "Identifiant ou mot de passe incorrect."
@@ -356,40 +320,28 @@ const handleLogout = () => {
   favorites.value = []
   selectedActivityId.value = ''
   showAdminPanel.value = false
-  showStravaPage.value = false
-  showStravaRoutesPage.value = false
+  showRoutesPage.value = false
   showAccountPanel.value = false
   theme.value = 'auto'
-  stravaStatus.value = { connected: false, athleteName: null, athleteProfile: null }
 }
 
 const openAdmin = () => {
   showAdminPanel.value = true
-  showStravaPage.value = false
-  showStravaRoutesPage.value = false
+  showRoutesPage.value = false
   showAccountPanel.value = false
   showBurgerMenu.value = false
 }
 
 const openWeather = () => {
   showAdminPanel.value = false
-  showStravaPage.value = false
-  showStravaRoutesPage.value = false
+  showRoutesPage.value = false
   showAccountPanel.value = false
   fetchCurrentWeatherOnly()
 }
 
-const openStrava = () => {
+const openRoutes = () => {
   showAdminPanel.value = false
-  showStravaPage.value = true
-  showStravaRoutesPage.value = false
-  showAccountPanel.value = false
-}
-
-const openStravaRoutes = () => {
-  showAdminPanel.value = false
-  showStravaPage.value = false
-  showStravaRoutesPage.value = true
+  showRoutesPage.value = true
   showAccountPanel.value = false
 }
 
@@ -409,8 +361,7 @@ const updateGlobalLocation = (newLoc) => {
 
 const openAccount = () => {
   showAdminPanel.value = false
-  showStravaPage.value = false
-  showStravaRoutesPage.value = false
+  showRoutesPage.value = false
   showAccountPanel.value = true
   showBurgerMenu.value = false
   loadUserActivities()
@@ -654,15 +605,7 @@ onMounted(async () => {
       await loadUserActivities()
       await loadFavorites()
       await loadSystemSettings()
-      await fetchStravaStatus()
       initializeApp()
-
-      // Retour callback Strava → ouvrir la page Activités
-      const urlParams = new URLSearchParams(window.location.search)
-      if (urlParams.has('strava')) {
-        showStravaPage.value = true
-        showAdminPanel.value = false
-      }
     } catch (err) {
       handleLogout()
     }
@@ -834,19 +777,7 @@ const getWeatherIcon = (periodData, isNight = false) => {
   return isNight ? 'mdi-weather-night' : 'mdi-weather-sunny';
 }
 
-const getStravaTypeLabel = (type) => {
-  const labels = {
-    Ride: 'Vélo de Route',
-    GravelRide: 'Gravel',
-    MountainBikeRide: 'VTT',
-    EBikeRide: 'Vélo Électrique',
-    Run: 'Course à pied',
-    TrailRun: 'Trail',
-    Walk: 'Marche',
-    Hike: 'Randonnée'
-  }
-  return labels[type] || type
-}
+
 
 const hasNumericalConstraints = (activity) => {
   return activity && (
@@ -1889,16 +1820,6 @@ const formatRadarTime = (timestamp) => {
         </div>
 
         <div v-if="isLoggedIn" class="header-actions">
-          <!-- Avatar Strava (si lié) ou Bouton pour lier (si non lié) -->
-          <div class="header-strava-action">
-            <img v-if="stravaStatus.connected && stravaStatus.athleteProfile" :src="stravaStatus.athleteProfile" class="header-strava-avatar" :alt="stravaStatus.athleteName" :title="`Compte Strava lié : ${stravaStatus.athleteName}`" />
-            <span v-else-if="stravaStatus.connected" class="mdi mdi-account-circle header-strava-avatar-fallback" :title="`Compte Strava lié : ${stravaStatus.athleteName}`"></span>
-            <button v-else class="btn-strava-connect-header" @click="connectStrava" :disabled="loadingConnect" title="Associer mon compte Strava">
-              <span v-if="loadingConnect" class="mdi mdi-loading mdi-spin"></span>
-              <img v-else src="/strava_logo.png" alt="Strava" class="strava-btn-logo-header" />
-            </button>
-          </div>
-
           <!-- Bouton burger -->
           <button
             class="burger-btn"
@@ -1948,14 +1869,7 @@ const formatRadarTime = (timestamp) => {
                 <span class="burger-menu-label">Compte</span>
               </button>
 
-              <!-- Délier Strava (si connecté) -->
-              <template v-if="stravaStatus.connected">
-                <div class="burger-menu-divider"></div>
-                <button @click="disconnectStrava" class="burger-menu-item burger-menu-btn burger-strava-disconnect">
-                  <span class="burger-menu-icon mdi mdi-link-off"></span>
-                  <span class="burger-menu-label">Délier Strava</span>
-                </button>
-              </template>
+
 
               <!-- Admin (si admin) -->
               <template v-if="userRole === 'admin'">
@@ -1991,11 +1905,8 @@ const formatRadarTime = (timestamp) => {
           <button @click="openWeather" :class="{ active: isWeatherPage }">
             <span class="mdi mdi-weather-sunny"></span> Météo
           </button>
-          <button @click="openStrava" :class="{ active: showStravaPage }">
-            <img src="/strava_logo.png" alt="Strava" class="strava-nav-logo" /> Activités
-          </button>
-          <button @click="openStravaRoutes" :class="{ active: showStravaRoutesPage }">
-            <span class="mdi mdi-map-marker-distance"></span> Itinéraires
+          <button @click="openRoutes" :class="{ active: showRoutesPage }">
+            <span class="mdi mdi-map-marker-distance"></span> Itinéraires GPX
           </button>
         </nav>
       </div>
@@ -2106,9 +2017,7 @@ const formatRadarTime = (timestamp) => {
               <article class="activity-card">
                 <div class="activity-card-content">
                   <h4><span class="mdi" :class="activity.icon || 'mdi-bike'"></span> {{ activity.label }}</h4>
-                  <div v-if="activity.stravaSportType" style="font-size: 0.78rem; font-weight: 600; color: var(--color-strava); margin-top: 4px; display: flex; align-items: center; gap: 4px;">
-                    <span class="mdi mdi-strava"></span> Strava : {{ getStravaTypeLabel(activity.stravaSportType) }}
-                  </div>
+
                   <p v-if="activity.constraints" class="activity-constraints-text">
                     {{ activity.constraints }}
                   </p>
@@ -2155,11 +2064,8 @@ const formatRadarTime = (timestamp) => {
         </section>
       </div>
     </main>
-    <main v-else-if="showStravaPage">
-      <StravaActivities :theme="resolvedTheme" :api-base-url="API_BASE_URL" />
-    </main>
-    <main v-else-if="showStravaRoutesPage">
-      <StravaRoutes
+    <main v-else-if="showRoutesPage">
+      <GpxRoutes
         :theme="resolvedTheme"
         :api-base-url="API_BASE_URL"
         :initial-city="city"

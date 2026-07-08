@@ -90,7 +90,6 @@ const userSchema = new mongoose.Schema({
     lon: Number,
     consignes: String,
     theme: { type: String, enum: ['light', 'dark', 'auto'], default: 'auto' },
-    stravaFilters: { type: [String], default: [] },
     useAiAnalysis: { type: Boolean, default: false }
   },
   activities: {
@@ -98,7 +97,6 @@ const userSchema = new mongoose.Schema({
       label: { type: String, required: true, trim: true, maxlength: 80 },
       icon: { type: String, default: 'mdi-bike', trim: true, maxlength: 60 },
       constraints: { type: String, default: '', trim: true, maxlength: 4000 },
-      stravaSportType: { type: String, default: '', trim: true },
       windMin: { type: Number, default: null },
       windMax: { type: Number, default: null },
       gustMin: { type: Number, default: null },
@@ -119,7 +117,6 @@ const userSchema = new mongoose.Schema({
     default: () => [{
       label: "Course à pied",
       icon: "mdi-run",
-      stravaSportType: "Run",
       tempMin: 10,
       tempMax: 28,
       precipMax: 0.1,
@@ -130,15 +127,7 @@ const userSchema = new mongoose.Schema({
     city: { type: String, required: true, trim: true },
     lat: { type: Number, required: true },
     lon: { type: Number, required: true }
-  }],
-  strava: {
-    athleteId: Number,
-    accessToken: String,
-    refreshToken: String,
-    expiresAt: Number, // Unix timestamp seconds
-    athleteName: String,
-    athleteProfile: String
-  }
+  }]
 });
 const User = mongoose.model('User', userSchema);
 
@@ -165,23 +154,7 @@ const routeSchema = new mongoose.Schema({
 });
 const Route = mongoose.model('Route', routeSchema);
 
-// --- HELPER STRAVA : Rafraîchit le token si expiré ---
-const ensureStravaToken = async (user) => {
-  const now = Math.floor(Date.now() / 1000);
-  if (user.strava.expiresAt > now + 60) return user.strava.accessToken;
 
-  const res = await axios.post('https://www.strava.com/oauth/token', {
-    client_id: process.env.STRAVA_CLIENT_ID,
-    client_secret: process.env.STRAVA_CLIENT_SECRET,
-    grant_type: 'refresh_token',
-    refresh_token: user.strava.refreshToken
-  });
-  user.strava.accessToken = res.data.access_token;
-  user.strava.refreshToken = res.data.refresh_token;
-  user.strava.expiresAt = res.data.expires_at;
-  await user.save();
-  return user.strava.accessToken;
-};
 
 // --- 3. MIDDLEWARE DE SÉCURITÉ (verifyToken) ---
 const verifyToken = (req, res, next) => {
@@ -854,6 +827,7 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
   let activityLabel = '';
   let userRules = '';
   let activity = null;
+  let structuredWeather = null;
 
   try {
     if (!activityId) return res.status(400).json({ error: "L'activité est obligatoire" });
@@ -888,7 +862,7 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
       return res.json({
         forecast: finalData,
         useAi: false,
-        provider: actualProviderUsed
+        provider: 'open-meteo'
       });
     }
 
@@ -1019,7 +993,7 @@ Les valeurs dans criteres sont uniquement les chaînes "favorable" ou "defavorab
       fallbackMessage: fallback
         ? `Le modèle ${activeModel} est temporairement indisponible. L'analyse a été réalisée avec ${fallbackModel}.`
         : null,
-      provider: actualProviderUsed
+      provider: 'open-meteo'
     });
 
   } catch (error) {
@@ -1043,7 +1017,6 @@ app.post('/api/admin/create-user', verifyToken, async (req, res) => {
       activities: [{
         label: "Course à pied",
         icon: "mdi-run",
-        stravaSportType: "Run",
         tempMin: 10,
         tempMax: 28,
         precipMax: 0.1,
@@ -1118,7 +1091,6 @@ app.post('/api/user/activities', verifyToken, async (req, res) => {
   const label = typeof req.body.label === 'string' ? req.body.label.trim() : '';
   const icon = normalizeMdiIcon(req.body.icon);
   const constraints = typeof req.body.constraints === 'string' ? req.body.constraints.trim() : '';
-  const stravaSportType = typeof req.body.stravaSportType === 'string' ? req.body.stravaSportType.trim() : '';
 
   const parseNum = (val) => {
     if (val === undefined || val === null || val === '') return null;
@@ -1162,7 +1134,7 @@ app.post('/api/user/activities', verifyToken, async (req, res) => {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
     user.activities.push({
-      label, icon, constraints, stravaSportType,
+      label, icon, constraints,
       windMin, windMax, gustMin, gustMax, tempMin, tempMax, precipMin, precipMax, uvMin, uvMax,
       slot1Name, slot1Start, slot1End, slot2Name, slot2Start, slot2End
     });
@@ -1177,7 +1149,6 @@ app.put('/api/user/activities/:activityId', verifyToken, async (req, res) => {
   const label = typeof req.body.label === 'string' ? req.body.label.trim() : '';
   const icon = normalizeMdiIcon(req.body.icon);
   const constraints = typeof req.body.constraints === 'string' ? req.body.constraints.trim() : '';
-  const stravaSportType = typeof req.body.stravaSportType === 'string' ? req.body.stravaSportType.trim() : '';
 
   const parseNum = (val) => {
     if (val === undefined || val === null || val === '') return null;
@@ -1225,7 +1196,6 @@ app.put('/api/user/activities/:activityId', verifyToken, async (req, res) => {
     activity.label = label;
     activity.icon = icon;
     activity.constraints = constraints;
-    activity.stravaSportType = stravaSportType;
     
     activity.windMin = windMin;
     activity.windMax = windMax;
@@ -1430,168 +1400,7 @@ app.get('/api/settings', verifyToken, async (req, res) => {
   }
 });
 
-// --- ROUTES STRAVA ---
 
-// 1. Générer l'URL d'autorisation Strava
-app.get('/api/strava/authorize', verifyToken, (req, res) => {
-  const state = Buffer.from(req.user.id).toString('base64url');
-  const params = new URLSearchParams({
-    client_id: process.env.STRAVA_CLIENT_ID,
-    response_type: 'code',
-    redirect_uri: process.env.STRAVA_CALLBACK_URL,
-    approval_prompt: 'auto',
-    scope: 'activity:read_all,read_all',
-    state
-  });
-  res.json({ url: `https://www.strava.com/oauth/authorize?${params}` });
-});
-
-// 2. Callback OAuth de Strava
-app.get('/api/strava/callback', async (req, res) => {
-  const { code, state, error } = req.query;
-  const frontend = process.env.FRONTEND_URL || 'http://localhost:5173';
-  if (error || !code) return res.redirect(`${frontend}/?strava=error`);
-
-  try {
-    const userId = Buffer.from(state, 'base64url').toString('utf-8');
-    const tokenRes = await axios.post('https://www.strava.com/oauth/token', {
-      client_id: process.env.STRAVA_CLIENT_ID,
-      client_secret: process.env.STRAVA_CLIENT_SECRET,
-      code,
-      grant_type: 'authorization_code'
-    });
-    const { access_token, refresh_token, expires_at, athlete } = tokenRes.data;
-    await User.findByIdAndUpdate(userId, {
-      strava: {
-        athleteId: athlete.id,
-        accessToken: access_token,
-        refreshToken: refresh_token,
-        expiresAt: expires_at,
-        athleteName: `${athlete.firstname} ${athlete.lastname}`,
-        athleteProfile: athlete.profile_medium
-      }
-    });
-    res.redirect(`${frontend}/?strava=success`);
-  } catch (err) {
-    console.error('Strava callback error:', err.message);
-    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/?strava=error`);
-  }
-});
-
-// 3. Statut de connexion Strava
-app.get('/api/strava/status', verifyToken, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id).select('strava');
-    res.json({
-      connected: !!(user?.strava?.accessToken),
-      athleteName: user?.strava?.athleteName || null,
-      athleteProfile: user?.strava?.athleteProfile || null
-    });
-  } catch (err) {
-    res.status(500).json({ error: 'Erreur statut Strava' });
-  }
-});
-
-// 4. Récupérer les activités vélo des 30 derniers jours
-const BIKE_TYPES = ['Ride', 'VirtualRide', 'GravelRide', 'EBikeRide', 'MountainBikeRide'];
-
-app.get('/api/strava/activities', verifyToken, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id);
-    if (!user?.strava?.accessToken) return res.status(404).json({ error: 'Compte Strava non lié' });
-
-    const accessToken = await ensureStravaToken(user);
-
-    // Support dynamic timeframe / custom calendar range
-    let after, before;
-    if (req.query.startDate) {
-      after = Math.floor(new Date(req.query.startDate).getTime() / 1000);
-      if (req.query.endDate) {
-        before = Math.floor(new Date(req.query.endDate).getTime() / 1000) + 86400;
-      }
-    } else {
-      const days = parseInt(req.query.days) || 30;
-      after = Math.floor(Date.now() / 1000) - days * 24 * 3600;
-    }
-
-    const stravaParams = { per_page: 200 };
-    if (after) stravaParams.after = after;
-    if (before) stravaParams.before = before;
-
-    const response = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      params: stravaParams
-    });
-
-
-    const activities = response.data
-      .map(a => ({
-        id: a.id,
-        name: a.name,
-        type: a.sport_type || a.type,
-        sport_type: a.sport_type || a.type,
-        start_date: a.start_date,
-        distance: a.distance,
-        moving_time: a.moving_time,
-        elapsed_time: a.elapsed_time,
-        total_elevation_gain: a.total_elevation_gain,
-        average_speed: a.average_speed,
-        max_speed: a.max_speed,
-        average_watts: a.average_watts,
-        map: { summary_polyline: a.map?.summary_polyline }
-      }));
-
-    res.json(activities);
-  } catch (err) {
-    console.error('Strava activities error:', err.message);
-    res.status(500).json({ error: 'Erreur récupération activités Strava' });
-  }
-});
-
-// 5. Récupérer les parcours (routes) Strava de l'athlète
-app.get('/api/strava/routes', verifyToken, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id);
-    if (!user?.strava?.accessToken) return res.status(404).json({ error: 'Compte Strava non lié' });
-
-    const accessToken = await ensureStravaToken(user);
-    const athleteId = user.strava.athleteId;
-
-    const response = await axios.get(`https://www.strava.com/api/v3/athletes/${athleteId}/routes`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      params: { per_page: 100 }
-    });
-
-    const routes = response.data.map(r => ({
-      id: r.id,
-      name: r.name,
-      description: r.description,
-      distance: r.distance,
-      elevation_gain: r.elevation_gain,
-      type: r.type,
-      sport_type: r.sport_type,
-      created_at: r.created_at,
-      updated_at: r.updated_at,
-      estimated_moving_time: r.estimated_moving_time,
-      map: { summary_polyline: r.map?.summary_polyline }
-    }));
-
-    res.json(routes);
-  } catch (err) {
-    console.error('Strava routes error:', err.message);
-    res.status(500).json({ error: 'Erreur récupération parcours Strava' });
-  }
-});
-
-// 6. Délier le compte Strava
-app.delete('/api/strava/disconnect', verifyToken, async (req, res) => {
-  try {
-    await User.findByIdAndUpdate(req.user.id, { $unset: { strava: '' } });
-    res.json({ message: 'Compte Strava délié' });
-  } catch (err) {
-    res.status(500).json({ error: 'Erreur lors de la déconnexion Strava' });
-  }
-});
 
 // --- ROUTES POUR LES PARCOURS IMPORTÉS (GPX) ---
 
