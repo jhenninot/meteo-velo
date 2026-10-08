@@ -7,7 +7,6 @@ const props = defineProps({
   isDark: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['close'])
 
 // --- ÉTATS ---
 const newUser = ref({ username: '', password: '', role: 'user' })

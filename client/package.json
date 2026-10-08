@@ -13,7 +13,6 @@
     "chart.js": "^4.5.1",
     "jwt-decode": "^4.0.0",
     "leaflet": "^1.9.4",
-    "lucide-vue-next": "^1.0.0",
     "vue": "^3.4.15",
     "vue-chartjs": "^5.3.3"
   },

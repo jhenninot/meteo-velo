@@ -4,7 +4,6 @@ import axios from 'axios'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
-import WeatherChart from './WeatherChart.vue'
 import WeatherIcon from './WeatherIcon.vue'
 import WeatherHourlyTimeline from './WeatherHourlyTimeline.vue'
 import RouteElevationChart from './RouteElevationChart.vue'

@@ -2,7 +2,6 @@
 import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
 import axios from 'axios'
 import { jwtDecode } from 'jwt-decode'
-import WeatherChart from './components/WeatherChart.vue'
 import WeatherIcon from './components/WeatherIcon.vue'
 import WeatherHourlyTimeline from './components/WeatherHourlyTimeline.vue'
 import GpxRoutes from './components/GpxRoutes.vue'
@@ -641,11 +640,6 @@ const initializeApp = () => {
   }
 }
 
-const saveConsignes = () => {
-  localStorage.setItem('user_consignes', consignes.value);
-  syncPreferences();
-}
-
 const formatDate = (dateString) => {
   if (!dateString) return '';
   const [year, month, day] = dateString.split('-');
@@ -668,14 +662,6 @@ const scrollToDayDetail = (index) => {
   if (el) {
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
-}
-
-const formatDateTime = (isoString) => {
-  if (!isoString) return '';
-  return new Intl.DateTimeFormat('fr-FR', {
-    dateStyle: 'short',
-    timeStyle: 'short'
-  }).format(new Date(isoString));
 }
 
 const formatCollectionTime = (timeStr) => {
@@ -704,23 +690,6 @@ const critereClass = (period, key) => {
   if (v === 'favorable') return 'metric-critere critere-fav'
   if (v === 'defavorable') return 'metric-critere critere-def'
   return 'metric-critere critere-neutre'
-}
-
-const critereWindClass = (period) => {
-  const v = period?.criteres?.vent
-  const r = period?.criteres?.rafales
-  if (v === 'defavorable' || r === 'defavorable') return 'metric-critere critere-def'
-  if (v === 'favorable' && r === 'favorable') return 'metric-critere critere-fav'
-  if (v === 'favorable' || r === 'favorable') return 'metric-critere critere-fav'
-  return 'metric-critere critere-neutre'
-}
-
-const defavorableCritereLabels = (period) => {
-  const c = period?.criteres
-  if (!c) return []
-  return Object.entries(c)
-    .filter(([, val]) => val === 'defavorable')
-    .map(([k]) => critereLabels[k] || k)
 }
 
 const getWmoWeatherIcon = (wmoCode, isNight = false) => {
@@ -1441,11 +1410,6 @@ const runAnalysisOnly = async () => {
   }
 }
 
-const toggleAiPreference = () => {
-  useAiAnalysis.value = !useAiAnalysis.value
-  handleAiToggle()
-}
-
 const handleAiToggle = () => {
   syncPreferences()
   if (restoreCachedForecast()) {
@@ -1576,7 +1540,6 @@ const radarEnabled = ref(true)
 const radarPlaying = ref(false)
 const radarFrames = ref([])
 const radarPosition = ref(0)
-const radarLoading = ref(false)
 
 let radarLayersNormal = { currentLayer: null }
 let radarLayersFullscreen = { currentLayer: null }
