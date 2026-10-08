@@ -11,7 +11,7 @@ COPY package*.json ./
 RUN apk add --no-cache git docker-cli docker-cli-compose docker-cli-buildx
 
 # Installation des dépendances
-RUN npm install
+RUN npm ci --omit=dev
 
 # Copie du reste du code source
 COPY . .

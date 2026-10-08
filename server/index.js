@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import axios from 'axios';
 import 'dotenv/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -13,8 +14,9 @@ const app = express();
 // Derrière Nginx Proxy Manager : req.ip doit refléter l'IP du client (utilisé par la limitation de connexion)
 app.set('trust proxy', 1);
 app.use(cors());
+app.use(compression());
 // Route brute webhook avant bodyParser (express.json)
-app.post('/api/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+app.post('/api/webhook', express.raw({ type: 'application/json', limit: '5mb' }), (req, res) => {
   const secret = process.env.WEBHOOK_SECRET;
   const stackDir = process.env.STACK_DIR || '/app/stack';
 
@@ -655,7 +657,7 @@ app.post('/api/weather', verifyToken, async (req, res) => {
     let currentConditions = null;
 
     const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,weather_code&current=temperature_2m,apparent_temperature,precipitation,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code&daily=weather_code&timezone=auto`;
-    const weatherRes = await axios.get(weatherUrl);
+    const weatherRes = await axios.get(weatherUrl, { timeout: 10000 });
     const hourly = weatherRes.data.hourly;
     const dailyData = weatherRes.data.daily;
     const utcOffsetSeconds = weatherRes.data.utc_offset_seconds ?? 0;
@@ -882,7 +884,7 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
     }
 
     const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index&timezone=auto`;
-    const weatherRes = await axios.get(weatherUrl);
+    const weatherRes = await axios.get(weatherUrl, { timeout: 10000 });
     const hourly = weatherRes.data.hourly;
     const utcOffsetSeconds = weatherRes.data.utc_offset_seconds ?? 0;
     structuredWeather = buildStructuredWeather(hourly, utcOffsetSeconds, activity);
@@ -1344,7 +1346,7 @@ app.get('/api/admin/models', verifyToken, async (req, res) => {
 
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-    const response = await axios.get(url);
+    const response = await axios.get(url, { timeout: 10000 });
     if (!response.data || !Array.isArray(response.data.models)) {
       throw new Error("Réponse de l'API Google invalide");
     }
