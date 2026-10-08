@@ -13,7 +13,20 @@ import { exec } from 'child_process';
 const app = express();
 // Derrière Nginx Proxy Manager : req.ip doit refléter l'IP du client (utilisé par la limitation de connexion)
 app.set('trust proxy', 1);
-app.use(cors());
+// CORS : origines autorisées = FRONTEND_URL (plusieurs valeurs possibles, séparées par des virgules).
+// Si la variable est absente, toutes les origines restent acceptées (comportement historique).
+const allowedOrigins = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map(o => o.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+if (allowedOrigins.length === 0) {
+  console.warn("FRONTEND_URL non défini : CORS ouvert à toutes les origines.");
+}
+app.use(cors({
+  origin: allowedOrigins.length > 0
+    ? (origin, callback) => callback(null, !origin || allowedOrigins.includes(origin))
+    : true
+}));
 app.use(compression());
 // Route brute webhook avant bodyParser (express.json)
 app.post('/api/webhook', express.raw({ type: 'application/json', limit: '5mb' }), (req, res) => {

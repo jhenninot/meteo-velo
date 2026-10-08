@@ -73,7 +73,7 @@ Descriptions :
 - `MONGO_URL` : chaîne de connexion MongoDB.
 - `JWT_SECRET` : clé pour signer les tokens JWT.
 - `GEMINI_API_KEY` : clé pour le service Gemini (IA), optionnel.
-- `FRONTEND_URL` : URL du frontend.
+- `FRONTEND_URL` : origine(s) du frontend autorisée(s) par CORS, sans `/` final (plusieurs valeurs séparées par des virgules). Si absent, toutes les origines sont acceptées.
 - `WEBHOOK_SECRET` : secret HMAC pour la route `/api/webhook` utilisée par déploiement automatisé.
 
 ## Captures d'écran
