@@ -29,7 +29,7 @@ services:
     depends_on:
       - mongodb
   mongodb:
-    image: mongo:latest
+    image: mongo:8.2
     container_name: mongodb
     ports:
       - 127.0.0.1:27017:27017 # Accessible uniquement depuis l'hôte (depuis ton PC : tunnel SSH, ex. ssh -L 27017:127.0.0.1:27017 serveur)
