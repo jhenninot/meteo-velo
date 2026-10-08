@@ -67,6 +67,8 @@ JWT_SECRET=une_clef_secrete_longue
 GEMINI_API_KEY=xxx
 FRONTEND_URL=http://localhost:5173
 WEBHOOK_SECRET=une_autre_clef_pour_webhook
+# Docker uniquement : dossier de la stack sur l'hôte (clone git + .env)
+STACK_HOST_DIR=/srv/appdata/dockhand/stacks/meteo-velo
 ```
 
 Descriptions :
@@ -75,6 +77,7 @@ Descriptions :
 - `GEMINI_API_KEY` : clé pour le service Gemini (IA), optionnel.
 - `FRONTEND_URL` : URL du frontend.
 - `WEBHOOK_SECRET` : secret HMAC pour la route `/api/webhook` utilisée par déploiement automatisé.
+- `STACK_HOST_DIR` : chemin sur l'hôte Docker du dossier de la stack (clone git du dépôt + `.env`), monté dans le backend sur `/app/stack` pour l'auto-déploiement par webhook. Doit être un clone git du dépôt et correspondre au dossier géré par Dockhand (ou Dockge).
 
 ## Captures d'écran
 
