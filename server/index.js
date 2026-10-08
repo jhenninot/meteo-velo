@@ -749,6 +749,37 @@ async function callGeminiWithFallback(prompt) {
   return { aiData, fallback, activeModel, fallbackModel };
 }
 
+// --- CACHE OPEN-METEO (mémoire) ---
+// Les coordonnées sont arrondies à 2 décimales (~1 km, la résolution d'Open-Meteo) pour mutualiser les requêtes.
+const WEATHER_CACHE_TTL_MS = 10 * 60 * 1000;
+const WEATHER_CACHE_MAX_ENTRIES = 500;
+const weatherCache = new Map();
+const OPEN_METEO_PARAMS = 'hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,weather_code&current=temperature_2m,apparent_temperature,precipitation,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code&daily=weather_code&timezone=auto';
+
+async function fetchOpenMeteo(lat, lon) {
+  const latR = Number(lat).toFixed(2);
+  const lonR = Number(lon).toFixed(2);
+  const key = `${latR},${lonR}`;
+  const now = Date.now();
+
+  const cached = weatherCache.get(key);
+  if (cached && cached.expiresAt > now) return cached.data;
+
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${latR}&longitude=${lonR}&${OPEN_METEO_PARAMS}`;
+  const response = await axios.get(url, { timeout: 10000 });
+
+  if (weatherCache.size >= WEATHER_CACHE_MAX_ENTRIES) {
+    for (const [k, v] of weatherCache) {
+      if (v.expiresAt <= now) weatherCache.delete(k);
+    }
+    if (weatherCache.size >= WEATHER_CACHE_MAX_ENTRIES) {
+      weatherCache.delete(weatherCache.keys().next().value);
+    }
+  }
+  weatherCache.set(key, { data: response.data, expiresAt: now + WEATHER_CACHE_TTL_MS });
+  return response.data;
+}
+
 // --- ROUTE MÉTÉO BRUTE (étape 1 : retourne la météo agrégée sans analyse IA) ---
 app.post('/api/weather', verifyToken, async (req, res) => {
   const { lat, lon, activityId } = req.body;
@@ -772,14 +803,13 @@ app.post('/api/weather', verifyToken, async (req, res) => {
     let structuredWeather;
     let currentConditions = null;
 
-    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,weather_code&current=temperature_2m,apparent_temperature,precipitation,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code&daily=weather_code&timezone=auto`;
-    const weatherRes = await axios.get(weatherUrl, { timeout: 10000 });
-    const hourly = weatherRes.data.hourly;
-    const dailyData = weatherRes.data.daily;
-    const utcOffsetSeconds = weatherRes.data.utc_offset_seconds ?? 0;
+    const weatherData = await fetchOpenMeteo(lat, lon);
+    const hourly = weatherData.hourly;
+    const dailyData = weatherData.daily;
+    const utcOffsetSeconds = weatherData.utc_offset_seconds ?? 0;
 
-    if (weatherRes.data.current) {
-      const cur = weatherRes.data.current;
+    if (weatherData.current) {
+      const cur = weatherData.current;
       currentConditions = {
         temp: Math.round(cur.temperature_2m),
         apparentTemp: Math.round(cur.apparent_temperature),
@@ -891,10 +921,9 @@ app.post('/api/forecast', verifyToken, async (req, res) => {
       userRules = (activity.constraints || '').trim();
     }
 
-    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index&timezone=auto`;
-    const weatherRes = await axios.get(weatherUrl, { timeout: 10000 });
-    const hourly = weatherRes.data.hourly;
-    const utcOffsetSeconds = weatherRes.data.utc_offset_seconds ?? 0;
+    const weatherData = await fetchOpenMeteo(lat, lon);
+    const hourly = weatherData.hourly;
+    const utcOffsetSeconds = weatherData.utc_offset_seconds ?? 0;
     structuredWeather = buildStructuredWeather(hourly, utcOffsetSeconds, activity);
 
     if (useAi === false) {
