@@ -24,7 +24,7 @@ services:
       - STACK_DIR=/app/stack
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /srv/appdata/dockge/stacks/meteo-velo:/app/stack
+      - /opt/dockhand/stacks/Production/meteo-velo:/app/stack
     restart: always
     depends_on:
       - mongodb
