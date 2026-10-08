@@ -32,7 +32,7 @@ services:
     image: mongo:latest
     container_name: mongodb
     ports:
-      - 27017:27017 # Permet à ton PC (VS Code) de se connecter au serveur
+      - 127.0.0.1:27017:27017 # Accessible uniquement depuis l'hôte (depuis ton PC : tunnel SSH, ex. ssh -L 27017:127.0.0.1:27017 serveur)
     volumes:
       - mongo_data:/data/db
     restart: always
