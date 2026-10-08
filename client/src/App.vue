@@ -1,11 +1,12 @@
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch, computed, defineAsyncComponent } from 'vue'
 import axios from 'axios'
 import { jwtDecode } from 'jwt-decode'
 import WeatherIcon from './components/WeatherIcon.vue'
 import WeatherHourlyTimeline from './components/WeatherHourlyTimeline.vue'
-import GpxRoutes from './components/GpxRoutes.vue'
-import AdminPanel from './components/AdminPanel.vue'
+// Chargés à la demande : écrans secondaires (parcours GPX + Chart.js, administration)
+const GpxRoutes = defineAsyncComponent(() => import('./components/GpxRoutes.vue'))
+const AdminPanel = defineAsyncComponent(() => import('./components/AdminPanel.vue'))
 import ActivityForm from './components/ActivityForm.vue'
 
 import L from 'leaflet'
