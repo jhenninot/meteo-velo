@@ -10,6 +10,8 @@ import crypto from 'crypto';
 import { exec } from 'child_process';
 // j
 const app = express();
+// Derrière Nginx Proxy Manager : req.ip doit refléter l'IP du client (utilisé par la limitation de connexion)
+app.set('trust proxy', 1);
 app.use(cors());
 // Route brute webhook avant bodyParser (express.json)
 app.post('/api/webhook', express.raw({ type: 'application/json' }), (req, res) => {
@@ -23,7 +25,9 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), (req, res) =
     return res.status(401).send('Unauthorized');
   }
   const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(req.body).digest('hex');
-  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+  const sigBuf = Buffer.from(sig);
+  const expectedBuf = Buffer.from(expected);
+  if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
     console.warn('[webhook] Signature invalide.');
     return res.status(401).send('Signature invalide');
   }
@@ -56,7 +60,11 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const JWT_SECRET = process.env.JWT_SECRET || 'ta_cle_secrete_hyper_longue';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error("JWT_SECRET manquant : arrêt du serveur.");
+  process.exit(1);
+}
 const PASSWORD_RULES_MESSAGE = "Le mot de passe doit contenir au moins 10 caractères, une majuscule, une minuscule, un chiffre et un caractère spécial.";
 const DEFAULT_ACTIVITY_ICON = 'mdi-bike';
 
@@ -172,15 +180,42 @@ const verifyToken = (req, res, next) => {
 
 // --- 4. ROUTES D'AUTHENTIFICATION ---
 
+// Limitation simple des tentatives de connexion (en mémoire, par IP)
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 10;
+const loginAttempts = new Map();
+
+const loginRateLimit = (req, res, next) => {
+  const now = Date.now();
+  const entry = loginAttempts.get(req.ip);
+  if (!entry || now > entry.resetAt) {
+    loginAttempts.set(req.ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    return next();
+  }
+  entry.count += 1;
+  if (entry.count > LOGIN_MAX_ATTEMPTS) {
+    return res.status(429).json({ error: "Trop de tentatives, réessayez plus tard." });
+  }
+  next();
+};
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of loginAttempts) {
+    if (now > entry.resetAt) loginAttempts.delete(ip);
+  }
+}, LOGIN_WINDOW_MS).unref();
+
 // Route de Login
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', loginRateLimit, async (req, res) => {
   const { username, password } = req.body;
+  if (typeof username !== 'string' || typeof password !== 'string') {
+    return res.status(400).json({ error: "Identifiants invalides" });
+  }
   try {
     const user = await User.findOne({ username });
-    if (!user) return res.status(401).json({ error: "Utilisateur non trouvé" });
-
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) return res.status(401).json({ error: "Mot de passe incorrect" });
+    const validPassword = user ? await bcrypt.compare(password, user.password) : false;
+    if (!validPassword) return res.status(401).json({ error: "Identifiant ou mot de passe incorrect" });
 
     const token = jwt.sign(
       { id: user._id, role: user.role, username: user.username },
@@ -204,7 +239,7 @@ app.post('/api/login', async (req, res) => {
 app.get('/api/search', verifyToken, async (req, res) => {
   const { q } = req.query;
   try {
-    const response = await axios.get(`https://photon.komoot.io/api/?q=${q}&limit=5`);
+    const response = await axios.get('https://photon.komoot.io/api/', { params: { q, limit: 5 }, timeout: 8000 });
     res.json(response.data.features);
   } catch (error) {
     console.error("Erreur Photon:", error.message);
@@ -218,7 +253,7 @@ app.get('/api/reverse', verifyToken, async (req, res) => {
     return res.status(400).json({ error: "Paramètres lat et lon requis." });
   }
   try {
-    const response = await axios.get(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}`);
+    const response = await axios.get('https://photon.komoot.io/reverse', { params: { lat, lon }, timeout: 8000 });
     res.json(response.data.features);
   } catch (error) {
     console.error("Erreur Photon Reverse:", error.message);
@@ -1050,7 +1085,11 @@ app.post('/api/user/preferences', verifyToken, async (req, res) => {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
     const prev = user.preferences?.toObject?.() ?? user.preferences ?? {};
-    user.preferences = { ...prev, ...req.body };
+    const allowed = {};
+    for (const key of ['city', 'lat', 'lon', 'consignes', 'theme', 'useAiAnalysis']) {
+      if (req.body[key] !== undefined) allowed[key] = req.body[key];
+    }
+    user.preferences = { ...prev, ...allowed };
     await user.save();
     res.json({ message: "Préférences sauvegardées" });
   } catch (err) {

@@ -12,7 +12,7 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 
 async function createFirstAdmin() {
-  const mongoUrl = process.env.MONGO_URL || 'mongodb://192.168.0.41:27017/meteo_velo';
+  const mongoUrl = process.env.MONGO_URL || 'mongodb://localhost:27017/meteo_velo';
   
   try {
     await mongoose.connect(mongoUrl);
@@ -25,8 +25,12 @@ async function createFirstAdmin() {
       console.log(`Un administrateur existe déjà : ${adminExists.username}`);
     } else {
       // Configuration de ton compte admin
-      const adminUsername = 'julien'; 
-      const adminPassword = 'ton_mot_de_passe_secret'; // CHANGE-LE ICI !
+      const adminUsername = process.env.ADMIN_USERNAME;
+      const adminPassword = process.env.ADMIN_PASSWORD;
+      if (!adminUsername || !adminPassword) {
+        console.error("Définissez ADMIN_USERNAME et ADMIN_PASSWORD (variables d'environnement) avant de lancer ce script.");
+        return;
+      }
       
       const hashedPassword = await bcrypt.hash(adminPassword, 10);
       
@@ -46,7 +50,6 @@ async function createFirstAdmin() {
       console.log(`-----------------------------------`);
       console.log(`Compte ADMIN créé avec succès !`);
       console.log(`Utilisateur : ${adminUsername}`);
-      console.log(`Mot de passe : ${adminPassword}`);
       console.log(`-----------------------------------`);
     }
   } catch (error) {
