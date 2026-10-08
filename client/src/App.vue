@@ -234,9 +234,13 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || `http://${window.locat
 // --- LOGIQUE STRAVA HEADER SUPPRIMÉE ---
 
 // --- GESTION DE LA CONNEXION ---
+let axiosInterceptorInstalled = false
+
 const setupAxiosToken = (token) => {
   axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-  
+
+  if (axiosInterceptorInstalled) return
+  axiosInterceptorInstalled = true
   axios.interceptors.response.use(
     response => response,
     err => {
@@ -1060,21 +1064,6 @@ const toggleFavorite = async () => {
     }
   } catch (err) {
     console.error("Erreur lors de la modification des favoris:", err.response?.data?.error || err.message)
-  }
-}
-
-const removeFavorite = async (fav) => {
-  try {
-    const response = await axios.delete(`${API_BASE_URL}/api/user/favorites`, {
-      params: {
-        city: fav.city,
-        lat: fav.lat,
-        lon: fav.lon
-      }
-    })
-    favorites.value = response.data
-  } catch (err) {
-    console.error("Erreur lors de la suppression du favori:", err.response?.data?.error || err.message)
   }
 }
 

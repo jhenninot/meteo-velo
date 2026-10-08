@@ -634,7 +634,9 @@ function buildStructuredWeather(hourly, utcOffsetSeconds, activity = null, daily
 // --- ROUTE MÉTÉO BRUTE (étape 1 : retourne la météo agrégée sans analyse IA) ---
 app.post('/api/weather', verifyToken, async (req, res) => {
   const { lat, lon, activityId } = req.body;
-  if (!lat || !lon) return res.status(400).json({ error: "lat et lon sont obligatoires" });
+  if (lat === undefined || lat === null || lat === '' || lon === undefined || lon === null || lon === '' || isNaN(Number(lat)) || isNaN(Number(lon))) {
+    return res.status(400).json({ error: "lat et lon sont obligatoires" });
+  }
 
   try {
     let activity = null;
@@ -1042,12 +1044,14 @@ app.post('/api/admin/create-user', verifyToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: "Accès refusé (Admin requis)" });
 
   const { username, password, role } = req.body;
+  if (typeof username !== 'string' || username.trim() === '') return res.status(400).json({ error: "Nom d'utilisateur invalide" });
+  if (role !== undefined && !['user', 'admin'].includes(role)) return res.status(400).json({ error: "Rôle invalide" });
   if (!validatePasswordStrength(password)) return res.status(400).json({ error: PASSWORD_RULES_MESSAGE });
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = new User({ 
-      username, 
-      password: hashedPassword, 
+      username: username.trim(),
+      password: hashedPassword,
       role,
       activities: [{
         label: "Course à pied",
@@ -1064,7 +1068,9 @@ app.post('/api/admin/create-user', verifyToken, async (req, res) => {
     await newUser.save();
     res.json({ message: "Utilisateur créé avec succès" });
   } catch (err) {
-    res.status(400).json({ error: "L'utilisateur existe déjà" });
+    if (err.code === 11000) return res.status(400).json({ error: "L'utilisateur existe déjà" });
+    console.error("Erreur création utilisateur:", err.message);
+    res.status(500).json({ error: "Erreur lors de la création de l'utilisateur" });
   }
 });
 
@@ -1295,16 +1301,21 @@ app.patch('/api/admin/users/:id/password', verifyToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: "Interdit" });
   const { newPassword } = req.body;
   if (!validatePasswordStrength(newPassword)) return res.status(400).json({ error: PASSWORD_RULES_MESSAGE });
-  const hashedPassword = await bcrypt.hash(newPassword, 10);
-  await User.findByIdAndUpdate(req.params.id, { password: hashedPassword });
-  res.json({ message: "Mot de passe mis à jour" });
+  try {
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const updated = await User.findByIdAndUpdate(req.params.id, { password: hashedPassword });
+    if (!updated) return res.status(404).json({ error: "Utilisateur introuvable" });
+    res.json({ message: "Mot de passe mis à jour" });
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors de la mise à jour du mot de passe" });
+  }
 });
 
 // Supprimer un utilisateur
 app.delete('/api/admin/users/:id', verifyToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: "Interdit" });
   // On empêche de se supprimer soi-même
-  if (req.params.id === req.user.id) return res.status(400).json({ error: "Impossible de supprimer votre propre compte" });
+  if (String(req.params.id) === String(req.user.id)) return res.status(400).json({ error: "Impossible de supprimer votre propre compte" });
   
   try {
     const userToDelete = await User.findById(req.params.id);
